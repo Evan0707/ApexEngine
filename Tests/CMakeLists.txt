@@ -4,6 +4,7 @@ add_executable(ApexTests
     Core/AssertTests.cpp
     Core/ErrorTests.cpp
     Core/LanguageTests.cpp
+    Core/LoggerTests.cpp
     Core/VersionTests.cpp
 )
 

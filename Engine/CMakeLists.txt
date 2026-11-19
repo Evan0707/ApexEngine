@@ -1,7 +1,15 @@
 add_library(ApexEngine STATIC
     Core/Assert.cpp
     Core/Assert.h
+    Core/ConsoleLogSink.cpp
+    Core/ConsoleLogSink.h
     Core/Error.h
+    Core/FileLogSink.cpp
+    Core/FileLogSink.h
+    Core/Logger.cpp
+    Core/Logger.h
+    Core/LogSink.cpp
+    Core/LogSink.h
     Core/Version.cpp
     Core/Version.h
 )
