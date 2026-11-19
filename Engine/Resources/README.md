@@ -17,6 +17,8 @@
 | `Resources/ImageDecoder.h` | `decodeImage()`, `kMaxImageSize` |
 | `Resources/FileReader.h` | `readFile()` |
 | `Resources/FallbackAssets.h` | `makeCheckerTexture()`, `makeWhiteTexture()`, `makeFallbackMesh()`, `makeDefaultMaterial()` |
+| `Resources/ModelData.h` | `ModelImage`, `ModelMaterial`, `ModelPart`, `ModelData` : ce que produit un importeur |
+| `Resources/GltfImporter.h` | `importGltf()` |
 | `Resources/ResourcePool.h` | `ResourcePool` : ressources d'un type, avec leur état, désignées par handles |
 
 ## Données
@@ -46,6 +48,16 @@
 - `decodeImage(octets, nom, espace)` décode un PNG ou un JPG par stb_image (décision 0013), seul fichier du moteur qui l'inclut. Les dimensions sont lues avant le décodage : au-delà de 4096 pixels de côté, l'image est refusée sans être décodée. L'erreur nomme l'image et dit pourquoi.
 - `readFile(chemin)` lit un fichier entier ; `NotFound` s'il n'existe pas, `IoFailure` s'il ne se lit pas, avec le chemin dans le message.
 
+## Import glTF (décision 0012)
+
+- `importGltf(fichier, nom)` lit un `.gltf` (avec ses fichiers externes) ou un `.glb` par cgltf, seul fichier du moteur qui l'inclut, et produit un `ModelData` indépendant du format (G-04). `nom` est le chemin d'asset, cité par toute erreur avec l'élément fautif.
+- Refusés : fichier absent (`NotFound`), tronqué, JSON ou glTF invalide, glTF 1.0, extension marquée obligatoire, index hors des sommets, primitive sans `POSITION`, modèle sans aucun triangle.
+- Hiérarchie aplatie (section 5.5, décision 0014) : chaque primitive est transformée par la matrice monde de son nœud, puis les primitives d'un même matériau sont fusionnées en une partie. Un nœud qui inverse le repère (échelle négative) inverse aussi l'ordre des sommets de ses triangles, pour garder des faces avant antihoraires.
+- Lus : `POSITION`, `NORMAL`, `TANGENT`, `TEXCOORD_0` (entiers normalisés compris), indices 8, 16 ou 32 bits, ou aucun indice. Les points et les lignes sont ignorés.
+- Normales absentes : moyenne des faces voisines, pondérée par leur aire. Tangentes absentes : calculées à partir des UV, avec la convention de `Vertex` ; une tangente impossible à calculer (UV dégénérés) devient une perpendiculaire quelconque à la normale.
+- Scène lue : la scène par défaut, sinon la première, sinon tous les nœuds sans parent. Une hiérarchie de plus de 64 niveaux est refusée (protection contre un cycle).
+- Limite : le chemin du fichier est passé à cgltf en encodage ANSI pour les `.bin` externes ; un dossier dont le nom contient des caractères hors de cet encodage ne fonctionnera pas.
+
 ## Assets de secours (section 5.5)
 
 - `makeCheckerTexture()` : damier magenta et noir de 64 × 64 pixels, cases de 8, en sRGB, pour une texture en échec.
@@ -59,4 +71,4 @@
 
 ## Dépendances
 
-`Core` (et GLM par `Core/Math.h`). stb_image (décision 0013), dans `ImageDecoder.cpp` uniquement. Ni Vulkan ni EnTT (section 4.2).
+`Core` (et GLM par `Core/Math.h`). stb_image (décision 0013), dans `ImageDecoder.cpp` uniquement ; cgltf (décision 0012), dans `GltfImporter.cpp` uniquement. Ni Vulkan ni EnTT (section 4.2).

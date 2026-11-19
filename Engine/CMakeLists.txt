@@ -1,6 +1,7 @@
 find_package(glm CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_path(APEX_CGLTF_INCLUDE_DIR cgltf.h REQUIRED)
 find_package(VulkanHeaders CONFIG REQUIRED)
 find_package(VulkanLoader CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
@@ -110,12 +111,15 @@ add_library(ApexEngine STATIC
     Resources/FallbackAssets.h
     Resources/FileReader.cpp
     Resources/FileReader.h
+    Resources/GltfImporter.cpp
+    Resources/GltfImporter.h
     Resources/Handles.h
     Resources/ImageDecoder.cpp
     Resources/ImageDecoder.h
     Resources/MaterialData.h
     Resources/MeshData.cpp
     Resources/MeshData.h
+    Resources/ModelData.h
     Resources/Primitives.cpp
     Resources/Primitives.h
     Resources/ResourcePool.h
@@ -147,6 +151,8 @@ target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-boots
                                           GPUOpen::VulkanMemoryAllocator)
 # stb_image is included only by Resources/ImageDecoder.cpp (decision 0013). SYSTEM: its warnings are not ours.
 target_include_directories(ApexEngine SYSTEM PRIVATE "${Stb_INCLUDE_DIR}")
+# cgltf is included only by Resources/GltfImporter.cpp (decision 0012).
+target_include_directories(ApexEngine SYSTEM PRIVATE "${APEX_CGLTF_INCLUDE_DIR}")
 # Dear ImGui is included only by Debug (decision 0008).
 target_link_libraries(ApexEngine PRIVATE imgui::imgui)
 if(APEX_ENABLE_PROFILING)

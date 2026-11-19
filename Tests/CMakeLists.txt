@@ -32,6 +32,7 @@ add_executable(ApexTests
     Input/ActionStateTests.cpp
     Platform/KeyTests.cpp
     Resources/AssetPathTests.cpp
+    Resources/GltfImporterTests.cpp
     Resources/ImageDecoderTests.cpp
     Resources/MeshDataTests.cpp
     Resources/PrimitivesTests.cpp
@@ -46,7 +47,8 @@ add_executable(ApexTests
 
 target_include_directories(ApexTests PRIVATE "${PROJECT_SOURCE_DIR}/Game")
 # Small files written by Tools/generate_assets.py; read in place, never written by the tests.
-target_compile_definitions(ApexTests PRIVATE APEX_TEST_DATA_DIR="${PROJECT_SOURCE_DIR}/Tests/Data")
+target_compile_definitions(ApexTests PRIVATE APEX_TEST_DATA_DIR="${PROJECT_SOURCE_DIR}/Tests/Data"
+                                             APEX_ASSETS_DIR="${PROJECT_SOURCE_DIR}/Assets")
 target_link_libraries(ApexTests PRIVATE Apex::Engine Catch2::Catch2WithMain)
 
 include(Catch)
