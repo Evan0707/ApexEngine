@@ -1,0 +1,19 @@
+# Build
+/build/
+/out/
+/vcpkg_installed/
+CMakeUserPresets.json
+
+# vcpkg cloned by CI
+/vcpkg/
+/vcpkg-cache/
+
+# IDE
+/.vs/
+/.vscode/
+/.idea/
+*.user
+
+# Runtime
+/Logs/
+*.rdc
