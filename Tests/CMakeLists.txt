@@ -37,6 +37,7 @@ add_executable(ApexTests
     Resources/ImageDecoderTests.cpp
     Resources/MeshDataTests.cpp
     Resources/PrimitivesTests.cpp
+    Resources/ResourceCacheTests.cpp
     Resources/ResourcePoolTests.cpp
     # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
     "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"

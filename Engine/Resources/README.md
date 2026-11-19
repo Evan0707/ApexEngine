@@ -2,7 +2,7 @@
 
 **Rôle :** données CPU des assets, indépendantes du format de fichier (garde-fou G-04). À terme : cache, handles avec état, import glTF et textures, assets de secours (cahier des charges, section 5.5).
 
-**État (phase 4, en cours) :** structures `MeshData` et `MaterialData`, validation d'un mesh, primitives cube et sphère (décision 0011), chemins d'assets normalisés, handles avec état (décision 0014). L'import, le cache et les assets de secours arrivent dans les tâches suivantes.
+**État (phase 4) :** structures CPU des meshes, matériaux, textures et modèles ; import glTF et GLB (décision 0012) ; décodage PNG et JPG (décision 0013) ; chemins d'assets normalisés, handles avec état, cache de ressources et assets de secours (décision 0014) ; primitives cube et sphère.
 
 ## Interface publique
 
@@ -19,6 +19,7 @@
 | `Resources/FallbackAssets.h` | `makeCheckerTexture()`, `makeWhiteTexture()`, `makeFallbackMesh()`, `makeDefaultMaterial()` |
 | `Resources/ModelData.h` | `ModelImage`, `ModelMaterial`, `ModelPart`, `ModelData` : ce que produit un importeur |
 | `Resources/GltfImporter.h` | `importGltf()` |
+| `Resources/ResourceCache.h` | `ModelPartRef`, `Model`, `ResourceCache` : `loadModel()`, `loadTexture()`, `addMesh()`, `addMaterial()`, `addModel()`, `state()`, `parts()`, assets de secours, `meshes()`, `textures()`, `materials()`, `unloadAll()`, `filesRead()` |
 | `Resources/ResourcePool.h` | `ResourcePool` : ressources d'un type, avec leur état, désignées par handles |
 
 ## Données
@@ -59,6 +60,19 @@
 - Images : non décodées par l'importeur. Une image est soit un chemin relatif au modèle, déjà décodé des échappements d'URI, soit des octets (GLB, `data:` en base64). Le cache les charge ; une image absente n'empêche pas l'import du modèle.
 - Scène lue : la scène par défaut, sinon la première, sinon tous les nœuds sans parent. Une hiérarchie de plus de 64 niveaux est refusée (protection contre un cycle).
 - Limite : le chemin du fichier est passé à cgltf en encodage ANSI pour les `.bin` externes ; un dossier dont le nom contient des caractères hors de cet encodage ne fonctionnera pas.
+
+## Cache (section 5.5, décision 0014)
+
+- `ResourceCache` possède toutes les ressources CPU : meshes, textures, matériaux et modèles, chacun dans un `ResourcePool`. Il est construit avec le dossier des assets et le logger.
+- `loadModel(chemin)` et `loadTexture(chemin, espace)` normalisent le chemin et le cherchent d'abord dans le cache : un fichier n'est lu qu'une fois, quelle que soit l'écriture du chemin. Un échec est mis en cache comme un succès : le fichier n'est pas relu à chaque demande.
+- Un chargement ne renvoie jamais d'erreur à l'appelant : il renvoie un handle dont l'état dit `Failed`, et l'erreur est écrite dans le log avec le chemin (AC-11). Chemin invalide, fichier absent, fichier corrompu : même traitement.
+- Un modèle chargé devient un `Model` : une liste de parties (`ModelPartRef` : un mesh et un matériau du cache). Ses textures externes passent par `loadTexture()`, donc par le cache ; ses images intégrées sont décodées sans clé de chemin. Une texture en échec n'empêche pas le modèle d'être prêt.
+- Une même image utilisée comme couleur et comme données serait chargée deux fois, une fois par espace de couleur (formats GPU différents).
+- `parts(modèle)` renvoie les parties d'un modèle prêt, sinon celles du modèle de secours : le cube de 1 m et le matériau par défaut (G-03).
+- `addMesh()`, `addMaterial()` et `addModel()` ajoutent des ressources faites en code (primitives et matériaux de la démo), sans chemin. Un mesh invalide ou un facteur hors de [0 ; 1] donnent `Failed`, avec une ligne de log.
+- `meshes()`, `textures()` et `materials()` donnent accès en lecture aux pools : le renderer y lit ce qui est devenu prêt ou a été déchargé.
+- `unloadAll()` décharge tout (déchargement de la scène) : chaque handle donné jusque-là devient périmé, et les assets de secours sont recréés.
+- Chargement synchrone et sans verrou en phase 4 : l'état `Loading` ne dure que le temps de l'appel.
 
 ## Assets de secours (section 5.5)
 

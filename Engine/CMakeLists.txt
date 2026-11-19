@@ -122,6 +122,8 @@ add_library(ApexEngine STATIC
     Resources/ModelData.h
     Resources/Primitives.cpp
     Resources/Primitives.h
+    Resources/ResourceCache.cpp
+    Resources/ResourceCache.h
     Resources/ResourcePool.h
     Resources/TextureData.h
 )
