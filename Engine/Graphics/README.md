@@ -36,7 +36,9 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU ;
 - `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
 - `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
-- `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`), sans Vulkan, testé sans GPU.
+- `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`), sans Vulkan, testé sans GPU ;
+- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
+- `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol.
 
 ## Renderer
 
@@ -78,6 +80,17 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `createMesh(name, meshData)` valide le mesh (`resources::validate`), crée ses buffers de sommets et d'indices en mémoire GPU, les remplit par des buffers de transit et attend la fin de la copie : à utiliser au chargement, pas à chaque frame. Une barrière à la fin de la copie rend les données visibles aux frames suivantes. En cas d'échec, l'erreur nomme le mesh et elle est écrite dans le log (section 5.4).
 - `destroyMesh(handle)` retire le mesh tout de suite ; ses buffers passent par la destruction différée. Un handle périmé est ignoré. Les meshes encore présents à la fermeture sont détruits par le renderer.
 - Matériaux (note 0011) : une table de 256 entrées au plus, dont l'entrée 0, le matériau par défaut. `createMaterial()` refuse une table pleine ou un facteur hors de [0 ; 1]. Un objet dont le handle de matériau est périmé ou par défaut reçoit le matériau par défaut. La table est recopiée dans le buffer de chaque frame : retirer un matériau ne gêne pas une frame en vol, et l'emplacement est réutilisé tout de suite.
+
+## Données par frame (G-02)
+
+- Un jeu de descripteurs par frame en vol, le jeu 0 (section 5.4, note 0011) :
+  - binding 0, uniform buffer `FrameUniforms` : matrice vue-projection, direction vers la lumière, radiance de la lumière (couleur × intensité), terme ambiant ;
+  - binding 1, storage buffer d'`ObjectGpu` : matrice du modèle relative à la caméra, matrice des normales, index de matériau. Un élément par objet dessiné, dans l'ordre des appels de dessin ; le shader le lit par `gl_InstanceIndex` ;
+  - binding 2, storage buffer de `MaterialGpu` : la table des matériaux.
+- Aucune matrice d'objet en push constant.
+- Les buffers sont visibles par le CPU, mappés pendant toute l'exécution et réécrits à chaque frame après l'attente de sa fence. `flush()` les rend visibles au GPU quand la mémoire n'est pas cohérente.
+- Les structures C++ (`FrameData.h`, `MaterialTable.h`) et GLSL (`Shaders/Frame.glsl`, `Shaders/Material.glsl`) ont la même disposition : des `static_assert` et des tests vérifient tailles et décalages. Les shaders accèdent aux matériaux uniquement par `Material.glsl` (G-08).
+- Matrice des normales : inverse transposée de la partie 3 × 3 du modèle, pour garder les normales perpendiculaires aux surfaces sous une échelle non uniforme.
 
 ## Swapchain
 

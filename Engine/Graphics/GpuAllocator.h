@@ -18,6 +18,8 @@ struct GpuBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation allocation = nullptr;
     VkDeviceSize size = 0;
+    // Set for a buffer created by createMappedBuffer: mapped for its whole life.
+    void* mapped = nullptr;
 };
 
 struct GpuImage {
@@ -47,6 +49,13 @@ public:
     // Device-local, filled by a copy (UploadContext): meshes. The name appears in the error message.
     [[nodiscard]] core::Result<GpuBuffer> createDeviceBuffer(std::string_view name, VkDeviceSize size,
                                                              VkBufferUsageFlags usage);
+    // Host-visible and mapped until destroyed, for data rewritten every frame. Write through
+    // GpuBuffer::mapped, then call flush().
+    [[nodiscard]] core::Result<GpuBuffer> createMappedBuffer(std::string_view name, VkDeviceSize size,
+                                                             VkBufferUsageFlags usage);
+    // Makes the first `size` bytes written through `mapped` visible to the GPU when the memory is not
+    // coherent; does nothing otherwise.
+    void flush(const GpuBuffer& buffer, VkDeviceSize size) noexcept;
     // Immediate: the caller makes sure no frame in flight still uses the buffer (DeferredDeleter).
     void destroyBuffer(const GpuBuffer& buffer) noexcept;
 

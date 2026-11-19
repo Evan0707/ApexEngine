@@ -55,7 +55,11 @@ add_library(ApexEngine STATIC
     Graphics/DrawList.h
     Graphics/Device.cpp
     Graphics/Device.h
+    Graphics/FrameBuffers.cpp
+    Graphics/FrameBuffers.h
     Graphics/FrameCounters.h
+    Graphics/FrameData.cpp
+    Graphics/FrameData.h
     Graphics/FrameSync.cpp
     Graphics/FrameSync.h
     Graphics/GpuAllocator.cpp
@@ -108,6 +112,11 @@ add_library(Apex::Engine ALIAS ApexEngine)
 apex_add_shaders(ApexEngine
     Graphics/Shaders/Triangle.frag
     Graphics/Shaders/Triangle.vert
+)
+# Included by the shaders above: tracked through glslc's depfiles, listed here for the IDE.
+target_sources(ApexEngine PRIVATE
+    Graphics/Shaders/Frame.glsl
+    Graphics/Shaders/Material.glsl
 )
 
 # Include root: #include "Core/Version.h"
