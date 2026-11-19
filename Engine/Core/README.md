@@ -2,7 +2,7 @@
 
 **Rôle :** socle du moteur. À terme : boucle à pas fixe, temps, logs, erreurs (cahier des charges, sections 4 et 5.1).
 
-**État (fin de phase 2) :** version du moteur, erreurs (dont `GpuFailure`, ajouté en phase 2), assertions, logger, pas fixe, boucle principale et macros de profilage.
+**État (phase 3) :** version du moteur, erreurs (dont `GpuFailure`, ajouté en phase 2), assertions, logger, pas fixe, boucle principale, macros de profilage, et depuis la phase 3 mathématiques (GLM) et `WorldPosition`.
 
 ## Interface publique
 
@@ -19,6 +19,8 @@
 | `Core/FramePhases.h` | `FixedStep`, `FramePhases` : interface des phases d'une frame, implémentée par l'application |
 | `Core/MainLoop.h` | `MainLoop` : `runFrame(phases, frameSeconds)`, `run(phases)` |
 | `Core/Profiling.h` | `APEX_PROFILE_FRAME()`, `APEX_PROFILE_SCOPE(name)` |
+| `Core/Math.h` | Point d'inclusion unique de GLM ; axes du repère : `kWorldRight`, `kWorldUp`, `kWorldForward` |
+| `Core/WorldPosition.h` | `WorldPosition`, alias de `glm::vec3` (garde-fou G-07) |
 
 ## Erreurs et assertions
 
@@ -46,6 +48,13 @@
 - `runFrame` prend la durée de frame en paramètre et se teste sans horloge. `run` mesure le temps réel avec `std::chrono::steady_clock` et appelle `runFrame` jusqu'à la demande d'arrêt.
 - Aucun état global : la boucle et son accumulateur appartiennent à l'objet `MainLoop` (garde-fou G-06).
 
+## Mathématiques
+
+- GLM (décision 0010), inclus uniquement par `Core/Math.h` : les autres fichiers incluent `Core/Math.h`. Seules les extensions stables (`glm/ext`, `glm/gtc`) sont incluses, jamais `glm/gtx`. Aucune option globale de GLM n'est définie.
+- Repère de la section 3.3 : main droite, +Y vers le haut, mètres, radians. Une caméra sans rotation regarde vers −Z (`kWorldForward`) ; une rotation positive autour de +Y tourne vers la gauche, dans le sens antihoraire vu de dessus.
+- `WorldPosition` désigne une position monde. Elle n'est convertie vers l'espace de rendu qu'à l'extraction, en matrices relatives à la caméra (G-07). Le jour où le monde dépasse quelques kilomètres, elle passera en double précision sans changer les interfaces (section 4.5).
+- La projection (profondeur 0 à 1, inversion de Y) n'est pas ici : elle est construite par `Graphics`, en un seul endroit.
+
 ## Profilage
 
 - Tracy (décision 0003). `Core/Profiling.h` est le seul fichier du moteur qui inclut Tracy ; le reste du moteur n'utilise que ses deux macros.
@@ -57,4 +66,4 @@
 
 ## Dépendances
 
-Bibliothèque standard (GLM arrivera en phase 3, décision 0006). Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.
+Bibliothèque standard, GLM (décision 0010). Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.

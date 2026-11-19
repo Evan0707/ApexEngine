@@ -5,6 +5,7 @@
   "builtin-baseline": "d13c536672dced4b8c671955ea7d057a1b7a1ff8",
   "dependencies": [
     "catch2",
+    "glm",
     {
       "name": "sdl3",
       "features": [

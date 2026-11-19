@@ -7,6 +7,7 @@ add_executable(ApexTests
     Core/LanguageTests.cpp
     Core/LoggerTests.cpp
     Core/MainLoopTests.cpp
+    Core/MathTests.cpp
     Core/VersionTests.cpp
     Debug/ColorSpaceTests.cpp
     Debug/FrameTimeStatsTests.cpp

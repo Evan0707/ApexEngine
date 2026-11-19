@@ -1,3 +1,4 @@
+find_package(glm CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(VulkanHeaders CONFIG REQUIRED)
 find_package(VulkanLoader CONFIG REQUIRED)
@@ -25,9 +26,11 @@ add_library(ApexEngine STATIC
     Core/LogSink.h
     Core/MainLoop.cpp
     Core/MainLoop.h
+    Core/Math.h
     Core/Profiling.h
     Core/Version.cpp
     Core/Version.h
+    Core/WorldPosition.h
     Debug/ColorSpace.cpp
     Debug/ColorSpace.h
     Debug/DebugUi.cpp
@@ -91,6 +94,8 @@ apex_add_shaders(ApexEngine
 target_include_directories(ApexEngine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(ApexEngine PUBLIC Apex::Options)
+# PUBLIC: GLM types are part of the public interfaces; included through Core/Math.h only (decision 0010).
+target_link_libraries(ApexEngine PUBLIC glm::glm)
 # SDL is included only by Platform/*.cpp (decision 0002).
 target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
 # Vulkan headers are included only by Graphics (decision 0006); no public header of Graphics needs them.
