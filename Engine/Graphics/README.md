@@ -125,7 +125,15 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - Sources GLSL 4.60 dans `Graphics/Shaders/`. `glslc`, fourni par le SDK Vulkan, les compile pendant le build : `--target-env=vulkan1.3 -Werror`, avec les informations de débogage en Debug (`-g`, utile dans RenderDoc) et optimisées ailleurs (`-O`). Une erreur ou un avertissement de shader fait échouer le build (section 3.1).
 - `apex_add_shaders()` (`cmake/ApexShaders.cmake`) produit pour chaque shader un fichier `Shaders/<nom>.spv.inc` dans le dossier de build : la liste des mots SPIR-V au format d'un initialiseur C, incluse par `ShaderBinaries.cpp`. Aucun fichier de shader n'est cherché au lancement.
-- Les fichiers inclus par un shader (`#include`, à venir avec les matériaux, G-08) sont suivis : les modifier recompile le shader.
+- Les fichiers inclus par un shader (`#include`) sont suivis par les fichiers de dépendances de `glslc` : les modifier recompile le shader. `Frame.glsl` déclare les données par frame, `Material.glsl` la table des matériaux (seul accès des shaders aux matériaux, G-08), `Pbr.glsl` l'éclairage.
+- Shaders de la scène : `Scene.vert` lit l'objet par `gl_InstanceIndex` et passe la position et la normale en espace de rendu ; `Scene.frag` calcule l'éclairage.
+
+## Éclairage (phase 3)
+
+- Modèle metallic-roughness de glTF 2.0, simplifié (section 5.5), dans `Pbr.glsl` : diffus de Lambert, distribution GGX, visibilité de Smith corrélée en hauteur, Fresnel de Schlick. Réflectance des diélectriques en incidence normale : 0,04. Rugosité perceptuelle bornée à 0,045 en bas, pour qu'un matériau parfaitement lisse garde un reflet visible.
+- Une lumière directionnelle (couleur × intensité) et un terme ambiant constant, appliqué aux parts diffuse et spéculaire. L'IBL le remplacera en P1.
+- Calcul en espace linéaire, encodage sRGB par la swapchain. Pas de tonemapping avant P1 : une valeur au-dessus de 1 sature en blanc.
+- La vue est calculée en espace de rendu : la caméra est à l'origine, la direction vers l'observateur est `-position`.
 - `glslc` est cherché dans `%VULKAN_SDK%\Bin`, puis dans le `PATH`. Sans lui, la configuration CMake échoue avec un message qui dit quoi installer.
 
 ## Validation

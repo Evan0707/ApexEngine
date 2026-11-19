@@ -117,6 +117,7 @@ apex_add_shaders(ApexEngine
 target_sources(ApexEngine PRIVATE
     Graphics/Shaders/Frame.glsl
     Graphics/Shaders/Material.glsl
+    Graphics/Shaders/Pbr.glsl
 )
 
 # Include root: #include "Core/Version.h"
