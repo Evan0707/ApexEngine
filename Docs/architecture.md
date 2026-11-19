@@ -2,20 +2,20 @@
 
 Ce document décrit l'architecture réellement en place. Il est complété à la fin de chaque phase. La cible est décrite dans `cahier_des_charges.md`, section 4.
 
-## État actuel (phase 4)
+## État actuel (phase 5)
 
 | Cible CMake | Type | Contenu |
 |---|---|---|
-| `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Debug`, et le SPIR-V des shaders |
-| `ApexDemo` | Exécutable | Dessine une scène éclairée (sol, cubes, sphères, modèles glTF texturés lus dans `Assets/`) vue par une caméra libre, affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
-| `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Debug` et de la démo, sans fenêtre ni GPU |
-| `Apex::Options` | Cible d'interface | Options de compilation communes : C++23, avertissements en erreurs |
+| `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `World`, `Serialization`, `Debug`, et le SPIR-V des shaders |
+| `ApexDemo` | Exécutable | Charge `Assets/Scenes/demo.json` et `Config/`, dessine la scène éclairée (sol, cubes, sphères, modèles glTF texturés) vue par une caméra libre, affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
+| `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `World`, `Serialization`, `Debug` et de la démo, sans fenêtre ni GPU |
+| `Apex::Options` | Cible d'interface | Options de compilation communes : avertissements en erreurs. Le standard C++23 est fixé pour tout le projet dans le `CMakeLists.txt` racine |
 
 Presets : `windows-debug`, `windows-release`, et `windows-profile` (Release instrumenté par Tracy, décision 0003). Les trois sont compilés et testés par la CI, qui installe aussi le SDK Vulkan pour `glslc`.
 
 Les shaders GLSL sont compilés en SPIR-V par `glslc` pendant le build (`cmake/ApexShaders.cmake`) et embarqués dans la bibliothèque (décision 0006).
 
-Le dossier `Assets/` est copié à côté de `ApexDemo` à chaque build (cible `ApexDemoAssets`, décision 0014). Ses fichiers générés viennent de `Tools/generate_assets.py`, que le build ne lance pas ; les tests lisent `Assets/` et `Tests/Data/` en place.
+Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaque build (cible `ApexDemoAssets`, décisions 0014 et 0017). Ses fichiers générés viennent de `Tools/generate_assets.py`, que le build ne lance pas ; les tests lisent `Assets/` et `Tests/Data/` en place.
 
 ## Modules en place
 
@@ -26,9 +26,11 @@ Le dossier `Assets/` est copié à côté de `ApexDemo` à chaque build (cible `
 | Input | Table des actions, état des actions | Core, Platform | Aucune | `Engine/Input/README.md` |
 | Resources | Données CPU (meshes, matériaux, textures, modèles), import glTF, décodage PNG et JPG, chemins d'assets, handles avec état, cache, assets de secours, primitives | Core | cgltf dans `Resources/GltfImporter.cpp`, stb_image dans `Resources/ImageDecoder.cpp`, uniquement | `Engine/Resources/README.md` |
 | Graphics | Périphérique Vulkan 1.3, mémoire GPU, swapchain, frames en vol, destruction différée, profondeur, reflet GPU du cache (meshes, textures, jeux de matériau), données par frame, `RenderScene`, éclairage PBR | Core, Platform, Resources | Vulkan-Headers, Vulkan-Loader, vk-bootstrap, VMA, dans `Graphics` uniquement | `Engine/Graphics/README.md` |
+| World | Composants du moteur, angles des fichiers de scène, recherches dans le registre, extraction vers le rendu avec interpolation | Core, Resources, Graphics (types de données) | EnTT, en-têtes seuls | `Engine/World/README.md` |
+| Serialization | Lecture et écriture des scènes (format version 1), lecture de la configuration | Core, World, Resources | nlohmann/json, par l'en-tête interne `Serialization/Json.h` uniquement | `Engine/Serialization/README.md` |
 | Debug | Statistiques de frame, mesure de performance, historique des logs, interface Dear ImGui, panneau de la section 5.9 | Core, Platform, Graphics | Dear ImGui dans `Debug` ; SDL et Vulkan dans `Debug/ImGuiBackend.cpp` uniquement | `Engine/Debug/README.md` |
 
-`Game` contient la démonstration : la table d'actions par défaut (`DefaultBindings`), les options de ligne de commande (`CommandLine`), la scène écrite en code jusqu'à la phase 5 (`DemoScene`, dont les modèles viennent du cache de ressources), la caméra libre (`FreeCamera`), l'extraction vers l'espace de rendu (`SceneExtraction`, qui passera dans `World` en phase 5) et l'implémentation des phases de la frame (`DemoApp`). Il n'inclut ni SDL, ni Vulkan, ni ImGui.
+`Game` contient la démonstration : les options de ligne de commande (`CommandLine`), la conversion de la configuration des entrées en table d'actions (`Bindings`), la logique de la caméra libre (`FreeCamera`), ses composants (`GameComponents` : contrôleur de caméra, rotation) et leurs systèmes (`GameSystems`), et l'implémentation des phases de la frame (`DemoApp`), qui possède le registre EnTT. Il n'inclut ni SDL, ni Vulkan, ni ImGui, ni nlohmann/json.
 
 ## Frontières entre modules (décision 0009)
 
@@ -38,14 +40,16 @@ Le dossier `Assets/` est copié à côté de `ApexDemo` à chaque build (cible `
 - `Graphics` ne reçoit du jeu qu'une `RenderScene` (G-01) : caméra, lumière, terme ambiant et objets (handles de mesh et de matériau de `Resources`, matrice relative à la caméra), copiés à chaque frame.
 - Un seul système de handles, celui de `Resources` (décision 0014). `Graphics` lit le cache une fois par frame (`Renderer::syncResources`) et en garde un reflet GPU désigné par ces handles ; il ne garde aucun pointeur vers les données du cache.
 - Le panneau de debug ne connaît pas la caméra : il modifie une `DebugControls` que l'application applique (décision 0011).
+- EnTT sans surcouche (décision 0015) : l'application possède un `entt::registry` ; `World`, `Serialization` et `Game` le reçoivent par référence. `Graphics` ne le voit jamais, `Debug` reçoit un nombre d'entités.
+- `Serialization` ne connaît ni `Game` ni `Input` (décision 0017) : il rend des structures de données (`SceneDescription`, `EngineConfig`, `InputConfig`). `Game` attache ses composants par identifiant d'entité et convertit la configuration des entrées.
 
-## Déroulement d'une frame (phase 4)
+## Déroulement d'une frame (phase 5)
 
-`Game/main.cpp` crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre, table d'actions, renderer, cache de ressources (dossier `Assets` à côté de l'exécutable, ou `--assets`), interface de debug, scène de démonstration (primitives, matériaux et modèles chargés dans le cache), application. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
+`Game/main.cpp` lit d'abord la configuration (`Config/engine.json` et `Config/input.json` à côté de l'exécutable, ou `--config`), puis crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre (à la taille configurée), table d'actions, renderer, cache de ressources (dossier `Assets` à côté de l'exécutable, ou `--assets`), interface de debug, application. L'application charge la scène en dernier (`Scenes/demo.json`, ou `--scene`) dans son registre, puis attache ses composants aux entités `camera` et `spinner`. Une scène ou une configuration invalide arrête la démo avec le code de sortie 1. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
 
 1. **Entrées.** `DemoApp::processInput` mesure la durée de la frame précédente pour le panneau, puis vide la file d'événements de la fenêtre. Les événements bruts passent aussi à ImGui. Ceux qu'ImGui utilise sont retirés avant que l'état `frame` applique le reste. Les actions qui ne relèvent pas de la simulation (capture du curseur, panneau de debug) sont traitées ici. L'état `frame` est ensuite fusionné dans l'état `simulation`. Une demande de fermeture arrête la boucle.
-2. **Simulation.** De zéro à quatre pas de 1/60 s. Chaque pas lit uniquement l'état `simulation`, puis vide ses fronts. La caméra libre (axes, course, souris si le curseur est capturé) et le cube tournant avancent d'un pas ; l'état précédent est gardé pour l'interpolation.
-3. **Extraction.** Caméra et cube tournant sont interpolés entre les deux derniers pas (`alpha`, section 5.1). Les positions monde deviennent des matrices relatives à la caméra (G-07). Chaque objet donne un `RenderObject` par partie de son modèle ; un modèle pas prêt donne les parties du modèle de secours.
+2. **Simulation.** De zéro à quatre pas de 1/60 s. Chaque pas commence par `world::rememberTransforms`, qui garde la transformation de chaque entité pour l'interpolation, puis lit uniquement l'état `simulation` et vide ses fronts. Les systèmes de `Game` font avancer la caméra libre (axes, course, souris si le curseur est capturé) et le cube tournant en écrivant leurs `Transform`.
+3. **Extraction.** `world::extractRenderScene` interpole les transformations entre les deux derniers pas (`alpha`, section 5.1), caméra comprise, et convertit les positions monde en matrices relatives à la caméra (G-07). Chaque entité avec un `MeshRenderer` donne un `RenderObject` par partie de son modèle ; un modèle pas prêt donne les parties du modèle de secours. Le champ de vision réglé dans le panneau est écrit dans le composant `Camera` juste avant.
 4. **Rendu.** `DebugUi::buildFrame` construit l'interface. `Renderer::syncResources(cache)` envoie au GPU ce qui est devenu prêt et libère ce qui a été déchargé. `Renderer::renderFrame(scene)` attend la fence du créneau de frame, acquiert une image, résout les handles (assets de secours si besoin, G-03), trie les objets par matériau, écrit les données de la frame (caméra, lumière, objets, matériaux), enregistre la passe de scène (couleur et profondeur, un jeu de descripteurs par matériau) puis la passe de l'interface, et soumet. Fenêtre réduite : rien n'est rendu.
 5. **Présentation.** `Renderer::presentFrame` présente l'image. Avec la vsync, l'attente se fait ici ou dans l'acquisition suivante.
 
@@ -70,6 +74,9 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 | 0012 | 4 | Ajout de cgltf |
 | 0013 | 4 | Ajout de stb_image |
 | 0014 | 4 | Ressources : un seul système de handles, nœuds aplatis dans les sommets, assets générés par script, `Assets/` à côté de l'exécutable |
+| 0015 | 5 | Ajout d'EnTT, utilisé sans surcouche |
+| 0016 | 5 | Ajout de nlohmann/json, confiné à un en-tête interne de `Serialization` |
+| 0017 | 5 | Monde et scène : format de scène complété, champs inconnus refusés, matériau par entité, configuration dans `Config/`, composants du jeu attachés par identifiant |
 
 ## Revue des garde-fous (AC-17)
 
@@ -77,16 +84,16 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 
 | ID | Phase 0 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 | Phase 7 | Phase 8 |
 |---|---|---|---|---|---|---|---|---|---|
-| G-01 | sans objet | sans objet | conforme | conforme | conforme | | | | |
-| G-02 | sans objet | sans objet | conforme | conforme | conforme | | | | |
-| G-03 | sans objet | sans objet | sans objet | sans objet | conforme | | | | |
-| G-04 | sans objet | sans objet | sans objet | conforme | conforme | | | | |
-| G-05 | sans objet | conforme | conforme | conforme | conforme | | | | |
-| G-06 | conforme | conforme | conforme | conforme | conforme | | | | |
-| G-07 | sans objet | sans objet | sans objet | conforme | conforme | | | | |
-| G-08 | sans objet | sans objet | sans objet | conforme | conforme | | | | |
-| G-09 | sans objet | sans objet | conforme | conforme | conforme | | | | |
-| G-10 | conforme | conforme | conforme | conforme | conforme | | | | |
+| G-01 | sans objet | sans objet | conforme | conforme | conforme | conforme | | | |
+| G-02 | sans objet | sans objet | conforme | conforme | conforme | conforme | | | |
+| G-03 | sans objet | sans objet | sans objet | sans objet | conforme | conforme | | | |
+| G-04 | sans objet | sans objet | sans objet | conforme | conforme | conforme | | | |
+| G-05 | sans objet | conforme | conforme | conforme | conforme | conforme | | | |
+| G-06 | conforme | conforme | conforme | conforme | conforme | conforme | | | |
+| G-07 | sans objet | sans objet | sans objet | conforme | conforme | conforme | | | |
+| G-08 | sans objet | sans objet | sans objet | conforme | conforme | conforme | | | |
+| G-09 | sans objet | sans objet | conforme | conforme | conforme | conforme | | | |
+| G-10 | conforme | conforme | conforme | conforme | conforme | conforme | | | |
 
 Détail de la phase 1 :
 
@@ -128,3 +135,16 @@ Détail de la phase 4 :
 - **G-08 :** un matériau reste un jeu de données (facteurs et handles de texture), un seul pipeline pour tous les objets. Les shaders lisent facteurs et textures par `Shaders/Material.glsl` (`sampleMaterial()`), seul point d'accès.
 - **G-09 :** inchangé ; le format des textures dépend de leur espace de couleur, choisi en un seul endroit (`textureFormat()`).
 - **G-10 :** confinement vérifié par recherche : cgltf et stb_image dans `Resources` ; SDL dans `Platform/Window.cpp`, `Platform/Paths.cpp` et `Debug/ImGuiBackend.cpp` ; aucune API Windows. Conventions : chemins relatifs à `Assets/` avec `/` (normalisation testée), couleurs de base en sRGB et données en linéaire, repère de glTF conservé sans conversion (cube de référence et modèle de Khronos importés à leur taille et dans leur orientation, testés), faces antihoraires gardées sous un nœud miroir (testé).
+
+Détail de la phase 5 :
+
+- **G-01 :** `Graphics` ne reçoit toujours qu'une `RenderScene`, remplie par `world::extractRenderScene` à partir du registre : des copies, aucun pointeur ni identifiant d'entité. Aucun fichier de `Graphics` n'inclut EnTT ni `World` (recherche faite). Vulkan reste dans `Graphics` et `Debug/ImGuiBackend.cpp`.
+- **G-02 :** inchangé (recherche de push constants faite).
+- **G-03 :** `MeshRenderer` désigne un modèle et un matériau par handles ; un modèle absent du disque laisse la scène se charger et donne le cube de secours. Aucun composant ne garde de pointeur de ressource.
+- **G-04 :** inchangé. `Serialization` ne produit pas de ressources : il passe des chemins au cache.
+- **G-05 :** la caméra libre et le cube tournant écrivent leur `Transform` dans `simulate`, par pas fixes ; `rememberTransforms` garde l'état précédent et l'extraction interpole avec `alpha` (testé). Le champ de vision du panneau est un réglage de vue, appliqué à l'extraction.
+- **G-06 :** aucune variable `static` modifiable (recherche faite). Le registre appartient à `DemoApp` et il est passé par référence ; le terme ambiant de la scène est dans le contexte de ce registre, pas dans une variable globale.
+- **G-07 :** `Transform::position` est une `WorldPosition`. La seule soustraction de la position de la caméra est dans `World/RenderExtraction.cpp` (recherche faite) ; `Game/SceneExtraction` est supprimé. Précision testée à 10 km de l'origine.
+- **G-08 :** le matériau donné par une entité dans la scène est un jeu de données de plus dans le cache, pas un shader.
+- **G-09 :** inchangé.
+- **G-10 :** confinement vérifié par recherche : EnTT dans `World`, `Serialization` et `Game` ; nlohmann/json inclus par `Serialization/Json.h` seulement ; cgltf et stb_image dans `Resources` ; SDL dans `Platform` et `Debug/ImGuiBackend.cpp` ; aucune API Windows. Les dépendances entre modules relevées dans les `#include` sont exactement celles de la section 4.2. Conventions : degrés dans les fichiers et radians en interne, ordre des rotations testé, chemins d'assets normalisés.

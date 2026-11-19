@@ -34,6 +34,7 @@ build\windows-release\bin\ApexDemo.exe --benchmark 60 --no-vsync
 |---|---|---|---|---|---|---|---|---|---|
 | 19 novembre 2026 | 3 | 19 | 22 188 | aucune | 1 602 | 0,62 ms | 1,53 ms | 18,12 ms | atteints |
 | 19 novembre 2026 | 4 | 20 | 26 698 | textures (7, sans mipmaps) | 1 399 | 0,71 ms | 1,56 ms | 8,97 ms | atteints |
+| 19 novembre 2026 | 5 | 20 | 26 698 | textures (7, sans mipmaps) | 1 456 | 0,69 ms | 1,46 ms | 4,72 ms | atteints |
 
 ### Phase 3 (19 novembre 2026)
 
@@ -50,4 +51,11 @@ Scène de la phase 3 avec des modèles glTF : cube de référence texturé, deux
 - Le FPS moyen baisse de 13 % (1 602 à 1 399) : échantillonnage de deux textures par fragment, un jeu de descripteurs lié par matériau, 4 500 triangles de plus. Le 99e centile ne bouge presque pas (1,53 à 1,56 ms).
 - Le maximum descend à 8,97 ms : l'accroc de 18 ms de la phase 3 ne s'est pas reproduit.
 - Mémoire GPU : 223 Mio après les envois (voir `Engine/Graphics/README.md` pour ce qu'elle compte). Cette mesure ne relevait pas la valeur de fin ; le résumé du benchmark la donne désormais (ligne `Benchmark end`), pour suivre la dérive demandée par la section 7.2.
+
+### Phase 5 (19 novembre 2026)
+
+Même contenu qu'en phase 4, mais la scène vient de `Assets/Scenes/demo.json` : 22 entités dans un registre EnTT, extraites vers le rendu à chaque frame. 87 382 frames en 60 s.
+
+- Le passage par le registre et par l'extraction ne coûte rien de mesurable : 1 456 FPS contre 1 399 en phase 4, un écart de 4 % qui tient dans la variation d'une mesure à l'autre sur cette machine.
+- Mémoire GPU : 223 Mio après les envois et 223 Mio en fin de mesure. Aucune dérive sur 60 s.
 
