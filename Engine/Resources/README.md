@@ -9,7 +9,7 @@
 | En-tête | Contenu |
 |---|---|
 | `Resources/MeshData.h` | `Vertex`, `MeshData`, `triangleCount()`, `validate()` |
-| `Resources/MaterialData.h` | `MaterialData` : couleur de base, métal, rugosité |
+| `Resources/MaterialData.h` | `MaterialData` : couleur de base, métal, rugosité, handles des deux textures |
 | `Resources/Primitives.h` | `makeCube(size)`, `makeSphere(radius, segments, rings)` |
 | `Resources/AssetPath.h` | `AssetPath` : `parse()`, `resolveSibling()`, `str()` |
 | `Resources/Handles.h` | `Handle`, `MeshHandle`, `TextureHandle`, `MaterialHandle`, `ModelHandle`, `ResourceState` |
@@ -26,7 +26,7 @@
 - Format de sommet unique (section 5.4) : position, normale, tangente, UV, 48 octets. La tangente suit glTF : `xyz` dans le sens des `u` croissants, `w` vaut +1 ou −1, et `cross(normale, tangente) * w` pointe vers le haut de la texture. L'origine des UV est le coin haut gauche (glTF).
 - `MeshData` : liste de triangles indexés sur 32 bits, faces avant dans le sens antihoraire (section 3.3).
 - `validate()` vérifie ce que `Graphics` suppose : au moins un triangle, indices dans les bornes, positions finies, normales et tangentes unitaires. L'erreur nomme le mesh et l'élément fautif.
-- `MaterialData` : modèle PBR metallic-roughness de glTF, simplifié (section 5.5), couleur de base en linéaire. Les valeurs par défaut forment le matériau par défaut du moteur : gris clair, non métallique, rugosité 0,5. Les textures arrivent en phase 4.
+- `MaterialData` : modèle PBR metallic-roughness de glTF, simplifié (section 5.5), couleur de base en linéaire, multipliée par la texture de couleur (sRGB) ; métal et rugosité multipliés par les canaux bleu et vert de la texture métal-rugosité (linéaire). Un handle de texture par défaut signifie « pas de texture ». Les valeurs par défaut forment le matériau par défaut du moteur : gris clair, non métallique, rugosité 0,5, sans texture.
 
 ## Chemins d'assets
 
@@ -55,6 +55,8 @@
 - Hiérarchie aplatie (section 5.5, décision 0014) : chaque primitive est transformée par la matrice monde de son nœud, puis les primitives d'un même matériau sont fusionnées en une partie. Un nœud qui inverse le repère (échelle négative) inverse aussi l'ordre des sommets de ses triangles, pour garder des faces avant antihoraires.
 - Lus : `POSITION`, `NORMAL`, `TANGENT`, `TEXCOORD_0` (entiers normalisés compris), indices 8, 16 ou 32 bits, ou aucun indice. Les points et les lignes sont ignorés.
 - Normales absentes : moyenne des faces voisines, pondérée par leur aire. Tangentes absentes : calculées à partir des UV, avec la convention de `Vertex` ; une tangente impossible à calculer (UV dégénérés) devient une perpendiculaire quelconque à la normale.
+- Matériaux : facteurs metallic-roughness (bornés à [0 ; 1]) et indices des images de couleur de base et de métal-rugosité. Les valeurs absentes du fichier prennent celles de glTF (blanc, métal et rugosité à 1). Une primitive sans matériau reçoit le matériau par défaut du moteur (gris, non métallique), plus lisible sans IBL que celui de glTF. Seul le premier jeu d'UV existe : `texCoord` est ignoré, comme les samplers, les normal maps (P1), l'occlusion et l'émissif.
+- Images : non décodées par l'importeur. Une image est soit un chemin relatif au modèle, déjà décodé des échappements d'URI, soit des octets (GLB, `data:` en base64). Le cache les charge ; une image absente n'empêche pas l'import du modèle.
 - Scène lue : la scène par défaut, sinon la première, sinon tous les nœuds sans parent. Une hiérarchie de plus de 64 niveaux est refusée (protection contre un cycle).
 - Limite : le chemin du fichier est passé à cgltf en encodage ANSI pour les `.bin` externes ; un dossier dont le nom contient des caractères hors de cet encodage ne fonctionnera pas.
 

@@ -33,6 +33,7 @@ add_executable(ApexTests
     Platform/KeyTests.cpp
     Resources/AssetPathTests.cpp
     Resources/GltfImporterTests.cpp
+    Resources/GltfMaterialTests.cpp
     Resources/ImageDecoderTests.cpp
     Resources/MeshDataTests.cpp
     Resources/PrimitivesTests.cpp

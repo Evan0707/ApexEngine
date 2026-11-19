@@ -7,6 +7,7 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <format>
@@ -61,6 +62,34 @@ using DataPtr = std::unique_ptr<cgltf_data, DataDeleter>;
     return name != nullptr && name[0] != '\0' ? std::format("'{}'", name) : std::format("{} {}", kind, index);
 }
 
+// RFC 4648, for images in "data:" URIs. Empty on invalid input.
+[[nodiscard]] std::vector<std::byte> decodeBase64(std::string_view text) {
+    constexpr std::string_view kAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::vector<std::byte> bytes;
+    std::uint32_t buffer = 0;
+    int bits = 0;
+    for (const char character : text) {
+        if (character == '=') {
+            break;
+        }
+        const std::size_t value = kAlphabet.find(character);
+        if (value == std::string_view::npos) {
+            return {};
+        }
+        buffer = (buffer << 6) | static_cast<std::uint32_t>(value);
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            bytes.push_back(static_cast<std::byte>((buffer >> bits) & 0xFF));
+        }
+    }
+    return bytes;
+}
+
+[[nodiscard]] float clampFactor(float value) noexcept {
+    return std::isfinite(value) ? std::clamp(value, 0.0f, 1.0f) : 1.0f;
+}
+
 [[nodiscard]] glm::vec3 anyPerpendicular(const glm::vec3& normal) noexcept {
     const glm::vec3 axis = std::abs(normal.y) < 0.999f ? core::kWorldUp : core::kWorldRight;
     return glm::normalize(glm::cross(axis, normal));
@@ -77,7 +106,12 @@ public:
     Converter(const cgltf_data& data, std::string_view name) : m_data(data), m_name(name) {}
 
     [[nodiscard]] core::Result<ModelData> run() {
-        m_model.materials.resize(m_data.materials_count);
+        for (std::size_t i = 0; i < m_data.images_count; ++i) {
+            m_model.images.push_back(convertImage(m_data.images[i]));
+        }
+        for (std::size_t i = 0; i < m_data.materials_count; ++i) {
+            m_model.materials.push_back(convertMaterial(m_data.materials[i], i));
+        }
         m_partOfMaterial.assign(m_data.materials_count + 1, std::nullopt);
 
         const cgltf_scene* scene = m_data.scene != nullptr   ? m_data.scene
@@ -115,6 +149,56 @@ private:
     [[nodiscard]] std::unexpected<core::Error> error(std::string_view reason) const {
         return core::makeError(core::ErrorCode::InvalidArgument,
                                std::format("glTF '{}': {}", m_name, reason));
+    }
+
+    // A file next to the model, or bytes inside it. Neither when the file gives none: the cache then
+    // fails that image alone.
+    [[nodiscard]] static ModelImage convertImage(const cgltf_image& image) {
+        ModelImage converted;
+        if (image.buffer_view != nullptr && image.buffer_view->buffer->data != nullptr) {
+            const auto* begin =
+                static_cast<const std::byte*>(image.buffer_view->buffer->data) + image.buffer_view->offset;
+            converted.bytes.assign(begin, begin + image.buffer_view->size);
+        } else if (image.uri != nullptr) {
+            const std::string_view uri = image.uri;
+            if (uri.starts_with("data:")) {
+                const std::size_t comma = uri.find(";base64,");
+                if (comma != std::string_view::npos) {
+                    converted.bytes = decodeBase64(uri.substr(comma + 8));
+                }
+            } else {
+                std::string decoded(uri);
+                decoded.resize(cgltf_decode_uri(decoded.data()));
+                converted.uri = std::move(decoded);
+            }
+        }
+        return converted;
+    }
+
+    [[nodiscard]] ModelMaterial convertMaterial(const cgltf_material& material, std::size_t index) const {
+        // cgltf fills the glTF defaults (white, fully metallic and rough) when the file omits a factor.
+        const cgltf_pbr_metallic_roughness& pbr = material.pbr_metallic_roughness;
+        ModelMaterial converted{
+            .name = material.name != nullptr ? material.name : std::format("Material {}", index),
+            .factors =
+                MaterialData{
+                    .baseColorFactor = {pbr.base_color_factor[0], pbr.base_color_factor[1],
+                                        pbr.base_color_factor[2], pbr.base_color_factor[3]},
+                    .metallicFactor = clampFactor(pbr.metallic_factor),
+                    .roughnessFactor = clampFactor(pbr.roughness_factor),
+                },
+        };
+        // Only the first UV set exists in the engine's vertex: texCoord is ignored.
+        converted.baseColorImage = imageOf(pbr.base_color_texture);
+        converted.metallicRoughnessImage = imageOf(pbr.metallic_roughness_texture);
+        return converted;
+    }
+
+    [[nodiscard]] std::optional<std::uint32_t> imageOf(const cgltf_texture_view& view) const noexcept {
+        if (view.texture == nullptr || view.texture->image == nullptr) {
+            return std::nullopt;
+        }
+        return static_cast<std::uint32_t>(view.texture->image - m_data.images);
     }
 
     [[nodiscard]] core::Result<void> addNode(const cgltf_node& node, int depth) {
@@ -312,6 +396,7 @@ private:
         if (!m_partOfMaterial[material]) {
             std::uint32_t modelMaterial = static_cast<std::uint32_t>(material);
             if (material == m_data.materials_count) {
+                // The engine's default material, not glTF's fully metallic white: readable without IBL.
                 modelMaterial = static_cast<std::uint32_t>(m_model.materials.size());
                 m_model.materials.push_back(ModelMaterial{.name = "Default"});
             }
