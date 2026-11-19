@@ -6,7 +6,7 @@ Instructions pour tout agent IA qui travaille sur ce dépôt. À lire en entier 
 
 - Prototype de moteur 3D en C++23, Windows x64, Vulkan 1.3.
 - **Source de vérité :** `Docs/cahier_des_charges.md` (v0.3). Si ce fichier et le cahier des charges se contredisent, le cahier des charges l'emporte : signale l'écart au lieu de trancher seul.
-- **Phase en cours : 2 (initialisation Vulkan, swapchain, triangle, ImGui).** Cette ligne est mise à jour par le développeur à chaque changement de phase. Ne travaille pas sur une phase ultérieure.
+- **Phase en cours : 3 (caméra, meshes, profondeur, shader PBR, lumière).** Cette ligne est mise à jour par le développeur à chaque changement de phase. Ne travaille pas sur une phase ultérieure.
 - Priorité : une petite expérience 3D complète et robuste. Rien de ce qui est hors périmètre (cahier des charges, section 2.2) ne doit être ajouté.
 
 ## 2. Commandes
