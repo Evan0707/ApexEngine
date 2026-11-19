@@ -1,3 +1,4 @@
+find_package(EnTT CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -131,6 +132,11 @@ add_library(ApexEngine STATIC
     Resources/ResourceCache.h
     Resources/ResourcePool.h
     Resources/TextureData.h
+    World/Components.h
+    World/Rotation.cpp
+    World/Rotation.h
+    World/SceneQueries.cpp
+    World/SceneQueries.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
 
@@ -151,6 +157,8 @@ target_include_directories(ApexEngine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(ApexEngine PUBLIC Apex::Options)
 # PUBLIC: GLM types are part of the public interfaces; included through Core/Math.h only (decision 0010).
 target_link_libraries(ApexEngine PUBLIC glm::glm)
+# PUBLIC: World and Game use entt::registry directly (decision 0015). Never included by Graphics.
+target_link_libraries(ApexEngine PUBLIC EnTT::EnTT)
 # SDL is included only by Platform/*.cpp (decision 0002).
 target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
 # Vulkan headers are included only by Graphics (decision 0006); no public header of Graphics needs them.

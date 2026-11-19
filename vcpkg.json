@@ -6,6 +6,7 @@
   "dependencies": [
     "catch2",
     "cgltf",
+    "entt",
     "glm",
     {
       "name": "sdl3",
