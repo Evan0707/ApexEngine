@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <format>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -109,6 +110,15 @@ TEST_CASE("An empty action name is rejected", "[input]") {
 TEST_CASE("An action cannot be both a button and an axis", "[input]") {
     requireInvalid({.buttons = {{"Jump", "Space"}}, .keyAxes = {{"Jump", "S", "W"}}}, "'Jump'");
     requireInvalid({.buttons = {{"Look", "F5"}}, .mouseAxes = {{"Look", MouseAxis::X}}}, "'Look'");
+}
+
+TEST_CASE("A mouse axis scale that is not finite is rejected", "[input]") {
+    constexpr float kInfinity = std::numeric_limits<float>::infinity();
+    requireInvalid({.mouseAxes = {{"LookX", MouseAxis::X, std::numeric_limits<float>::quiet_NaN()}}},
+                   "'LookX'");
+    requireInvalid({.mouseAxes = {{"LookX", MouseAxis::X, kInfinity}}}, "not finite");
+    requireInvalid({.mouseAxes = {{"LookY", MouseAxis::Y, -kInfinity}}}, "'LookY'");
+    CHECK(ActionMap::create({.mouseAxes = {{"LookX", MouseAxis::X, 0.0f}}}).has_value());
 }
 
 TEST_CASE("Several keys can trigger one button", "[input]") {

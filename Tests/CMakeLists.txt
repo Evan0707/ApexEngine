@@ -9,6 +9,7 @@ add_executable(ApexTests
     Core/MainLoopTests.cpp
     Core/VersionTests.cpp
     Input/ActionMapTests.cpp
+    Input/ActionStateTests.cpp
     Platform/KeyTests.cpp
 )
 

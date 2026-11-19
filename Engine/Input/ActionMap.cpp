@@ -3,6 +3,7 @@
 #include "Core/Assert.h"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <limits>
 #include <unordered_map>
@@ -92,6 +93,12 @@ core::Result<ActionMap> ActionMap::create(const InputBindings& bindings) {
             resolveAction(binding.action, ActionKind::Axis, "mouse axis", i);
         if (!action) {
             return std::unexpected(action.error());
+        }
+        if (!std::isfinite(binding.scale)) {
+            return core::makeError(
+                core::ErrorCode::InvalidArgument,
+                std::format("Input binding: mouse axis scale {} for action '{}' is not finite", binding.scale,
+                            binding.action));
         }
         map.m_mouseAxes.push_back({*action, binding.axis, binding.scale});
     }
