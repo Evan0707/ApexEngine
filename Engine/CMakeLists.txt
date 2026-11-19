@@ -1,3 +1,5 @@
+find_package(SDL3 CONFIG REQUIRED)
+
 add_library(ApexEngine STATIC
     Core/Assert.cpp
     Core/Assert.h
@@ -20,6 +22,8 @@ add_library(ApexEngine STATIC
     Platform/Event.h
     Platform/Key.cpp
     Platform/Key.h
+    Platform/Window.cpp
+    Platform/Window.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
 
@@ -27,6 +31,8 @@ add_library(Apex::Engine ALIAS ApexEngine)
 target_include_directories(ApexEngine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(ApexEngine PUBLIC Apex::Options)
+# SDL is included only by Platform/*.cpp (decision 0002).
+target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
 
 target_compile_definitions(ApexEngine PRIVATE
     APEX_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
