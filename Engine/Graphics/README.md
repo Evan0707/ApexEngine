@@ -11,7 +11,8 @@ Aucun en-tête public n'inclut Vulkan : `Game` peut les inclure tous.
 | En-tête | Contenu |
 |---|---|
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
-| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()` |
+| `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
+| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()`, `memoryStats()` |
 
 En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
@@ -19,7 +20,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/DeferredDeleter.h` (`DeferredDeleter`), sans Vulkan, testé sans GPU ;
 - `Graphics/Swapchain.h` (`SwapchainConfig`, `Swapchain`) ;
 - `Graphics/SwapchainState.h` (`FrameDecision`, `SwapchainState`), sans Vulkan, testé sans GPU ;
-- `Graphics/ShaderBinaries.h` : le SPIR-V des shaders, embarqué dans le binaire.
+- `Graphics/ShaderBinaries.h` : le SPIR-V des shaders, embarqué dans le binaire ;
+- `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp`.
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`).
 
 ## Renderer
@@ -50,6 +52,13 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - GPU retenu : le premier qui accepte Vulkan 1.3, `dynamicRendering`, `synchronization2` et la présentation dans la surface, un GPU dédié de préférence. Le nom du GPU et sa version de Vulkan sont écrits dans le log.
 - Une file graphique et une file de présentation (souvent la même).
 
+## Mémoire GPU
+
+- Toute la mémoire GPU passe par `GpuAllocator`, qui encapsule VMA (note 0007). Il est créé après le périphérique, détruit après tous les buffers et avant le périphérique.
+- `createBufferWithData(name, usage, data)` crée un buffer visible par le CPU et le remplit une fois : suffisant pour de petites données statiques (le triangle). Les transferts par buffer intermédiaire viendront avec les meshes. Un échec renvoie `ErrorCode::GpuFailure` avec le nom du buffer (section 5.4).
+- `memoryStats()` additionne l'usage et le budget des tas `DEVICE_LOCAL` (section 5.9). Le budget est exact quand `VK_EXT_memory_budget` est disponible (activée si le pilote la propose), estimé sinon. La valeur est écrite dans le log au démarrage.
+- L'implémentation de VMA compile sans avertissement en `/W4` : aucun avertissement n'est désactivé.
+
 ## Destruction différée
 
 - Un objet GPU peut encore être lu par une frame en vol quand le code n'en a plus besoin (ancienne swapchain, buffer remplacé). Sa destruction est confiée au `DeferredDeleter` sous forme de fonction (section 5.4).
@@ -74,4 +83,4 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 ## Dépendances
 
-Autorisé : `Core`, `Platform`, `Resources`. Interdit : EnTT, Jolt, `World`. Bibliothèques : Vulkan-Headers, Vulkan-Loader et vk-bootstrap 1.4.363 (liés en `PRIVATE` à `ApexEngine`). Les en-têtes Vulkan ne sont inclus que dans `Graphics` et dans `Debug/ImGuiBackend.cpp`.
+Autorisé : `Core`, `Platform`, `Resources`. Interdit : EnTT, Jolt, `World`. Bibliothèques : Vulkan-Headers, Vulkan-Loader et vk-bootstrap 1.4.363, Vulkan Memory Allocator 3.5.0 (liés en `PRIVATE` à `ApexEngine`). Les en-têtes Vulkan ne sont inclus que dans `Graphics` et dans `Debug/ImGuiBackend.cpp`.

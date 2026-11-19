@@ -52,6 +52,8 @@ public:
     [[nodiscard]] VkQueue presentQueue() const noexcept;
 
     [[nodiscard]] bool validationEnabled() const noexcept;
+    // VK_EXT_memory_budget: exact GPU memory budget in VMA's statistics.
+    [[nodiscard]] bool memoryBudgetEnabled() const noexcept;
 
     // Waits for the GPU to finish all submitted work. Logged on failure, never fatal.
     void waitIdle() noexcept;
@@ -67,6 +69,7 @@ private:
     std::uint32_t m_graphicsQueueFamily = 0;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
     bool m_validationEnabled = false;
+    bool m_memoryBudgetEnabled = false;
 };
 
 } // namespace apex::graphics

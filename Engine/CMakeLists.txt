@@ -2,6 +2,7 @@ find_package(SDL3 CONFIG REQUIRED)
 find_package(VulkanHeaders CONFIG REQUIRED)
 find_package(VulkanLoader CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
+find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 if(APEX_ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -38,6 +39,9 @@ add_library(ApexEngine STATIC
     Graphics/Device.h
     Graphics/FrameSync.cpp
     Graphics/FrameSync.h
+    Graphics/GpuAllocator.cpp
+    Graphics/GpuAllocator.h
+    Graphics/GpuMemoryStats.h
     Graphics/Renderer.cpp
     Graphics/Renderer.h
     Graphics/ShaderBinaries.cpp
@@ -48,6 +52,7 @@ add_library(ApexEngine STATIC
     Graphics/SwapchainState.h
     Graphics/ValidationLog.cpp
     Graphics/ValidationLog.h
+    Graphics/VmaImplementation.cpp
     Input/ActionMap.cpp
     Input/ActionMap.h
     Input/ActionState.cpp
@@ -72,7 +77,8 @@ target_link_libraries(ApexEngine PUBLIC Apex::Options)
 # SDL is included only by Platform/*.cpp (decision 0002).
 target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
 # Vulkan headers are included only by Graphics (decision 0006); no public header of Graphics needs them.
-target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-bootstrap::vk-bootstrap)
+target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-bootstrap::vk-bootstrap
+                                          GPUOpen::VulkanMemoryAllocator)
 if(APEX_ENABLE_PROFILING)
     # PUBLIC: the macros of Core/Profiling.h expand in every source that profiles (decision 0003).
     target_link_libraries(ApexEngine PUBLIC Tracy::TracyClient)

@@ -135,11 +135,14 @@ core::Result<std::unique_ptr<Device>> Device::create(platform::Window& window, c
                         physicalDevice);
     }
 
+    const bool memoryBudget =
+        physicalDevice->enable_extension_if_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     vkb::Result<vkb::Device> logicalDevice = vkb::DeviceBuilder(*physicalDevice).build();
     if (!logicalDevice) {
         return gpuError(logger, "Cannot create the Vulkan device", logicalDevice);
     }
     device->m_device = std::move(*logicalDevice);
+    device->m_memoryBudgetEnabled = memoryBudget;
 
     const vkb::Result<VkQueue> graphicsQueue = device->m_device.get_queue(vkb::QueueType::graphics);
     const vkb::Result<std::uint32_t> graphicsFamily =
@@ -213,6 +216,10 @@ VkQueue Device::presentQueue() const noexcept {
 
 bool Device::validationEnabled() const noexcept {
     return m_validationEnabled;
+}
+
+bool Device::memoryBudgetEnabled() const noexcept {
+    return m_memoryBudgetEnabled;
 }
 
 void Device::waitIdle() noexcept {

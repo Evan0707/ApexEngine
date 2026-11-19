@@ -4,6 +4,7 @@
 #include "Graphics/DeferredDeleter.h"
 #include "Graphics/Device.h"
 #include "Graphics/FrameSync.h"
+#include "Graphics/GpuAllocator.h"
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
 
@@ -69,11 +70,13 @@ void transitionImage(VkCommandBuffer commands, VkImage image, VkImageLayout from
 
 } // namespace
 
-// Members are destroyed in reverse order: swapchain and frames, then the deleter, then the device.
+// Members are destroyed in reverse order: swapchain and frames, then the deleter (which may still free
+// buffers), then the allocator, then the device.
 struct Renderer::State {
     platform::Window* window = nullptr;
     core::Logger* logger = nullptr;
     std::unique_ptr<Device> device;
+    std::unique_ptr<GpuAllocator> allocator;
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
     Swapchain swapchain;
@@ -175,6 +178,19 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
         return std::unexpected(device.error());
     }
     state->device = std::move(*device);
+
+    core::Result<std::unique_ptr<GpuAllocator>> allocator = GpuAllocator::create(*state->device);
+    if (!allocator) {
+        logger.error("{}", allocator.error().message);
+        return std::unexpected(allocator.error());
+    }
+    state->allocator = std::move(*allocator);
+    const GpuMemoryStats memory = state->allocator->memoryStats();
+    constexpr double kMebibyte = 1024.0 * 1024.0;
+    logger.info("GPU memory: {:.0f} MiB used, {:.0f} MiB budget{}",
+                static_cast<double>(memory.usedBytes) / kMebibyte,
+                static_cast<double>(memory.budgetBytes) / kMebibyte,
+                state->device->memoryBudgetEnabled() ? "" : " (estimate: VK_EXT_memory_budget unavailable)");
 
     core::Result<FrameSync> frames =
         FrameSync::create(state->device->device(), state->device->graphicsQueueFamily(), kFramesInFlight);
@@ -282,6 +298,10 @@ core::Result<void> Renderer::renderFrame() {
     state.frameIndex = (state.frameIndex + 1) % kFramesInFlight;
     state.acquiredImage = imageIndex;
     return {};
+}
+
+GpuMemoryStats Renderer::memoryStats() const {
+    return m_state->allocator->memoryStats();
 }
 
 core::Result<void> Renderer::presentFrame() {

@@ -2,6 +2,7 @@
 
 #include "Core/Error.h"
 #include "Core/Logger.h"
+#include "Graphics/GpuMemoryStats.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
 
@@ -43,6 +44,8 @@ public:
     [[nodiscard]] core::Result<void> renderFrame();
     // Presentation phase: presents the image of the last renderFrame, if there is one.
     [[nodiscard]] core::Result<void> presentFrame();
+
+    [[nodiscard]] GpuMemoryStats memoryStats() const;
 
 private:
     std::unique_ptr<State> m_state;

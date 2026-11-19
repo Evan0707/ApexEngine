@@ -13,7 +13,8 @@
     },
     "vk-bootstrap",
     "vulkan-headers",
-    "vulkan-loader"
+    "vulkan-loader",
+    "vulkan-memory-allocator"
   ],
   "features": {
     "profiling": {
