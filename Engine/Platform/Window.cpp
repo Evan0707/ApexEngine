@@ -4,7 +4,7 @@
 #include "Platform/Key.h"
 
 #include <SDL3/SDL.h>
-// Declares SDL_SetMainReady() only: Game keeps its standard main (decision 0002).
+// Declares SDL_SetMainReady() only: Game keeps its standard main (decisions 0002 and 0005).
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL_main.h>
 
