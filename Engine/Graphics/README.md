@@ -13,7 +13,10 @@ Aucun en-tête public n'inclut Vulkan : `Game` peut les inclure tous.
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()` |
 
-En-tête interne, inclus uniquement par les fichiers `.cpp` de `Graphics` : `Graphics/Device.h` (`DeviceConfig`, `Device`), qui inclut Vulkan et vk-bootstrap.
+En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
+
+- `Graphics/Device.h` (`DeviceConfig`, `Device`), qui inclut Vulkan et vk-bootstrap ;
+- `Graphics/DeferredDeleter.h` (`DeferredDeleter`), sans Vulkan, testé sans GPU.
 
 ## Renderer
 
@@ -26,6 +29,13 @@ En-tête interne, inclus uniquement par les fichiers `.cpp` de `Graphics` : `Gra
 - Instance Vulkan 1.3. Ses extensions sont celles que SDL demande pour présenter dans la fenêtre (`Window::vulkanInstanceExtensions()`), vk-bootstrap ne choisit pas les siennes.
 - GPU retenu : le premier qui accepte Vulkan 1.3, `dynamicRendering`, `synchronization2` et la présentation dans la surface, un GPU dédié de préférence. Le nom du GPU et sa version de Vulkan sont écrits dans le log.
 - Une file graphique et une file de présentation (souvent la même).
+
+## Destruction différée
+
+- Un objet GPU peut encore être lu par une frame en vol quand le code n'en a plus besoin (ancienne swapchain, buffer remplacé). Sa destruction est confiée au `DeferredDeleter` sous forme de fonction (section 5.4).
+- `advanceFrame()` est appelé une fois par frame, après l'attente de la fence du créneau de frame qui va être réutilisé. Une destruction ajoutée pendant la frame N s'exécute au début de la frame N + nombre de frames en vol : le GPU a fini la frame N.
+- Les destructions s'exécutent dans l'ordre d'ajout. Une destruction peut en ajouter une autre, qui attend les frames suivantes.
+- `flushAll()` exécute tout ce qui reste, après une attente du GPU (fermeture). Le destructeur l'appelle aussi : le `DeferredDeleter` doit donc être détruit avant le périphérique.
 
 ## Validation
 

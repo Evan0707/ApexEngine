@@ -32,6 +32,8 @@ add_library(ApexEngine STATIC
     Debug/LogHistory.h
     Debug/LogHistorySink.cpp
     Debug/LogHistorySink.h
+    Graphics/DeferredDeleter.cpp
+    Graphics/DeferredDeleter.h
     Graphics/Device.cpp
     Graphics/Device.h
     Graphics/Renderer.cpp
