@@ -41,6 +41,7 @@ add_executable(ApexTests
     Resources/ResourcePoolTests.cpp
     Serialization/SceneJsonTests.cpp
     Serialization/SceneLoaderTests.cpp
+    Serialization/SceneRoundTripTests.cpp
     World/RenderExtractionTests.cpp
     World/RotationTests.cpp
     World/SceneQueriesTests.cpp

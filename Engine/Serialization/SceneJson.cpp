@@ -3,6 +3,8 @@
 #include "Resources/AssetPath.h"
 #include "Serialization/Json.h"
 
+#include <array>
+#include <charconv>
 #include <format>
 #include <set>
 #include <string>
@@ -417,6 +419,97 @@ core::Result<SceneDescription> parseScene(std::string_view text, std::string_vie
         scene.entities.push_back(std::move(*entity));
     }
     return scene;
+}
+
+namespace {
+
+using OrderedJson = nlohmann::ordered_json;
+
+// The shortest decimal that reads back as the same float: 0.1f is written "0.1", not "0.10000000149".
+[[nodiscard]] double tidy(float value) {
+    std::array<char, 32> buffer{};
+    const std::to_chars_result written = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value);
+    double result = 0.0;
+    std::from_chars(buffer.data(), written.ptr, result);
+    return result;
+}
+
+[[nodiscard]] OrderedJson toJson(const glm::vec3& vector) {
+    return OrderedJson::array({tidy(vector.x), tidy(vector.y), tidy(vector.z)});
+}
+
+[[nodiscard]] OrderedJson toJson(const world::Collider& collider) {
+    OrderedJson json;
+    switch (collider.shape) {
+    case world::ColliderShape::Box:
+        json["shape"] = "box";
+        json["half_extents"] = toJson(collider.halfExtents);
+        break;
+    case world::ColliderShape::Sphere:
+        json["shape"] = "sphere";
+        json["radius"] = tidy(collider.radius);
+        break;
+    case world::ColliderShape::Capsule:
+        json["shape"] = "capsule";
+        json["radius"] = tidy(collider.radius);
+        json["half_height"] = tidy(collider.halfHeight);
+        break;
+    }
+    return json;
+}
+
+[[nodiscard]] OrderedJson toJson(const EntityDesc& entity) {
+    OrderedJson json;
+    json["id"] = entity.id;
+    if (entity.name) {
+        json["name"] = *entity.name;
+    }
+    if (entity.transform) {
+        json["transform"] = {{"position", toJson(entity.transform->position)},
+                             {"rotation_deg", toJson(entity.transform->rotationDegrees)},
+                             {"scale", toJson(entity.transform->scale)}};
+    }
+    if (entity.mesh) {
+        json["mesh"] = *entity.mesh;
+    }
+    if (entity.material) {
+        json["material"] = {{"base_color", toJson(entity.material->baseColor)},
+                            {"metallic", tidy(entity.material->metallic)},
+                            {"roughness", tidy(entity.material->roughness)}};
+    }
+    if (entity.collider) {
+        json["collider"] = toJson(*entity.collider);
+    }
+    if (entity.rigidBody) {
+        const bool dynamic = entity.rigidBody->type == world::BodyType::Dynamic;
+        json["rigid_body"] = {{"type", dynamic ? "dynamic" : "static"},
+                              {"mass", tidy(entity.rigidBody->mass)}};
+    }
+    if (entity.camera) {
+        json["camera"] = {{"fov_deg", tidy(entity.camera->fovDegrees)},
+                          {"near", tidy(entity.camera->nearPlane)},
+                          {"far", tidy(entity.camera->farPlane)}};
+    }
+    if (entity.light) {
+        json["light"] = {{"direction", toJson(entity.light->direction)},
+                         {"color", toJson(entity.light->color)},
+                         {"intensity", tidy(entity.light->intensity)}};
+    }
+    return json;
+}
+
+} // namespace
+
+std::string writeScene(const SceneDescription& scene) {
+    OrderedJson root;
+    root["version"] = kSceneVersion;
+    root["ambient"] = toJson(scene.ambient);
+    OrderedJson entities = OrderedJson::array();
+    for (const EntityDesc& entity : scene.entities) {
+        entities.push_back(toJson(entity));
+    }
+    root["entities"] = std::move(entities);
+    return root.dump(2) + "\n";
 }
 
 } // namespace apex::serialization

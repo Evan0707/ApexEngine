@@ -2,7 +2,7 @@
 
 **Rôle :** lecture et écriture des scènes et de la configuration en JSON (cahier des charges, sections 3.1, 5.2 et 5.6).
 
-**État (phase 5, en cours) :** lecture d'une scène, version 1 du format (notes de décision 0016 et 0017). L'écriture et la configuration arrivent dans les tâches suivantes.
+**État (phase 5, en cours) :** lecture et écriture d'une scène, version 1 du format (notes de décision 0016 et 0017). La configuration arrive dans la tâche suivante.
 
 ## Interface publique
 
@@ -11,8 +11,8 @@ Aucun en-tête public n'expose de type JSON.
 | En-tête | Contenu |
 |---|---|
 | `Serialization/SceneDescription.h` | `kSceneVersion`, `TransformDesc`, `MaterialDesc`, `CameraDesc`, `LightDesc`, `EntityDesc`, `SceneDescription` : une scène en données pures, dans les unités du fichier |
-| `Serialization/SceneJson.h` | `parseScene(text, sourceName)` |
-| `Serialization/SceneLoader.h` | `instantiateScene()`, `loadSceneFile()` |
+| `Serialization/SceneJson.h` | `parseScene(text, sourceName)`, `writeScene(scene)` |
+| `Serialization/SceneLoader.h` | `instantiateScene()`, `describeScene()`, `loadSceneFile()` |
 
 En-tête interne : `Serialization/Json.h`, seul fichier qui inclut nlohmann/json, avec les fonctions de lecture d'un champ et de construction des messages d'erreur.
 
@@ -24,6 +24,13 @@ En-tête interne : `Serialization/Json.h`, seul fichier qui inclut nlohmann/json
 `loadSceneFile()` enchaîne lecture du fichier, validation et instanciation. Un fichier invalide ne crée donc aucune entité.
 
 Un modèle introuvable n'est pas une erreur de scène : le cache l'écrit dans le log et l'entité est dessinée avec le modèle de secours (AC-11).
+
+## Écriture et aller-retour (section 7.4)
+
+- `describeScene(registry, cache)` fait le chemin inverse d'`instantiateScene()` : les entités qui portent un `SceneId`, triées par identifiant (le registre n'a pas d'ordre propre), dans les unités du fichier. Le chemin d'un modèle vient du cache (`ResourceCache::modelPath()`) ; un modèle créé en code n'a pas de chemin, et son entité est décrite sans `mesh`.
+- `writeScene(scene)` écrit une description dans le format lu par `parseScene()`. Les champs sont dans un ordre fixe et les nombres sous leur forme la plus courte qui redonne le même `float` (0,1 s'écrit `0.1`) : une même scène donne toujours le même texte.
+- Garanties testées : texte → description → texte → description redonne la même description, exactement ; une scène passée par le registre revient identique, aux arrondis près sur les angles (qui passent par un quaternion) et le champ de vision (qui passe par des radians).
+- La démonstration ne sauvegarde pas de scène : l'écriture sert aux tests et à de futurs outils.
 
 ## Format de scène, version 1
 

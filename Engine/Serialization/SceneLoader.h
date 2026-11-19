@@ -17,6 +17,11 @@ namespace apex::serialization {
 void instantiateScene(const SceneDescription& scene, entt::registry& registry,
                       resources::ResourceCache& cache);
 
+// The inverse of instantiateScene: the entities that carry a SceneId, sorted by id, in the units of the
+// file. A MeshRenderer whose model was not loaded from a file is left out, with its material.
+[[nodiscard]] SceneDescription describeScene(const entt::registry& registry,
+                                             const resources::ResourceCache& cache);
+
 // Reads, checks and instantiates a scene file. On any error the registry is left untouched; the error
 // names the file (`sourceName`, its asset path), the entity and the field (spec 5.6).
 [[nodiscard]] core::Result<void> loadSceneFile(const std::filesystem::path& file, std::string_view sourceName,

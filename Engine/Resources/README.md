@@ -71,6 +71,7 @@
 - `parts(modèle)` renvoie les parties d'un modèle prêt, sinon celles du modèle de secours : le cube de 1 m dans le damier magenta (`fallbackMaterial()`), impossible à manquer à l'écran (G-03, AC-11). `defaultMaterial()` reste le matériau par défaut, sans texture.
 - `addMesh()`, `addMaterial()` et `addModel()` ajoutent des ressources faites en code (primitives et matériaux de la démo), sans chemin. Un mesh invalide ou un facteur hors de [0 ; 1] donnent `Failed`, avec une ligne de log.
 - `meshes()`, `textures()` et `materials()` donnent accès en lecture aux pools : le renderer y lit ce qui est devenu prêt ou a été déchargé.
+- `modelPath(modèle)` rend le chemin d'asset d'un modèle chargé depuis un fichier (pour l'écriture d'une scène) ; `root()` le dossier des assets.
 - `unloadAll()` décharge tout (déchargement de la scène) : chaque handle donné jusque-là devient périmé, et les assets de secours sont recréés.
 - Chargement synchrone et sans verrou en phase 4 : l'état `Loading` ne dure que le temps de l'appel.
 

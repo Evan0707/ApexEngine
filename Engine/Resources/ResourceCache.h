@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <utility>
@@ -47,6 +48,11 @@ public:
     [[nodiscard]] MeshHandle addMesh(std::string_view name, MeshData mesh);
     [[nodiscard]] MaterialHandle addMaterial(std::string_view name, const MaterialData& material);
     [[nodiscard]] ModelHandle addModel(std::span<const ModelPartRef> parts);
+
+    // The asset path a model was loaded from. Nothing for a stale handle or a model made in code.
+    [[nodiscard]] std::optional<AssetPath> modelPath(ModelHandle model) const;
+    // The folder asset paths are relative to.
+    [[nodiscard]] const std::filesystem::path& root() const noexcept;
 
     [[nodiscard]] ResourceState state(ModelHandle model) const noexcept;
     [[nodiscard]] ResourceState state(TextureHandle texture) const noexcept;

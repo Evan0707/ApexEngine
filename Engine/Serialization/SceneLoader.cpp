@@ -3,8 +3,11 @@
 #include "Resources/FileReader.h"
 #include "Serialization/SceneJson.h"
 #include "World/Rotation.h"
+#include "World/SceneQueries.h"
 
+#include <algorithm>
 #include <format>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -76,6 +79,55 @@ core::Result<void> loadSceneFile(const std::filesystem::path& file, std::string_
     }
     instantiateScene(*scene, registry, cache);
     return {};
+}
+
+SceneDescription describeScene(const entt::registry& registry, const resources::ResourceCache& cache) {
+    SceneDescription scene;
+    scene.ambient = world::sceneEnvironment(registry).ambient;
+
+    for (const auto [entity, sceneId] : registry.view<world::SceneId>().each()) {
+        EntityDesc description;
+        description.id = sceneId.value;
+        if (const world::Name* name = registry.try_get<world::Name>(entity)) {
+            description.name = name->value;
+        }
+        if (const world::Transform* transform = registry.try_get<world::Transform>(entity)) {
+            description.transform =
+                TransformDesc{.position = transform->position,
+                              .rotationDegrees = world::eulerDegreesFromRotation(transform->rotation),
+                              .scale = transform->scale};
+        }
+        if (const world::MeshRenderer* renderer = registry.try_get<world::MeshRenderer>(entity)) {
+            if (const std::optional<resources::AssetPath> path = cache.modelPath(renderer->model)) {
+                description.mesh = path->str();
+                if (const resources::MaterialData* material =
+                        cache.materials().find(renderer->materialOverride)) {
+                    description.material = MaterialDesc{.baseColor = glm::vec3(material->baseColorFactor),
+                                                        .metallic = material->metallicFactor,
+                                                        .roughness = material->roughnessFactor};
+                }
+            }
+        }
+        if (const world::Collider* collider = registry.try_get<world::Collider>(entity)) {
+            description.collider = *collider;
+        }
+        if (const world::RigidBody* body = registry.try_get<world::RigidBody>(entity)) {
+            description.rigidBody = *body;
+        }
+        if (const world::Camera* camera = registry.try_get<world::Camera>(entity)) {
+            description.camera = CameraDesc{.fovDegrees = glm::degrees(camera->verticalFovRadians),
+                                            .nearPlane = camera->nearPlane,
+                                            .farPlane = camera->farPlane};
+        }
+        if (const world::DirectionalLight* light = registry.try_get<world::DirectionalLight>(entity)) {
+            description.light = LightDesc{
+                .direction = light->direction, .color = light->color, .intensity = light->intensity};
+        }
+        scene.entities.push_back(std::move(description));
+    }
+    // The registry has no order of its own: sorted, so that the same scene always gives the same result.
+    std::ranges::sort(scene.entities, {}, &EntityDesc::id);
+    return scene;
 }
 
 } // namespace apex::serialization

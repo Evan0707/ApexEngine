@@ -169,6 +169,19 @@ ModelHandle ResourceCache::addModel(std::span<const ModelPartRef> parts) {
     return m_models.add(Model{.parts = {parts.begin(), parts.end()}});
 }
 
+std::optional<AssetPath> ResourceCache::modelPath(ModelHandle model) const {
+    for (const auto& [path, handle] : m_modelPaths) {
+        if (handle == model) {
+            return path;
+        }
+    }
+    return std::nullopt;
+}
+
+const std::filesystem::path& ResourceCache::root() const noexcept {
+    return m_root;
+}
+
 ResourceState ResourceCache::state(ModelHandle model) const noexcept {
     return m_models.state(model);
 }
