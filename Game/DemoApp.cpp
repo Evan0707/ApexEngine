@@ -51,9 +51,11 @@ findActions(const input::ActionMap& actions, const std::array<std::string_view, 
 
 } // namespace
 
-core::Result<DemoApp> DemoApp::create(platform::Window& window, core::Logger& logger,
-                                      input::ActionMap actions) {
-    DemoApp app(window, logger, std::move(actions));
+core::Result<DemoApp> DemoApp::create(platform::Window& window, graphics::Renderer& renderer,
+                                      core::Logger& logger, input::ActionMap actions,
+                                      std::optional<std::uint64_t> maxFrames) {
+    DemoApp app(window, renderer, logger, std::move(actions));
+    app.m_maxFrames = maxFrames;
 
     const core::Result<input::ActionId> toggleCursor = findAction(app.m_actions, "ToggleCursor");
     if (!toggleCursor) {
@@ -87,11 +89,18 @@ core::Result<DemoApp> DemoApp::create(platform::Window& window, core::Logger& lo
     return app;
 }
 
-DemoApp::DemoApp(platform::Window& window, core::Logger& logger, input::ActionMap actions)
-    : m_window(&window), m_logger(&logger), m_actions(std::move(actions)), m_frame(m_actions),
-      m_simulation(m_actions) {}
+DemoApp::DemoApp(platform::Window& window, graphics::Renderer& renderer, core::Logger& logger,
+                 input::ActionMap actions)
+    : m_window(&window), m_renderer(&renderer), m_logger(&logger), m_actions(std::move(actions)),
+      m_frame(m_actions), m_simulation(m_actions) {}
 
 bool DemoApp::processInput() {
+    if (m_maxFrames && m_frameCount == *m_maxFrames) {
+        m_logger->info("Frame limit reached: {} frames", m_frameCount);
+        return false;
+    }
+    ++m_frameCount;
+
     const std::span<const platform::Event> events = m_window->pollEvents();
     handleWindowEvents(events);
 
@@ -177,12 +186,32 @@ void DemoApp::logMouseLook(const core::FixedStep& step) {
 
 void DemoApp::extract(double /*alpha*/) {}
 
-void DemoApp::render() {}
+void DemoApp::render() {
+    if (!m_failed) {
+        stopOnRenderError(m_renderer->renderFrame());
+    }
+}
 
 void DemoApp::present() {
-    // No swapchain before phase 2: sleep instead of spinning a core, longer while minimized.
-    const auto pause = m_window->isMinimized() ? std::chrono::milliseconds(10) : std::chrono::milliseconds(1);
-    std::this_thread::sleep_for(pause);
+    if (!m_failed) {
+        stopOnRenderError(m_renderer->presentFrame());
+    }
+    // Rendering is suspended while minimized (spec 5.2): nothing waits for vsync, so do not spin a core.
+    if (m_window->isMinimized()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+bool DemoApp::failed() const noexcept {
+    return m_failed;
+}
+
+void DemoApp::stopOnRenderError(const core::Result<void>& result) {
+    if (!result) {
+        // Already logged by the renderer. The loop stops at the next input phase.
+        m_failed = true;
+        m_quitRequested = true;
+    }
 }
 
 } // namespace apex::game

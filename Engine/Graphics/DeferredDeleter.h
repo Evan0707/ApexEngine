@@ -20,8 +20,9 @@ public:
     // Runs after framesInFlight more calls to advanceFrame.
     void enqueue(std::move_only_function<void()> destroy);
 
-    // Called once per frame, after waiting for the fence of the frame slot about to be reused:
-    // the frame submitted framesInFlight frames ago has finished on the GPU.
+    // Called once per frame, after waiting for the fence of the frame slot about to be reused: the frame
+    // submitted framesInFlight frames ago has finished on the GPU. Called again for that slot only after
+    // a new submission: a skipped frame must not age the pending destructions.
     void advanceFrame();
 
     // Runs every pending destruction, oldest first. The caller has waited for the GPU to be idle.

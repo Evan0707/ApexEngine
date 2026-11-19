@@ -10,6 +10,7 @@ add_executable(ApexTests
     Core/VersionTests.cpp
     Debug/FrameTimeStatsTests.cpp
     Debug/LogHistoryTests.cpp
+    Game/CommandLineTests.cpp
     Game/DefaultBindingsTests.cpp
     Graphics/DeferredDeleterTests.cpp
     Graphics/ValidationLogTests.cpp
@@ -17,6 +18,7 @@ add_executable(ApexTests
     Input/ActionStateTests.cpp
     Platform/KeyTests.cpp
     # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
+    "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"
     "${PROJECT_SOURCE_DIR}/Game/DefaultBindings.cpp"
 )
 

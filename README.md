@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 1 (Core, fenêtre, boucle à pas fixe, logs, actions).** `ApexDemo` ouvre une fenêtre, fait tourner la boucle à pas fixe, logue les actions et se ferme proprement. Rien n'est encore dessiné : le rendu Vulkan arrive en phase 2.
+**État : phase 2 en cours (Vulkan, swapchain, triangle, ImGui).** `ApexDemo` ouvre une fenêtre, l'efface en bleu nuit par Vulkan 1.3 à chaque frame, fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -11,7 +11,7 @@ Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un 
 | Visual Studio 2026 | 18.12 ou plus récent | Charge de travail « Développement Desktop en C++ ». Fournit MSVC 14.52, CMake et Ninja |
 | Git | récente | |
 | vcpkg | cloné à part | Voir ci-dessous |
-| SDK Vulkan (LunarG) | 1.3 ou plus récent | À partir de la phase 2 seulement |
+| SDK Vulkan (LunarG) | 1.4.363.1 | Fournit les validation layers (Debug) et `glslc`. Sans lui, la démo tourne sans validation (avertissement dans le log) |
 
 Installation de vcpkg, une seule fois :
 
@@ -36,9 +36,20 @@ build\windows-debug\bin\ApexDemo.exe
 
 Remplacer `windows-debug` par `windows-release` pour la configuration Release, ou par `windows-profile` pour une Release instrumentée par Tracy (voir `Engine/Core/README.md`).
 
-## La démonstration de la phase 1
+## La démonstration
 
 `ApexDemo` ouvre une fenêtre de 1920 × 1080 et écrit ses logs dans la console et dans `Logs/apex.log`, relatif au dossier de lancement.
+
+| Option | Effet |
+|---|---|
+| `--frames N` | Quitte seul après N frames |
+| `--no-vsync` | Désactive la synchronisation verticale, pour les mesures |
+
+| Code de sortie | Signification |
+|---|---|
+| 0 | Fermeture normale |
+| 1 | Échec : fenêtre, GPU, option invalide ou erreur pendant le rendu (voir le log) |
+| 2 | Fermeture normale, mais les validation layers ont émis au moins un message |
 
 | Touche (AZERTY) | Effet |
 |---|---|

@@ -36,8 +36,12 @@ add_library(ApexEngine STATIC
     Graphics/DeferredDeleter.h
     Graphics/Device.cpp
     Graphics/Device.h
+    Graphics/FrameSync.cpp
+    Graphics/FrameSync.h
     Graphics/Renderer.cpp
     Graphics/Renderer.h
+    Graphics/Swapchain.cpp
+    Graphics/Swapchain.h
     Graphics/ValidationLog.cpp
     Graphics/ValidationLog.h
     Input/ActionMap.cpp

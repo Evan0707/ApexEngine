@@ -1,3 +1,4 @@
+#include "CommandLine.h"
 #include "DefaultBindings.h"
 #include "DemoApp.h"
 
@@ -13,7 +14,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -29,7 +32,8 @@ constexpr bool kEnableValidation = true;
 #endif
 
 // Every system is created here in the order of spec 5.1 and destroyed in reverse order when this returns.
-[[nodiscard]] int runDemo(apex::core::Logger& logger, apex::graphics::ValidationLog& validation) {
+[[nodiscard]] int runDemo(apex::core::Logger& logger, apex::graphics::ValidationLog& validation,
+                          const apex::game::CommandLineOptions& options) {
     using namespace apex;
 
     core::Result<platform::Window> window = platform::Window::create(platform::WindowConfig{}, logger);
@@ -43,15 +47,16 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
-    const graphics::RendererConfig rendererConfig{.applicationName = "Apex Demo",
-                                                  .enableValidation = kEnableValidation};
+    const graphics::RendererConfig rendererConfig{
+        .applicationName = "Apex Demo", .enableValidation = kEnableValidation, .vsync = options.vsync};
     core::Result<std::unique_ptr<graphics::Renderer>> renderer =
         graphics::Renderer::create(*window, logger, validation, rendererConfig);
     if (!renderer) {
         return kExitFailure;
     }
 
-    core::Result<game::DemoApp> app = game::DemoApp::create(*window, logger, std::move(*actions));
+    core::Result<game::DemoApp> app =
+        game::DemoApp::create(*window, **renderer, logger, std::move(*actions), options.maxFrames);
     if (!app) {
         logger.error("{}", app.error().message);
         return kExitFailure;
@@ -61,12 +66,12 @@ constexpr bool kEnableValidation = true;
     loop.run(*app);
 
     logger.info("Shutting down");
-    return kExitSuccess;
+    return app->failed() ? kExitFailure : kExitSuccess;
 }
 
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
     using namespace apex;
 
     // Declared first so that they outlive every system: shutdown messages are logged and counted too.
@@ -80,7 +85,14 @@ int main() {
     graphics::ValidationLog validation(logger);
     logger.info("Apex Engine {}", core::engineVersion().toString());
 
-    const int exitCode = runDemo(logger, validation);
+    const std::vector<std::string_view> arguments(argv + 1, argv + argc);
+    const core::Result<game::CommandLineOptions> options = game::parseCommandLine(arguments);
+    if (!options) {
+        logger.error("{}", options.error().message);
+        return kExitFailure;
+    }
+
+    const int exitCode = runDemo(logger, validation, *options);
     if (const std::uint32_t count = validation.messageCount(); count > 0) {
         logger.error("{} Vulkan validation message(s) during the run", count);
         return exitCode == kExitSuccess ? kExitValidationMessages : exitCode;

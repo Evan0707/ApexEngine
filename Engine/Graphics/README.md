@@ -2,7 +2,7 @@
 
 **Rôle :** renderer Vulkan 1.3, seul module qui émet des appels GPU (cahier des charges, sections 4.3 et 5.4, garde-fou G-01).
 
-**État (phase 2, tâche 3) :** instance, surface de la fenêtre et périphérique logique, avec la validation en Debug. Rien n'est encore dessiné : swapchain et première frame arrivent avec la tâche 5. Notes de décision `0006-chaine-vulkan.md` et `0009-frontieres-platform-graphics-debug.md`.
+**État (phase 2, tâche 5) :** périphérique, swapchain sRGB et deux frames en vol. Chaque frame efface la fenêtre en bleu nuit ; le triangle arrive avec la tâche 8. Notes de décision `0006-chaine-vulkan.md` et `0009-frontieres-platform-graphics-debug.md`.
 
 ## Interface publique
 
@@ -11,18 +11,35 @@ Aucun en-tête public n'inclut Vulkan : `Game` peut les inclure tous.
 | En-tête | Contenu |
 |---|---|
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
-| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()` |
+| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()` |
 
 En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - `Graphics/Device.h` (`DeviceConfig`, `Device`), qui inclut Vulkan et vk-bootstrap ;
-- `Graphics/DeferredDeleter.h` (`DeferredDeleter`), sans Vulkan, testé sans GPU.
+- `Graphics/DeferredDeleter.h` (`DeferredDeleter`), sans Vulkan, testé sans GPU ;
+- `Graphics/Swapchain.h` (`SwapchainConfig`, `Swapchain`) ;
+- `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`).
 
 ## Renderer
 
 - `Renderer::create(window, logger, validation, config)` crée le périphérique. Échec : `ErrorCode::GpuFailure` (ou `PlatformFailure` si SDL ne peut pas créer la surface), avec un message qui dit ce qui manque. Le message est aussi écrit dans le log.
 - La fenêtre, le logger et le `ValidationLog` doivent vivre plus longtemps que le renderer. Le renderer n'est ni copiable ni déplaçable : il est tenu par un `std::unique_ptr`.
-- Le destructeur attend la fin du travail du GPU, puis détruit le périphérique, la surface et l'instance, dans cet ordre.
+- Le destructeur attend la fin du travail du GPU, puis détruit la swapchain et les objets des frames, exécute les destructions différées restantes, et détruit enfin le périphérique, la surface et l'instance.
+- `Renderer.h` n'expose aucun type Vulkan : l'état du renderer est une structure privée, définie dans `Renderer.cpp`.
+
+## Frame
+
+- `renderFrame()` (phase de rendu) : attend la fence du créneau de frame, acquiert une image de la swapchain, enregistre et soumet les commandes. `presentFrame()` (phase de présentation) présente l'image acquise. Une erreur renvoyée par l'une ou l'autre signifie que le périphérique est inutilisable : la démo s'arrête avec le code de sortie 1.
+- Deux frames en vol (section 5.4) : chacune a son pool et son command buffer, sa fence et son sémaphore « image disponible ».
+- Le sémaphore « rendu terminé », attendu par la présentation, existe une fois par **image** de la swapchain, et non par frame en vol. Avec un sémaphore par frame, il pourrait être signalé de nouveau alors que la présentation précédente l'attend encore.
+- Le rendu se fait par dynamic rendering, sans render pass. Les transitions d'image utilisent synchronization2.
+- Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
+
+## Swapchain
+
+- Format sRGB : `B8G8R8A8_SRGB`, sinon `R8G8B8A8_SRGB`. Si le pilote ne propose aucun des deux, un avertissement est écrit : les couleurs seront trop sombres.
+- Vsync activé : mode FIFO. Désactivé (`RendererConfig::vsync`, option `--no-vsync` de la démo) : mailbox, sinon immédiat, sinon FIFO.
+- Créée à la première frame, puis recréée quand la taille de la fenêtre change ou quand l'acquisition ou la présentation renvoie `VK_ERROR_OUT_OF_DATE_KHR` ou `VK_SUBOPTIMAL_KHR`. La recréation attend que le GPU soit inactif : simple et toujours correct, pour un événement rare. Le format, l'extent et le nombre d'images sont écrits dans le log.
 
 ## Périphérique
 
@@ -33,7 +50,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 ## Destruction différée
 
 - Un objet GPU peut encore être lu par une frame en vol quand le code n'en a plus besoin (ancienne swapchain, buffer remplacé). Sa destruction est confiée au `DeferredDeleter` sous forme de fonction (section 5.4).
-- `advanceFrame()` est appelé une fois par frame, après l'attente de la fence du créneau de frame qui va être réutilisé. Une destruction ajoutée pendant la frame N s'exécute au début de la frame N + nombre de frames en vol : le GPU a fini la frame N.
+- `advanceFrame()` est appelé une fois par frame, juste après l'attente de la fence du créneau de frame qui va être réutilisé. Une destruction ajoutée pendant la frame N s'exécute au début de la frame N + 2 (deux frames en vol), après l'attente de la fence de la frame N : le GPU a fini tout ce qui pouvait l'utiliser.
+- Piège : quand une frame est sautée après l'attente de sa fence (swapchain périmée), la frame suivante attend la même fence. Le renderer n'appelle alors pas `advanceFrame()` une seconde fois pour ce créneau : sinon le compteur avancerait sans que le GPU ait progressé, et un objet encore lu pourrait être détruit.
 - Les destructions s'exécutent dans l'ordre d'ajout. Une destruction peut en ajouter une autre, qui attend les frames suivantes.
 - `flushAll()` exécute tout ce qui reste, après une attente du GPU (fermeture). Le destructeur l'appelle aussi : le `DeferredDeleter` doit donc être détruit avant le périphérique.
 
