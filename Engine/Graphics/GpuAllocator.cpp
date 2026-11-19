@@ -71,6 +71,29 @@ void GpuAllocator::destroyBuffer(const GpuBuffer& buffer) noexcept {
     vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
 }
 
+core::Result<GpuImage> GpuAllocator::createImage(std::string_view name, const VkImageCreateInfo& info) {
+    VmaAllocationCreateInfo allocationInfo{};
+    allocationInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    // Render targets are large and recreated with the swapchain: their own memory block each.
+    allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+    GpuImage image;
+    if (const VkResult result =
+            vmaCreateImage(m_allocator, &info, &allocationInfo, &image.image, &image.allocation, nullptr);
+        result != VK_SUCCESS) {
+        return core::makeError(core::ErrorCode::GpuFailure,
+                               std::format("Cannot create the GPU image '{}' ({}x{}): VkResult {}", name,
+                                           info.extent.width, info.extent.height, static_cast<int>(result)));
+    }
+    const std::string ownedName(name);
+    vmaSetAllocationName(m_allocator, image.allocation, ownedName.c_str());
+    return image;
+}
+
+void GpuAllocator::destroyImage(const GpuImage& image) noexcept {
+    vmaDestroyImage(m_allocator, image.image, image.allocation);
+}
+
 GpuMemoryStats GpuAllocator::memoryStats() const {
     const VkPhysicalDeviceMemoryProperties* properties = nullptr;
     vmaGetMemoryProperties(m_allocator, &properties);

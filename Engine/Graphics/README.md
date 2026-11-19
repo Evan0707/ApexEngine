@@ -27,7 +27,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/SwapchainState.h` (`FrameDecision`, `SwapchainState`), sans Vulkan, testé sans GPU ;
 - `Graphics/ShaderBinaries.h` : le SPIR-V des shaders, embarqué dans le binaire ;
 - `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
-- `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : format et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
+- `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : formats de couleur et de profondeur et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
+- `Graphics/DepthTarget.h` (`DepthTarget`) : le tampon de profondeur de la passe principale ;
 - `Graphics/TrianglePipeline.h` (`TriangleVertex`, `TrianglePipeline`).
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/HandlePool.h` (`HandlePool`), sans Vulkan, testé sans GPU ;
@@ -41,7 +42,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Le destructeur attend la fin du travail du GPU, puis détruit la swapchain et les objets des frames, exécute les destructions différées restantes, et détruit enfin le périphérique, la surface et l'instance.
 - `Renderer.h` n'expose aucun type Vulkan : l'état du renderer est une structure privée, définie dans `Renderer.cpp`.
 - La swapchain est créée dès `create()` quand la fenêtre a une taille : le backend Vulkan d'ImGui a besoin de son format à l'initialisation.
-- `setOverlay()` : l'overlay enregistré dessine à la fin de la passe principale de chaque frame, après la scène (note 0008).
+- `setOverlay()` : l'overlay enregistré dessine dans une seconde passe, après la scène et sans profondeur (notes 0008 et 0011).
 
 ## Frame
 
@@ -49,6 +50,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Deux frames en vol (section 5.4) : chacune a son pool et son command buffer, sa fence et son sémaphore « image disponible ».
 - Le sémaphore « rendu terminé », attendu par la présentation, existe une fois par **image** de la swapchain, et non par frame en vol. Avec un sémaphore par frame, il pourrait être signalé de nouveau alors que la présentation précédente l'attend encore.
 - Le rendu se fait par dynamic rendering, sans render pass. Les transitions d'image utilisent synchronization2.
+- Deux passes (note 0011) : la scène, qui efface la couleur et la profondeur ; puis l'interface, qui charge la couleur et n'a pas de profondeur. Une barrière sépare les deux écritures de la couleur. Le backend ImGui n'a donc pas à connaître le format de profondeur, et l'ordre est celui que demandera le tonemapping de la phase 7.
+- Profondeur : `D32_SFLOAT` (section 5.4), choisi en un seul endroit (`Renderer.cpp`) et passé aux pipelines (G-09). Test « inférieur », effacement à 1. Le tampon est recréé avec la swapchain, à sa taille ; son contenu n'est pas conservé après la passe. Un seul tampon sert aux deux frames en vol : la barrière du début de frame attend les écritures de profondeur de la frame précédente.
 - Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
 
 ## Triangle (phase 2)
@@ -84,6 +87,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - Toute la mémoire GPU passe par `GpuAllocator`, qui encapsule VMA (note 0007). Il est créé après le périphérique, détruit après tous les buffers et avant le périphérique.
 - `createBufferWithData(name, usage, data)` crée un buffer visible par le CPU et le remplit une fois : suffisant pour de petites données statiques (le triangle). Les transferts par buffer intermédiaire viendront avec les meshes. Un échec renvoie `ErrorCode::GpuFailure` avec le nom du buffer (section 5.4).
+- `createImage(name, info)` crée une image en mémoire GPU, dans son propre bloc (cibles de rendu). `destroyImage()` la libère immédiatement.
 - `memoryStats()` additionne l'usage et le budget des tas `DEVICE_LOCAL` (section 5.9). Le budget est exact quand `VK_EXT_memory_budget` est disponible (activée si le pilote la propose), estimé sinon. La valeur est écrite dans le log au démarrage.
 - L'implémentation de VMA compile sans avertissement en `/W4` : aucun avertissement n'est désactivé.
 

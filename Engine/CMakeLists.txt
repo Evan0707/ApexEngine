@@ -49,6 +49,8 @@ add_library(ApexEngine STATIC
     Debug/StatsPanel.h
     Graphics/DeferredDeleter.cpp
     Graphics/DeferredDeleter.h
+    Graphics/DepthTarget.cpp
+    Graphics/DepthTarget.h
     Graphics/DrawList.cpp
     Graphics/DrawList.h
     Graphics/Device.cpp

@@ -116,6 +116,12 @@ core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const R
     const VkPipelineMultisampleStateCreateInfo multisample{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
         .rasterizationSamples = target.samples};
+    const bool hasDepth = target.depthFormat != VK_FORMAT_UNDEFINED;
+    const VkPipelineDepthStencilStateCreateInfo depthStencil{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = hasDepth ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable = hasDepth ? VK_TRUE : VK_FALSE,
+        .depthCompareOp = VK_COMPARE_OP_LESS};
     const VkPipelineColorBlendAttachmentState blendAttachment{
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
                           VK_COLOR_COMPONENT_A_BIT};
@@ -130,7 +136,8 @@ core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const R
         .pDynamicStates = dynamicStates.data()};
     const VkPipelineRenderingCreateInfo rendering{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
                                                   .colorAttachmentCount = 1,
-                                                  .pColorAttachmentFormats = &target.colorFormat};
+                                                  .pColorAttachmentFormats = &target.colorFormat,
+                                                  .depthAttachmentFormat = target.depthFormat};
 
     const VkGraphicsPipelineCreateInfo info{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -142,6 +149,7 @@ core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const R
         .pViewportState = &viewport,
         .pRasterizationState = &rasterization,
         .pMultisampleState = &multisample,
+        .pDepthStencilState = &depthStencil,
         .pColorBlendState = &blend,
         .pDynamicState = &dynamic,
         .layout = pipeline.m_layout,

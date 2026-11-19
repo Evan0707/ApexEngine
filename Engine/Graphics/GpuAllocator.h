@@ -20,6 +20,11 @@ struct GpuBuffer {
     VkDeviceSize size = 0;
 };
 
+struct GpuImage {
+    VkImage image = VK_NULL_HANDLE;
+    VmaAllocation allocation = nullptr;
+};
+
 // Internal to Graphics. The only user of VMA (decision 0007). Must outlive every buffer it created
 // and be destroyed before the device.
 class GpuAllocator {
@@ -41,6 +46,11 @@ public:
     createBufferWithData(std::string_view name, VkBufferUsageFlags usage, std::span<const std::byte> data);
     // Immediate: the caller makes sure no frame in flight still uses the buffer (DeferredDeleter).
     void destroyBuffer(const GpuBuffer& buffer) noexcept;
+
+    // Device-local image, for a render target. The name appears in the error message and in VMA.
+    [[nodiscard]] core::Result<GpuImage> createImage(std::string_view name, const VkImageCreateInfo& info);
+    // Immediate, like destroyBuffer.
+    void destroyImage(const GpuImage& image) noexcept;
 
     [[nodiscard]] GpuMemoryStats memoryStats() const;
 

@@ -2,6 +2,7 @@
 
 #include "Core/Profiling.h"
 #include "Graphics/DeferredDeleter.h"
+#include "Graphics/DepthTarget.h"
 #include "Graphics/Device.h"
 #include "Graphics/FrameSync.h"
 #include "Graphics/GpuAllocator.h"
@@ -34,6 +35,9 @@ constexpr std::uint32_t kFramesInFlight = 2;
 // Linear color, written to an sRGB swapchain: a dark blue, easy to tell from a black window.
 constexpr VkClearColorValue kClearColor{{0.02f, 0.04f, 0.10f, 1.0f}};
 
+// 32-bit float depth (spec 5.4). Chosen here only, then passed to the pipelines (G-09).
+constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
+
 // Vulkan clip space: +Y points down until the phase 3 projection flips it (spec 3.3). Linear colors.
 constexpr std::array<TriangleVertex, 3> kTriangle{{
     {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
@@ -57,21 +61,30 @@ constexpr std::array<TriangleVertex, 3> kTriangle{{
            format == VK_FORMAT_A8B8G8R8_SRGB_PACK32;
 }
 
-void transitionImage(VkCommandBuffer commands, VkImage image, VkImageLayout from, VkImageLayout to,
-                     VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage,
-                     VkAccessFlags2 dstAccess) {
+struct ImageBarrier {
+    VkImage image;
+    VkImageAspectFlags aspect;
+    VkImageLayout from;
+    VkImageLayout to;
+    VkPipelineStageFlags2 srcStage;
+    VkAccessFlags2 srcAccess;
+    VkPipelineStageFlags2 dstStage;
+    VkAccessFlags2 dstAccess;
+};
+
+void transitionImage(VkCommandBuffer commands, const ImageBarrier& transition) {
     const VkImageMemoryBarrier2 barrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = srcStage,
-        .srcAccessMask = srcAccess,
-        .dstStageMask = dstStage,
-        .dstAccessMask = dstAccess,
-        .oldLayout = from,
-        .newLayout = to,
+        .srcStageMask = transition.srcStage,
+        .srcAccessMask = transition.srcAccess,
+        .dstStageMask = transition.dstStage,
+        .dstAccessMask = transition.dstAccess,
+        .oldLayout = transition.from,
+        .newLayout = transition.to,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = image,
-        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+        .image = transition.image,
+        .subresourceRange = {transition.aspect, 0, 1, 0, 1},
     };
     const VkDependencyInfo dependency{
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -95,6 +108,7 @@ struct Renderer::State {
     GpuBuffer triangleVertices;
     TrianglePipeline trianglePipeline;
     Swapchain swapchain;
+    DepthTarget depth;
     FrameCounters counters;
     RenderOverlay* overlay = nullptr;
     bool vsync = true;
@@ -119,6 +133,8 @@ struct Renderer::State {
     [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
     [[nodiscard]] core::Result<void> ensurePipeline();
     void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
+    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex);
+    void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
 };
 
 core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) {
@@ -144,6 +160,15 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     }
     // The old swapchain is destroyed here, after the new one was created from it.
     swapchain = std::move(*created);
+    // Same size as the swapchain. The GPU is idle: the old one can go at once.
+    depth = DepthTarget();
+    core::Result<DepthTarget> depthTarget =
+        DepthTarget::create(*device, *allocator, swapchain.extent(), kDepthFormat);
+    if (!depthTarget) {
+        logger->error("{}", depthTarget.error().message);
+        return std::unexpected(depthTarget.error());
+    }
+    depth = std::move(*depthTarget);
     swapchainState.recreated(size);
     if (core::Result<void> pipeline = ensurePipeline(); !pipeline) {
         return std::unexpected(pipeline.error());
@@ -159,7 +184,8 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
 }
 
 core::Result<void> Renderer::State::ensurePipeline() {
-    const RenderTargetDesc target{.colorFormat = swapchain.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
+    const RenderTargetDesc target{
+        .colorFormat = swapchain.format(), .depthFormat = depth.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
     if (trianglePipeline.handle() != VK_NULL_HANDLE && trianglePipeline.target() == target) {
         return {};
     }
@@ -177,10 +203,39 @@ core::Result<void> Renderer::State::ensurePipeline() {
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
     const VkImage image = swapchain.image(imageIndex);
     // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
-    transitionImage(commands, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE,
-                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE,
+                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                               VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
+    // One depth buffer for both frames in flight: the previous frame's depth writes must be done.
+    constexpr VkPipelineStageFlags2 kDepthStages =
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    transitionImage(commands, {depth.image(), VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
+                               VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
+                               VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
 
+    recordScenePass(commands, imageIndex);
+    // Second pass, without depth: the interface is drawn over the scene (decisions 0008 and 0011).
+    if (overlay != nullptr) {
+        transitionImage(
+            commands,
+            {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+             VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
+        recordOverlayPass(commands, imageIndex);
+    }
+
+    transitionImage(commands,
+                    {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE});
+}
+
+void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
     const VkRenderingAttachmentInfo colorAttachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = swapchain.imageView(imageIndex),
@@ -189,12 +244,22 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = {.color = kClearColor},
     };
+    // Depth is not needed after the pass.
+    const VkRenderingAttachmentInfo depthAttachment{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = depth.view(),
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .clearValue = {.depthStencil = {1.0f, 0}},
+    };
     const VkRenderingInfo rendering{
         .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
         .renderArea = {{0, 0}, swapchain.extent()},
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &colorAttachment,
+        .pDepthAttachment = &depthAttachment,
     };
     vkCmdBeginRendering(commands, &rendering);
 
@@ -214,16 +279,27 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
     vkCmdDraw(commands, static_cast<std::uint32_t>(kTriangle.size()), 1, 0, 0);
     counters = FrameCounters{.drawCalls = 1, .triangles = kTriangle.size() / 3};
 
-    // Last in the pass: the interface is drawn over the scene (decision 0008).
-    if (overlay != nullptr) {
-        overlay->record(OverlayCommands{.commandBuffer = commands, .colorFormat = swapchain.format()});
-    }
-
     vkCmdEndRendering(commands);
+}
 
-    transitionImage(commands, image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE);
+void Renderer::State::recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex) {
+    const VkRenderingAttachmentInfo colorAttachment{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = swapchain.imageView(imageIndex),
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    };
+    const VkRenderingInfo rendering{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = {{0, 0}, swapchain.extent()},
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachment,
+    };
+    vkCmdBeginRendering(commands, &rendering);
+    overlay->record(OverlayCommands{.commandBuffer = commands, .colorFormat = swapchain.format()});
+    vkCmdEndRendering(commands);
 }
 
 core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& window, core::Logger& logger,
