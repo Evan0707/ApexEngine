@@ -2,7 +2,7 @@
 
 **Rôle :** frontière avec le système d'exploitation : fenêtre, événements bruts du clavier et de la souris, capture du curseur (cahier des charges, section 5.2). Seul module autorisé à appeler l'API Windows et à inclure SDL.
 
-**État (phase 1, en cours) :** types des touches et des événements, fenêtre SDL3 (note de décision `0002-sdl3.md`).
+**État (fin de phase 1) :** types des touches et des événements, fenêtre SDL3 (notes de décision `0002-sdl3.md` et `0005-precisions-sdl3.md`).
 
 ## Interface publique
 

@@ -2,7 +2,7 @@
 
 **Rôle :** socle du moteur. À terme : boucle à pas fixe, temps, logs, erreurs (cahier des charges, sections 4 et 5.1).
 
-**État (phase 1, en cours) :** version du moteur, erreurs, assertions, logger, pas fixe, boucle principale et macros de profilage.
+**État (fin de phase 1) :** version du moteur, erreurs, assertions, logger, pas fixe, boucle principale et macros de profilage.
 
 ## Interface publique
 
@@ -56,4 +56,4 @@
 
 ## Dépendances
 
-Bibliothèque standard et GLM. Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.
+Bibliothèque standard (GLM arrivera en phase 2). Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.

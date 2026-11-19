@@ -2,7 +2,7 @@
 
 **Rôle :** transformer les événements bruts de `Platform` en actions (cahier des charges, sections 4.3 et 5.2). Aucun système de gameplay ne lit une touche directement : il lit une action.
 
-**État (phase 1, en cours) :** table des actions (`ActionMap`), construite à partir d'associations décrites comme des données, et état des actions (`ActionState`) : maintenue, pressée, relâchée, valeur d'axe.
+**État (fin de phase 1) :** table des actions (`ActionMap`), construite à partir d'associations décrites comme des données, et état des actions (`ActionState`) : maintenue, pressée, relâchée, valeur d'axe.
 
 ## Interface publique
 

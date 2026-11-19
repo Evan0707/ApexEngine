@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 0 (socle).** Le dépôt compile une bibliothèque `ApexEngine`, un exécutable `ApexDemo` qui affiche la version, et des tests.
+**État : phase 1 (Core, fenêtre, boucle à pas fixe, logs, actions).** `ApexDemo` ouvre une fenêtre, fait tourner la boucle à pas fixe, logue les actions et se ferme proprement. Rien n'est encore dessiné : le rendu Vulkan arrive en phase 2.
 
 ## Prérequis
 
@@ -34,7 +34,20 @@ ctest --preset windows-debug
 build\windows-debug\bin\ApexDemo.exe
 ```
 
-Remplacer `windows-debug` par `windows-release` pour la configuration Release.
+Remplacer `windows-debug` par `windows-release` pour la configuration Release, ou par `windows-profile` pour une Release instrumentée par Tracy (voir `Engine/Core/README.md`).
+
+## La démonstration de la phase 1
+
+`ApexDemo` ouvre une fenêtre de 1920 × 1080 et écrit ses logs dans la console et dans `Logs/apex.log`, relatif au dossier de lancement.
+
+| Touche (AZERTY) | Effet |
+|---|---|
+| Z / S, Q / D, A / E | Logue la valeur des axes `MoveForward`, `MoveRight`, `MoveUp` quand elle change |
+| Espace, Maj gauche, F3 | Logue l'appui et le relâchement de `Jump`, `Sprint`, `SwitchCamera` |
+| Échap | Capture ou libère le curseur |
+| F1, F2, F4 | Logue l'appui ; sans effet avant les phases 2 et 7 |
+| Souris | Logue une fois par seconde le déplacement cumulé, quand elle a bougé |
+| Croix, Alt + F4 | Ferme l'application, code de sortie 0 |
 
 Avec Visual Studio : ouvrir le dossier du dépôt, les presets sont détectés automatiquement.
 
@@ -61,4 +74,4 @@ cmake/       options de compilation communes
 
 ## Intégration continue
 
-À chaque push, GitHub Actions vérifie le formatage, compile en Debug et en Release, puis lance les tests (`.github/workflows/ci.yml`).
+À chaque push, GitHub Actions vérifie le formatage, compile en Debug, en Release et avec le preset `windows-profile`, puis lance les tests (`.github/workflows/ci.yml`).
