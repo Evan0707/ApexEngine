@@ -1,5 +1,6 @@
 find_package(EnTT CONFIG REQUIRED)
 find_package(glm CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_path(APEX_CGLTF_INCLUDE_DIR cgltf.h REQUIRED)
@@ -132,6 +133,13 @@ add_library(ApexEngine STATIC
     Resources/ResourceCache.h
     Resources/ResourcePool.h
     Resources/TextureData.h
+    Serialization/Json.cpp
+    Serialization/Json.h
+    Serialization/SceneDescription.h
+    Serialization/SceneJson.cpp
+    Serialization/SceneJson.h
+    Serialization/SceneLoader.cpp
+    Serialization/SceneLoader.h
     World/Components.h
     World/RenderExtraction.cpp
     World/RenderExtraction.h
@@ -170,6 +178,8 @@ target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-boots
 target_include_directories(ApexEngine SYSTEM PRIVATE "${Stb_INCLUDE_DIR}")
 # cgltf is included only by Resources/GltfImporter.cpp (decision 0012).
 target_include_directories(ApexEngine SYSTEM PRIVATE "${APEX_CGLTF_INCLUDE_DIR}")
+# nlohmann/json is included only by Serialization/Json.h, an internal header (decision 0016).
+target_link_libraries(ApexEngine PRIVATE nlohmann_json::nlohmann_json)
 # Dear ImGui is included only by Debug (decision 0008).
 target_link_libraries(ApexEngine PRIVATE imgui::imgui)
 if(APEX_ENABLE_PROFILING)
