@@ -6,7 +6,7 @@ Instructions pour tout agent IA qui travaille sur ce dépôt. À lire en entier 
 
 - Prototype de moteur 3D en C++23, Windows x64, Vulkan 1.3.
 - **Source de vérité :** `Docs/cahier_des_charges.md` (v0.3). Si ce fichier et le cahier des charges se contredisent, le cahier des charges l'emporte : signale l'écart au lieu de trancher seul.
-- **Phase en cours : 1 (Core, fenêtre, boucle à pas fixe, logs, actions).** Cette ligne est mise à jour par le développeur à chaque changement de phase. Ne travaille pas sur une phase ultérieure.
+- **Phase en cours : 2 (initialisation Vulkan, swapchain, triangle, ImGui).** Cette ligne est mise à jour par le développeur à chaque changement de phase. Ne travaille pas sur une phase ultérieure.
 - Priorité : une petite expérience 3D complète et robuste. Rien de ce qui est hors périmètre (cahier des charges, section 2.2) ne doit être ajouté.
 
 ## 2. Commandes
@@ -63,7 +63,10 @@ Confinement des bibliothèques tierces :
 - en-têtes SDL : `Platform` et le backend ImGui de `Debug` uniquement ;
 - cgltf et stb : `Resources` uniquement ;
 - nlohmann/json : `Serialization` uniquement ;
-- en-têtes Tracy : `Core/Profiling.h` uniquement.
+- en-têtes Tracy : `Core/Profiling.h` uniquement ;
+- en-têtes Dear ImGui : `Debug` uniquement.
+
+Le « backend ImGui de `Debug` » est un seul fichier : `Debug/ImGuiBackend.cpp`. `Platform`, `Graphics` et `Debug` n'échangent la fenêtre, la surface et les événements bruts que par handles opaques, et un seul en-tête public de `Graphics` contient des types Vulkan : `Graphics/VulkanBackendAccess.h`, réservé à ce fichier (décision 0009).
 
 ## 5. Garde-fous (obligatoires, vérifiés par AC-17)
 
@@ -123,7 +126,7 @@ Une dépendance à la fois, uniquement quand la phase en cours en a besoin. Pour
 3. ajoute sa licence à `ThirdPartyLicenses.md` ;
 4. respecte le confinement de la section 4.
 
-Bibliothèques prévues par le cahier des charges, à ajouter le moment venu : SDL3 (phase 1), vk-bootstrap, VMA, GLM et Dear ImGui (phase 2), Tracy (phase 1), cgltf et stb_image (phase 4), EnTT et nlohmann/json (phase 5), Jolt Physics (phase 6).
+Bibliothèques prévues par le cahier des charges, à ajouter le moment venu : SDL3 (phase 1), Tracy (phase 1), vk-bootstrap, VMA et Dear ImGui (phase 2), GLM (phase 3, décision 0006), cgltf et stb_image (phase 4), EnTT et nlohmann/json (phase 5), Jolt Physics (phase 6).
 
 ## 9. Ce que tu ne peux pas vérifier
 
