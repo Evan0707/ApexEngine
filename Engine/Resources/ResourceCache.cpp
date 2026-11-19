@@ -139,6 +139,7 @@ TextureHandle ResourceCache::addDecodedTexture(std::string_view name, std::span<
 
 MeshHandle ResourceCache::addMesh(std::string_view name, MeshData mesh) {
     const MeshHandle handle = m_meshes.reserve();
+    mesh.name = name;
     if (const core::Result<void> valid = validate(mesh, name); !valid) {
         m_logger->error("{}", valid.error().message);
         m_meshes.setFailed(handle);

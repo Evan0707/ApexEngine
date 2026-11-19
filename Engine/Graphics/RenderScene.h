@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Math.h"
-#include "Graphics/GpuHandles.h"
+#include "Resources/Handles.h"
 
 #include <vector>
 
@@ -26,10 +26,12 @@ struct RenderLight {
     float intensity = 1.0f;
 };
 
+// One mesh with one material: a model gives one object per part (resources::ResourceCache::parts).
 struct RenderObject {
-    MeshHandle mesh;
-    // A stale or default handle gives the default material.
-    MaterialHandle material;
+    // Not ready, failed or stale: the fallback mesh is drawn (G-03).
+    resources::MeshHandle mesh;
+    // Not ready, failed or stale: the default material.
+    resources::MaterialHandle material;
     // Object to render space.
     glm::mat4 modelRelativeToCamera{1.0f};
 };

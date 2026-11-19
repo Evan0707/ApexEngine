@@ -2,11 +2,10 @@
 
 #include "SceneExtraction.h"
 
-#include "Core/Error.h"
-#include "Graphics/GpuHandles.h"
 #include "Graphics/RenderScene.h"
-#include "Graphics/Renderer.h"
+#include "Resources/Handles.h"
 #include "Resources/MaterialData.h"
+#include "Resources/ResourceCache.h"
 
 #include <cstddef>
 #include <vector>
@@ -32,41 +31,34 @@ struct DemoObjectDesc {
 [[nodiscard]] graphics::RenderLight demoLight() noexcept;
 [[nodiscard]] glm::vec3 demoAmbient() noexcept;
 
-// The demo scene's GPU objects. The renderer must outlive it; its meshes and materials are destroyed
-// with it.
+// The objects of the demo scene, each drawn as a model of the resource cache (decision 0014). The cache
+// owns the meshes and materials, and must outlive the scene.
 class DemoScene {
 public:
-    [[nodiscard]] static core::Result<DemoScene> create(graphics::Renderer& renderer);
-
-    ~DemoScene();
-    DemoScene(DemoScene&& other) noexcept;
-    DemoScene& operator=(DemoScene&&) = delete;
-    DemoScene(const DemoScene&) = delete;
-    DemoScene& operator=(const DemoScene&) = delete;
+    // Adds the scene's primitives and materials to the cache. An invalid one is logged by the cache and
+    // drawn with the fallbacks.
+    [[nodiscard]] static DemoScene create(resources::ResourceCache& cache);
 
     // One fixed step (G-05).
     void simulate(double deltaSeconds) noexcept;
-    // Fills everything but the camera: objects relative to the camera position (G-07), interpolated
-    // between the last two steps (alpha in [0, 1]), light, ambient.
+    // Fills everything but the camera: one object per model part, relative to the camera position
+    // (G-07), interpolated between the last two steps (alpha in [0, 1]); light, ambient.
     void extract(const core::WorldPosition& cameraPosition, float alpha, graphics::RenderScene& scene) const;
 
     [[nodiscard]] std::size_t objectCount() const noexcept;
 
 private:
     struct Object {
-        graphics::MeshHandle mesh;
-        graphics::MaterialHandle material;
+        resources::ModelHandle model;
         ObjectTransform transform;
         float spinRadiansPerSecond = 0.0f;
         float previousSpin = 0.0f;
         float spin = 0.0f;
     };
 
-    explicit DemoScene(graphics::Renderer& renderer) noexcept;
+    explicit DemoScene(const resources::ResourceCache& cache) noexcept;
 
-    graphics::Renderer* m_renderer;
-    std::vector<graphics::MeshHandle> m_meshes;
-    std::vector<graphics::MaterialHandle> m_materials;
+    const resources::ResourceCache* m_cache;
     std::vector<Object> m_objects;
 };
 

@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -24,6 +25,8 @@ struct Vertex {
 
 // Indexed triangle list, counter-clockwise front faces (spec 3.3). Independent of any file format (G-04).
 struct MeshData {
+    // For error messages and GPU debugging: the asset path and part, or the name given in code.
+    std::string name;
     std::vector<Vertex> vertices;
     std::vector<std::uint32_t> indices;
 };

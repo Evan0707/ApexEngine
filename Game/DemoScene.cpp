@@ -4,6 +4,8 @@
 
 #include <array>
 #include <cstdint>
+#include <format>
+#include <span>
 #include <string_view>
 #include <utility>
 
@@ -95,54 +97,29 @@ glm::vec3 demoAmbient() noexcept {
     return {0.06f, 0.07f, 0.09f};
 }
 
-core::Result<DemoScene> DemoScene::create(graphics::Renderer& renderer) {
-    DemoScene scene(renderer);
-
-    // Unit sizes: the transforms scale them. Errors are already logged by the renderer.
-    const std::array<std::pair<std::string_view, resources::MeshData>, 2> meshes{{
-        {"Cube", resources::makeCube(1.0f)},
-        {"Sphere", resources::makeSphere(0.5f, kSphereSegments, kSphereRings)},
-    }};
-    for (const auto& [name, data] : meshes) {
-        core::Result<graphics::MeshHandle> mesh = renderer.createMesh(name, data);
-        if (!mesh) {
-            return std::unexpected(mesh.error());
-        }
-        scene.m_meshes.push_back(*mesh);
-    }
-    for (const resources::MaterialData& data : demoMaterials()) {
-        core::Result<graphics::MaterialHandle> material = renderer.createMaterial(data);
-        if (!material) {
-            return std::unexpected(material.error());
-        }
-        scene.m_materials.push_back(*material);
+DemoScene DemoScene::create(resources::ResourceCache& cache) {
+    DemoScene scene(cache);
+    // Unit sizes: the transforms scale them.
+    const std::array<resources::MeshHandle, 2> meshes{
+        cache.addMesh("Cube", resources::makeCube(1.0f)),
+        cache.addMesh("Sphere", resources::makeSphere(0.5f, kSphereSegments, kSphereRings)),
+    };
+    std::vector<resources::MaterialHandle> materials;
+    const std::vector<resources::MaterialData> materialData = demoMaterials();
+    for (std::size_t i = 0; i < materialData.size(); ++i) {
+        materials.push_back(cache.addMaterial(std::format("Demo material {}", i), materialData[i]));
     }
     for (const DemoObjectDesc& desc : demoObjects()) {
-        scene.m_objects.push_back(Object{.mesh = scene.m_meshes[static_cast<std::size_t>(desc.shape)],
-                                         .material = scene.m_materials[desc.material],
+        const resources::ModelPartRef part{.mesh = meshes[static_cast<std::size_t>(desc.shape)],
+                                           .material = materials[desc.material]};
+        scene.m_objects.push_back(Object{.model = cache.addModel(std::span(&part, 1)),
                                          .transform = desc.transform,
                                          .spinRadiansPerSecond = glm::radians(desc.spinDegreesPerSecond)});
     }
     return scene;
 }
 
-DemoScene::DemoScene(graphics::Renderer& renderer) noexcept : m_renderer(&renderer) {}
-
-DemoScene::~DemoScene() {
-    if (m_renderer == nullptr) {
-        return;
-    }
-    for (const graphics::MeshHandle mesh : m_meshes) {
-        m_renderer->destroyMesh(mesh);
-    }
-    for (const graphics::MaterialHandle material : m_materials) {
-        m_renderer->destroyMaterial(material);
-    }
-}
-
-DemoScene::DemoScene(DemoScene&& other) noexcept
-    : m_renderer(std::exchange(other.m_renderer, nullptr)), m_meshes(std::move(other.m_meshes)),
-      m_materials(std::move(other.m_materials)), m_objects(std::move(other.m_objects)) {}
+DemoScene::DemoScene(const resources::ResourceCache& cache) noexcept : m_cache(&cache) {}
 
 void DemoScene::simulate(double deltaSeconds) noexcept {
     for (Object& object : m_objects) {
@@ -165,11 +142,12 @@ void DemoScene::extract(const core::WorldPosition& cameraPosition, float alpha,
         ObjectTransform transform = object.transform;
         const float spin = glm::mix(object.previousSpin, object.spin, alpha);
         transform.rotation = glm::angleAxis(spin, core::kWorldUp) * transform.rotation;
-        scene.objects.push_back(graphics::RenderObject{
-            .mesh = object.mesh,
-            .material = object.material,
-            .modelRelativeToCamera = modelRelativeToCamera(transform, cameraPosition),
-        });
+        const glm::mat4 model = modelRelativeToCamera(transform, cameraPosition);
+        // A model that is not ready gives the fallback model's parts (G-03).
+        for (const resources::ModelPartRef& part : m_cache->parts(object.model)) {
+            scene.objects.push_back(graphics::RenderObject{
+                .mesh = part.mesh, .material = part.material, .modelRelativeToCamera = model});
+        }
     }
 }
 

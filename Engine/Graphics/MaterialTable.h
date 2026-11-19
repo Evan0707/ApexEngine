@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Core/Error.h"
 #include "Core/Math.h"
-#include "Graphics/GpuHandles.h"
+#include "Resources/Handles.h"
 #include "Resources/MaterialData.h"
+#include "Resources/ResourcePool.h"
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -21,8 +22,9 @@ struct MaterialGpu {
 };
 static_assert(sizeof(MaterialGpu) == 32);
 
-// Internal to Graphics, without Vulkan. The materials, in the order of the table copied to the GPU each
-// frame. Index 0 is the default material: it cannot be removed and replaces any stale handle.
+// Internal to Graphics, without Vulkan. The factors of the cache's materials, in the order of the table
+// copied to the GPU each frame: material slot i of the cache is entry i + 1. Entry 0 is the default
+// material, given to any material that is not ready, stale, or beyond the capacity (G-03).
 class MaterialTable {
 public:
     static constexpr std::uint32_t kDefaultIndex = 0;
@@ -30,27 +32,21 @@ public:
     // capacity counts the default material.
     explicit MaterialTable(std::uint32_t capacity);
 
-    // Fails when the table is full or a factor is outside [0, 1].
-    [[nodiscard]] core::Result<MaterialHandle> add(const resources::MaterialData& material);
-    // False for a stale handle. The slot is reused: a frame already copied its own table.
-    bool remove(MaterialHandle handle) noexcept;
+    // Rebuilds the table when the pool changed. Returns the number of ready materials left out for lack
+    // of room (they get the default material).
+    std::size_t sync(const resources::ResourcePool<resources::MaterialHandle, resources::MaterialData>& pool);
 
-    // kDefaultIndex for a stale or default handle.
-    [[nodiscard]] std::uint32_t gpuIndex(MaterialHandle handle) const noexcept;
-    // Every slot up to the highest one in use; free slots keep stale data that no object refers to.
+    [[nodiscard]] std::uint32_t gpuIndex(resources::MaterialHandle handle) const noexcept;
     [[nodiscard]] std::span<const MaterialGpu> gpuData() const noexcept;
-    // Materials added and not removed, without the default one.
-    [[nodiscard]] std::size_t size() const noexcept;
 
 private:
-    [[nodiscard]] bool isLive(MaterialHandle handle) const noexcept;
+    static constexpr std::uint32_t kNoGeneration = 0;
 
     std::uint32_t m_capacity;
     std::vector<MaterialGpu> m_gpu;
+    // Generation of the ready material in each cache slot, kNoGeneration otherwise.
     std::vector<std::uint32_t> m_generations;
-    std::vector<bool> m_live;
-    std::vector<std::uint32_t> m_free;
-    std::size_t m_size = 0;
+    std::uint64_t m_revision = std::numeric_limits<std::uint64_t>::max();
 };
 
 } // namespace apex::graphics

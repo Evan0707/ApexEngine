@@ -10,13 +10,14 @@
 #include "Graphics/FrameSync.h"
 #include "Graphics/GpuAllocator.h"
 #include "Graphics/GpuMesh.h"
-#include "Graphics/HandlePool.h"
 #include "Graphics/MaterialTable.h"
+#include "Graphics/ResourceMirror.h"
 #include "Graphics/ScenePipeline.h"
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
 #include "Graphics/UploadContext.h"
 #include "Graphics/VulkanBackendAccess.h"
+#include "Resources/ResourceCache.h"
 
 #include <vulkan/vulkan.h>
 
@@ -112,7 +113,8 @@ struct Renderer::State {
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
     UploadContext upload;
-    HandlePool<MeshHandle, GpuMesh> meshes;
+    ResourceMirror<resources::MeshHandle, resources::MeshData, GpuMesh> meshes;
+    resources::MeshHandle fallbackMesh;
     MaterialTable materials{kMaxMaterials};
     FrameBuffers frameBuffers;
     ScenePipeline scenePipeline;
@@ -130,8 +132,9 @@ struct Renderer::State {
     std::optional<std::uint32_t> acquiredImage;
     // Rebuilt each frame; kept to reuse their memory.
     std::vector<DrawItem> drawItems;
+    // The mesh of each draw, in draw order. Valid for the frame being recorded only.
+    std::vector<const GpuMesh*> drawMeshes;
     std::vector<ObjectGpu> objectData;
-    bool warnedStaleMesh = false;
     bool warnedTooManyObjects = false;
 
     ~State() {
@@ -139,7 +142,7 @@ struct Renderer::State {
             device->waitIdle();
         }
         if (allocator) {
-            meshes.forEach([this](const GpuMesh& mesh) { destroyGpuMesh(*allocator, mesh); });
+            meshes.releaseAll([this](GpuMesh&& mesh) { destroyGpuMesh(*allocator, mesh); });
         }
     }
 
@@ -148,8 +151,12 @@ struct Renderer::State {
     [[nodiscard]] core::Result<void> ensurePipeline();
     // Resolves the handles, sorts by material and fills the frame's buffers.
     void prepareFrame(const RenderScene& scene);
-    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex, const RenderScene& scene);
-    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex, const RenderScene& scene);
+    // The object's mesh, or the fallback mesh when it is not ready (G-03). nullptr before the first sync.
+    [[nodiscard]] std::pair<const GpuMesh*, std::uint32_t>
+    resolveMesh(const RenderObject& object) const noexcept;
+    // After prepareFrame: draws what it resolved.
+    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
+    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex);
     void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
 };
 
@@ -217,22 +224,24 @@ core::Result<void> Renderer::State::ensurePipeline() {
     return {};
 }
 
+std::pair<const GpuMesh*, std::uint32_t>
+Renderer::State::resolveMesh(const RenderObject& object) const noexcept {
+    if (const GpuMesh* mesh = meshes.find(object.mesh)) {
+        return {mesh, object.mesh.index};
+    }
+    return {meshes.find(fallbackMesh), fallbackMesh.index};
+}
+
 void Renderer::State::prepareFrame(const RenderScene& scene) {
     drawItems.clear();
-    std::size_t staleMeshes = 0;
     for (std::uint32_t i = 0; i < scene.objects.size(); ++i) {
         const RenderObject& object = scene.objects[i];
-        if (meshes.find(object.mesh) == nullptr) {
-            ++staleMeshes;
+        const auto [mesh, meshIndex] = resolveMesh(object);
+        if (mesh == nullptr) {
             continue;
         }
-        drawItems.push_back(DrawItem{.objectIndex = i,
-                                     .materialIndex = materials.gpuIndex(object.material),
-                                     .meshIndex = object.mesh.index});
-    }
-    if (staleMeshes > 0 && !warnedStaleMesh) {
-        logger->warning("{} object(s) not drawn: stale mesh handle (logged once)", staleMeshes);
-        warnedStaleMesh = true;
+        drawItems.push_back(DrawItem{
+            .objectIndex = i, .materialIndex = materials.gpuIndex(object.material), .meshIndex = meshIndex});
     }
     if (drawItems.size() > kMaxObjects) {
         if (!warnedTooManyObjects) {
@@ -245,7 +254,9 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
     sortDrawItems(drawItems);
 
     objectData.clear();
+    drawMeshes.clear();
     for (const DrawItem& item : drawItems) {
+        drawMeshes.push_back(resolveMesh(scene.objects[item.objectIndex]).first);
         objectData.push_back(
             makeObjectGpu(scene.objects[item.objectIndex].modelRelativeToCamera, item.materialIndex));
     }
@@ -254,8 +265,7 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
     frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio), objectData, materials.gpuData());
 }
 
-void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex,
-                                  const RenderScene& scene) {
+void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
     const VkImage image = swapchain.image(imageIndex);
     // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
     transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -272,7 +282,7 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
 
-    recordScenePass(commands, imageIndex, scene);
+    recordScenePass(commands, imageIndex);
     // Second pass, without depth: the interface is drawn over the scene (decisions 0008 and 0011).
     if (overlay != nullptr) {
         transitionImage(
@@ -290,8 +300,7 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE});
 }
 
-void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex,
-                                      const RenderScene& scene) {
+void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
     const VkRenderingAttachmentInfo colorAttachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = swapchain.imageView(imageIndex),
@@ -337,7 +346,7 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t im
     counters = FrameCounters{};
     const GpuMesh* boundMesh = nullptr;
     for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
-        const GpuMesh* mesh = meshes.find(scene.objects[drawItems[drawIndex].objectIndex].mesh);
+        const GpuMesh* mesh = drawMeshes[drawIndex];
         if (mesh != boundMesh) {
             const VkDeviceSize offset = 0;
             vkCmdBindVertexBuffers(commands, 0, 1, &mesh->vertices.buffer, &offset);
@@ -503,7 +512,7 @@ core::Result<void> Renderer::renderFrame(const RenderScene& scene) {
         return vulkanError(*state.logger, "vkBeginCommandBuffer", result);
     }
     state.prepareFrame(scene);
-    state.recordFrame(frame.commandBuffer, imageIndex, scene);
+    state.recordFrame(frame.commandBuffer, imageIndex);
     if (const VkResult result = vkEndCommandBuffer(frame.commandBuffer); result != VK_SUCCESS) {
         return vulkanError(*state.logger, "vkEndCommandBuffer", result);
     }
@@ -537,34 +546,29 @@ core::Result<void> Renderer::renderFrame(const RenderScene& scene) {
     return {};
 }
 
-core::Result<MeshHandle> Renderer::createMesh(std::string_view name, const resources::MeshData& mesh) {
+void Renderer::syncResources(const resources::ResourceCache& cache) {
     State& state = *m_state;
-    core::Result<GpuMesh> created = createGpuMesh(*state.allocator, state.upload, name, mesh);
-    if (!created) {
-        state.logger->error("{}", created.error().message);
-        return std::unexpected(created.error());
+    APEX_PROFILE_SCOPE("Renderer::syncResources");
+    state.fallbackMesh = cache.fallbackMesh();
+    state.meshes.sync(
+        cache.meshes(),
+        [&state](resources::MeshHandle, const resources::MeshData& mesh) -> std::optional<GpuMesh> {
+            core::Result<GpuMesh> created = createGpuMesh(*state.allocator, state.upload, mesh.name, mesh);
+            if (!created) {
+                state.logger->error("{}", created.error().message);
+                return std::nullopt;
+            }
+            return *created;
+        },
+        [&state](GpuMesh&& mesh) {
+            // A frame in flight may still draw it.
+            state.deleter.enqueue(
+                [allocator = state.allocator.get(), mesh] { destroyGpuMesh(*allocator, mesh); });
+        });
+    if (const std::size_t leftOut = state.materials.sync(cache.materials()); leftOut > 0) {
+        state.logger->warning("{} material(s) beyond the table's {} entries get the default material",
+                              leftOut, kMaxMaterials);
     }
-    return state.meshes.add(*created);
-}
-
-void Renderer::destroyMesh(MeshHandle mesh) {
-    State& state = *m_state;
-    if (std::optional<GpuMesh> removed = state.meshes.remove(mesh)) {
-        state.deleter.enqueue(
-            [allocator = state.allocator.get(), gpuMesh = *removed] { destroyGpuMesh(*allocator, gpuMesh); });
-    }
-}
-
-core::Result<MaterialHandle> Renderer::createMaterial(const resources::MaterialData& material) {
-    core::Result<MaterialHandle> handle = m_state->materials.add(material);
-    if (!handle) {
-        m_state->logger->error("{}", handle.error().message);
-    }
-    return handle;
-}
-
-void Renderer::destroyMaterial(MaterialHandle material) {
-    (void)m_state->materials.remove(material);
 }
 
 GpuMemoryStats Renderer::memoryStats() const {

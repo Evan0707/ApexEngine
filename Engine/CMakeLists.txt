@@ -68,11 +68,9 @@ add_library(ApexEngine STATIC
     Graphics/FrameSync.h
     Graphics/GpuAllocator.cpp
     Graphics/GpuAllocator.h
-    Graphics/GpuHandles.h
     Graphics/GpuMemoryStats.h
     Graphics/GpuMesh.cpp
     Graphics/GpuMesh.h
-    Graphics/HandlePool.h
     Graphics/MaterialTable.cpp
     Graphics/MaterialTable.h
     Graphics/Projection.cpp
@@ -82,6 +80,7 @@ add_library(ApexEngine STATIC
     Graphics/Renderer.cpp
     Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
+    Graphics/ResourceMirror.h
     Graphics/ScenePipeline.cpp
     Graphics/ScenePipeline.h
     Graphics/ShaderBinaries.cpp

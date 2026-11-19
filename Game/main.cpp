@@ -15,6 +15,7 @@
 #include "Graphics/ValidationLog.h"
 #include "Input/ActionMap.h"
 #include "Platform/Window.h"
+#include "Resources/ResourceCache.h"
 
 #include <cstdint>
 #include <memory>
@@ -60,6 +61,9 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
+    // Spec 5.1: Resources after Graphics. Asset paths are relative to Assets/ (spec 3.3).
+    resources::ResourceCache cache("Assets", logger);
+
     core::Result<std::unique_ptr<debug::DebugUi>> debugUi =
         debug::DebugUi::create(*window, **renderer, logger);
     if (!debugUi) {
@@ -67,18 +71,16 @@ constexpr bool kEnableValidation = true;
     }
 
     // Loaded last (spec 5.1), destroyed first.
-    core::Result<game::DemoScene> scene = game::DemoScene::create(**renderer);
-    if (!scene) {
-        return kExitFailure;
-    }
-    logger.info("Demo scene: {} objects", scene->objectCount());
+    game::DemoScene scene = game::DemoScene::create(cache);
+    logger.info("Demo scene: {} objects", scene.objectCount());
 
     const game::DemoSystems systems{.window = *window,
                                     .renderer = **renderer,
                                     .debugUi = **debugUi,
                                     .logHistory = logHistory,
                                     .logger = logger,
-                                    .scene = *scene};
+                                    .cache = cache,
+                                    .scene = scene};
     core::Result<game::DemoApp> app = game::DemoApp::create(systems, std::move(*actions), options);
     if (!app) {
         logger.error("{}", app.error().message);

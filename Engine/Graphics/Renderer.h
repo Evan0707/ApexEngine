@@ -3,18 +3,18 @@
 #include "Core/Error.h"
 #include "Core/Logger.h"
 #include "Graphics/FrameCounters.h"
-#include "Graphics/GpuHandles.h"
 #include "Graphics/GpuMemoryStats.h"
 #include "Graphics/RenderOverlay.h"
 #include "Graphics/RenderScene.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
-#include "Resources/MaterialData.h"
-#include "Resources/MeshData.h"
 
 #include <memory>
 #include <string>
-#include <string_view>
+
+namespace apex::resources {
+class ResourceCache;
+} // namespace apex::resources
 
 namespace apex::graphics {
 
@@ -49,21 +49,16 @@ public:
     Renderer& operator=(const Renderer&) = delete;
 
     // Render phase: acquires a swapchain image, records and submits the frame. The scene is copied: it
-    // can change as soon as this returns (G-01). Objects with a stale mesh handle are skipped.
+    // can change as soon as this returns (G-01). Handles that are not ready give the fallbacks (G-03).
     // Does nothing while the window is minimized (spec 5.2). An error means the device is unusable.
     [[nodiscard]] core::Result<void> renderFrame(const RenderScene& scene);
     // Presentation phase: presents the image of the last renderFrame, if there is one.
     [[nodiscard]] core::Result<void> presentFrame();
 
-    // Uploads the mesh and waits for the copy: meant for loading time. The error names the mesh, and is
-    // logged too (spec 5.4).
-    [[nodiscard]] core::Result<MeshHandle> createMesh(std::string_view name, const resources::MeshData& mesh);
-    // The GPU memory is freed once no frame in flight draws the mesh. A stale handle is ignored.
-    void destroyMesh(MeshHandle mesh);
-    // Fails, with a log line, when the table is full or a factor is outside [0, 1].
-    [[nodiscard]] core::Result<MaterialHandle> createMaterial(const resources::MaterialData& material);
-    // Objects that still use the handle get the default material. A stale handle is ignored.
-    void destroyMaterial(MaterialHandle material);
+    // Mirrors the cache on the GPU (decision 0014): uploads what became ready, frees what was unloaded
+    // once no frame in flight uses it. Called each frame before renderFrame; cheap when nothing changed.
+    // A GPU failure is logged with the resource's name; the fallback is drawn instead (spec 5.4).
+    void syncResources(const resources::ResourceCache& cache);
 
     [[nodiscard]] GpuMemoryStats memoryStats() const;
     // Counters of the last rendered frame. Unchanged by a skipped frame.

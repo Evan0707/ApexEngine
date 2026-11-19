@@ -22,9 +22,9 @@ add_executable(ApexTests
     Graphics/DeferredDeleterTests.cpp
     Graphics/DrawListTests.cpp
     Graphics/FrameDataTests.cpp
-    Graphics/HandlePoolTests.cpp
     Graphics/MaterialTableTests.cpp
     Graphics/ProjectionTests.cpp
+    Graphics/ResourceMirrorTests.cpp
     Graphics/ShaderBinariesTests.cpp
     Graphics/SwapchainStateTests.cpp
     Graphics/ValidationLogTests.cpp

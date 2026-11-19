@@ -13,11 +13,10 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
-| `Graphics/GpuHandles.h` | `GpuHandle`, `MeshHandle`, `MaterialHandle` : désignent un objet GPU du renderer, périmés quand l'objet est détruit |
 | `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
-| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `createMesh()`, `destroyMesh()`, `createMaterial()`, `destroyMaterial()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
+| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `syncResources()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
 
 En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
@@ -31,12 +30,12 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/DepthTarget.h` (`DepthTarget`) : le tampon de profondeur de la passe principale ;
 - `Graphics/ScenePipeline.h` (`ScenePipeline`) : le pipeline de la passe principale.
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
-- `Graphics/HandlePool.h` (`HandlePool`), sans Vulkan, testé sans GPU ;
+- `Graphics/ResourceMirror.h` (`ResourceMirror`), sans Vulkan, testé sans GPU ;
 - `Graphics/Projection.h` (`perspectiveProjection()`), sans Vulkan, testé sans GPU ;
 - `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU ;
 - `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
 - `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
-- `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`), sans Vulkan, testé sans GPU ;
+- `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`) : reflet des matériaux du cache, sans Vulkan, testé sans GPU ;
 - `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
 - `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol.
 
@@ -61,7 +60,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 ## Passe de scène (phase 3)
 
-- `renderFrame(scene)` résout les handles de chaque objet : un mesh périmé fait sauter l'objet (avertissement écrit une fois), un matériau périmé donne le matériau par défaut. Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
+- `renderFrame(scene)` résout les handles de chaque objet (voir « Ressources »). Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
 - Les objets sont triés par matériau puis par mesh, puis leurs données sont écrites dans le buffer de la frame dans cet ordre. Le dessin `i` utilise `firstInstance = i` : le vertex shader lit l'objet par `gl_InstanceIndex` (G-02). Les buffers de sommets et d'indices ne sont liés qu'au changement de mesh.
 - Pipeline (`ScenePipeline`) : jeu de descripteurs 0 de la frame, aucun push constant ; position et normale lues dans le format de sommet unique (tangente et UV attendent les textures, phase 4) ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
@@ -72,14 +71,15 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `RenderScene` (G-01) : caméra, lumière directionnelle, terme ambiant et liste d'objets, copiés par l'application à chaque frame. Aucun pointeur vers les objets du jeu.
 - Espace de rendu : l'espace monde translaté pour que la caméra soit à l'origine (G-07). `RenderCamera::view` n'est qu'une rotation, et `RenderObject::modelRelativeToCamera` porte la position de l'objet relative à la caméra. La conversion depuis `WorldPosition` se fait dans l'extraction, jamais dans `Graphics`.
 - `perspectiveProjection()` est le seul endroit qui connaît l'espace de clip de Vulkan (section 3.3) : vue main droite tournée vers −Z, profondeur de 0 (plan proche) à 1 (plan lointain), Y inversé pour que le haut de la vue soit en haut de l'écran. Une face antihoraire vue de la caméra reste une face avant pour Vulkan : un test le vérifie avec la formule d'aire de la spécification Vulkan.
-- Handles (`MeshHandle`, `MaterialHandle`) : un index et une génération. Détruire l'objet rend le handle périmé, même quand l'emplacement est réutilisé. Le handle par défaut n'est jamais valide.
 - La liste d'objets est triée par matériau, puis par mesh, en gardant l'ordre de la scène dans un groupe (`sortDrawItems()`, section 5.4).
 
-## Meshes et matériaux
+## Ressources (décision 0014)
 
-- `createMesh(name, meshData)` valide le mesh (`resources::validate`), crée ses buffers de sommets et d'indices en mémoire GPU, les remplit par des buffers de transit et attend la fin de la copie : à utiliser au chargement, pas à chaque frame. Une barrière à la fin de la copie rend les données visibles aux frames suivantes. En cas d'échec, l'erreur nomme le mesh et elle est écrite dans le log (section 5.4).
-- `destroyMesh(handle)` retire le mesh tout de suite ; ses buffers passent par la destruction différée. Un handle périmé est ignoré. Les meshes encore présents à la fermeture sont détruits par le renderer.
-- Matériaux (note 0011) : une table de 256 entrées au plus, dont l'entrée 0, le matériau par défaut. `createMaterial()` refuse une table pleine ou un facteur hors de [0 ; 1]. Un objet dont le handle de matériau est périmé ou par défaut reçoit le matériau par défaut. La table est recopiée dans le buffer de chaque frame : retirer un matériau ne gêne pas une frame en vol, et l'emplacement est réutilisé tout de suite.
+- Les meshes et les matériaux appartiennent au cache de `Resources` ; le renderer n'en garde qu'un reflet GPU, désigné par les handles de `Resources`. `syncResources(cache)`, appelé à chaque frame avant `renderFrame()`, compare chaque pool du cache à ce reflet (`ResourceMirror`) : ce qui est devenu prêt est envoyé au GPU, ce qui a été déchargé ou dont l'emplacement a été réutilisé est libéré par la destruction différée. Un pool qui n'a pas changé (`revision()`) n'est pas parcouru.
+- Envoi d'un mesh : buffers de sommets et d'indices en mémoire GPU, remplis par des buffers de transit ; l'appel attend la fin de la copie. Un échec est écrit dans le log avec le nom du mesh, et n'est pas retenté tant que le mesh existe (section 5.4).
+- Résolution à chaque frame (G-03) : un mesh pas encore envoyé, en échec, périmé ou absent du GPU donne le mesh de secours du cache (cube de 1 m). Un matériau dans le même cas donne l'entrée 0 de la table, le matériau par défaut. Aucun pointeur vers les données du cache n'est gardé d'une frame à l'autre.
+- Table des matériaux (note 0011) : l'emplacement `i` du pool de matériaux du cache est l'entrée `i + 1` de la table ; au-delà de 256 entrées, un avertissement est écrit et les matériaux suivants reçoivent le matériau par défaut. La table est reconstruite quand le pool change, puis recopiée dans le buffer de chaque frame : retirer un matériau ne gêne pas une frame en vol.
+- À la destruction du renderer, tous les meshes encore présents sur le GPU sont libérés.
 
 ## Données par frame (G-02)
 
@@ -145,4 +145,4 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 ## Dépendances
 
-Autorisé : `Core`, `Platform`, `Resources`. Interdit : EnTT, Jolt, `World`. Bibliothèques : Vulkan-Headers, Vulkan-Loader et vk-bootstrap 1.4.363, Vulkan Memory Allocator 3.5.0 (liés en `PRIVATE` à `ApexEngine`). Les en-têtes Vulkan ne sont inclus que dans `Graphics` et dans `Debug/ImGuiBackend.cpp`.
+Autorisé : `Core`, `Platform`, `Resources` (structures CPU, handles et cache, en lecture). Interdit : EnTT, Jolt, `World`. Bibliothèques : Vulkan-Headers, Vulkan-Loader et vk-bootstrap 1.4.363, Vulkan Memory Allocator 3.5.0 (liés en `PRIVATE` à `ApexEngine`). Les en-têtes Vulkan ne sont inclus que dans `Graphics` et dans `Debug/ImGuiBackend.cpp`.

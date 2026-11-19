@@ -33,6 +33,7 @@ struct DemoSystems {
     debug::DebugUi& debugUi;
     const debug::LogHistory& logHistory;
     core::Logger& logger;
+    resources::ResourceCache& cache;
     DemoScene& scene;
 };
 
@@ -76,6 +77,7 @@ private:
     debug::DebugUi* m_debugUi;
     const debug::LogHistory* m_logHistory;
     core::Logger* m_logger;
+    resources::ResourceCache* m_cache;
     DemoScene* m_scene;
     input::ActionMap m_actions;
     input::ActionState m_frame;

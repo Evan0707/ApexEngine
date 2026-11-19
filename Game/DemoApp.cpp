@@ -139,8 +139,8 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
 
 DemoApp::DemoApp(const DemoSystems& systems, input::ActionMap actions)
     : m_window(&systems.window), m_renderer(&systems.renderer), m_debugUi(&systems.debugUi),
-      m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_scene(&systems.scene),
-      m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {
+      m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_cache(&systems.cache),
+      m_scene(&systems.scene), m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {
     // In front of the reference cube, looking slightly down at the scene.
     m_camera = FreeCameraState{.position = {0.0f, 2.5f, 7.0f}, .yaw = 0.0f, .pitch = glm::radians(-15.0f)};
     m_previousCamera = m_camera;
@@ -327,6 +327,7 @@ void DemoApp::render() {
                                                 .log = *m_logHistory},
                           m_controls);
     if (!m_failed) {
+        m_renderer->syncResources(*m_cache);
         stopOnRenderError(m_renderer->renderFrame(m_renderScene));
     }
 }
