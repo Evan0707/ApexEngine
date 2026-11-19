@@ -8,6 +8,7 @@ add_executable(ApexTests
     Core/LoggerTests.cpp
     Core/MainLoopTests.cpp
     Core/VersionTests.cpp
+    Platform/KeyTests.cpp
 )
 
 target_link_libraries(ApexTests PRIVATE Apex::Engine Catch2::Catch2WithMain)

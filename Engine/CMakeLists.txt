@@ -17,6 +17,9 @@ add_library(ApexEngine STATIC
     Core/MainLoop.h
     Core/Version.cpp
     Core/Version.h
+    Platform/Event.h
+    Platform/Key.cpp
+    Platform/Key.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
 
