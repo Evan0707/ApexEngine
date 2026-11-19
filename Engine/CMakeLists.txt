@@ -23,6 +23,12 @@ add_library(ApexEngine STATIC
     Core/Profiling.h
     Core/Version.cpp
     Core/Version.h
+    Debug/FrameTimeStats.cpp
+    Debug/FrameTimeStats.h
+    Debug/LogHistory.cpp
+    Debug/LogHistory.h
+    Debug/LogHistorySink.cpp
+    Debug/LogHistorySink.h
     Input/ActionMap.cpp
     Input/ActionMap.h
     Input/ActionState.cpp
