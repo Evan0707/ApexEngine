@@ -6,5 +6,19 @@
   "dependencies": [
     "catch2",
     "sdl3"
-  ]
+  ],
+  "features": {
+    "profiling": {
+      "description": "Tracy CPU profiler client, used by the windows-profile preset",
+      "dependencies": [
+        {
+          "name": "tracy",
+          "default-features": false,
+          "features": [
+            "on-demand"
+          ]
+        }
+      ]
+    }
+  }
 }

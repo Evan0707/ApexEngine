@@ -2,7 +2,7 @@
 
 **Rôle :** socle du moteur. À terme : boucle à pas fixe, temps, logs, erreurs (cahier des charges, sections 4 et 5.1).
 
-**État (phase 1, en cours) :** version du moteur, erreurs, assertions, logger, pas fixe et boucle principale.
+**État (phase 1, en cours) :** version du moteur, erreurs, assertions, logger, pas fixe, boucle principale et macros de profilage.
 
 ## Interface publique
 
@@ -18,6 +18,7 @@
 | `Core/FixedTimestep.h` | `FixedTimestepConfig`, `FrameAdvance`, `FixedTimestep` : `advance(frameSeconds)`, `config()` |
 | `Core/FramePhases.h` | `FixedStep`, `FramePhases` : interface des phases d'une frame, implémentée par l'application |
 | `Core/MainLoop.h` | `MainLoop` : `runFrame(phases, frameSeconds)`, `run(phases)` |
+| `Core/Profiling.h` | `APEX_PROFILE_FRAME()`, `APEX_PROFILE_SCOPE(name)` |
 
 ## Erreurs et assertions
 
@@ -44,6 +45,15 @@
 - `runFrame` prend la durée de frame en paramètre et se teste sans horloge. `run` mesure le temps réel avec `std::chrono::steady_clock` et appelle `runFrame` jusqu'à la demande d'arrêt.
 - Aucun état global : la boucle et son accumulateur appartiennent à l'objet `MainLoop` (garde-fou G-06).
 
+## Profilage
+
+- Tracy (décision 0003). `Core/Profiling.h` est le seul fichier du moteur qui inclut Tracy ; le reste du moteur n'utilise que ses deux macros.
+- `APEX_PROFILE_FRAME()` marque la fin d'une frame. `APEX_PROFILE_SCOPE(name)` mesure le bloc courant jusqu'à sa fin ; `name` est une chaîne littérale. La macro déclare une variable locale : une seule zone par bloc.
+- Option CMake `APEX_ENABLE_PROFILING`, désactivée par défaut : les macros sont vides et Tracy n'est ni installé ni lié. Le preset `windows-profile` (Release) l'active avec la fonctionnalité vcpkg `profiling`, qui installe Tracy sans ses fonctionnalités par défaut et avec `on-demand` : rien n'est enregistré tant qu'aucun profileur n'est connecté.
+- Zones posées par `MainLoop::runFrame` : `Input`, `Simulation` (tous les pas de la frame), `Extraction`, `Rendering`, `Presentation`, puis la marque de frame. Une frame interrompue par `processInput` n'a pas de marque.
+- Réseau : un processus profilé écoute sur le port TCP 8086 (ou le suivant s'il est pris) et annonce sa présence par diffusion UDP sur le port 8086. La variable d'environnement `TRACY_ONLY_LOCALHOST=1` est lue à l'exécution et limite l'écoute TCP à la machine locale, ce qui doit éviter la demande du pare-feu Windows ; elle ne change pas la diffusion UDP, réglable seulement à la compilation de Tracy. Les tests du preset `windows-profile` sont aussi des processus profilés.
+- Le profileur se télécharge depuis la page des versions de Tracy, dans la version exacte du client (0.15.0), sinon la connexion est refusée.
+
 ## Dépendances
 
-Bibliothèque standard et GLM uniquement. Aucun autre module du moteur, aucune bibliothèque tierce.
+Bibliothèque standard et GLM. Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.

@@ -21,6 +21,8 @@ ctest --preset windows-debug
 
 Même chose avec `windows-release`. L'exécutable est dans `build/<preset>/bin/`.
 
+`windows-profile` : Release instrumenté par Tracy (`APEX_ENABLE_PROFILING=ON`, décision 0003).
+
 Formatage, avant chaque commit (clang-format 18.1.3, la version vérifiée par la CI) :
 
 ```
@@ -60,7 +62,8 @@ Confinement des bibliothèques tierces :
 - en-têtes Jolt : `Physics` uniquement ;
 - en-têtes SDL : `Platform` et le backend ImGui de `Debug` uniquement ;
 - cgltf et stb : `Resources` uniquement ;
-- nlohmann/json : `Serialization` uniquement.
+- nlohmann/json : `Serialization` uniquement ;
+- en-têtes Tracy : `Core/Profiling.h` uniquement.
 
 ## 5. Garde-fous (obligatoires, vérifiés par AC-17)
 

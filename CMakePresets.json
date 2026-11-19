@@ -36,11 +36,22 @@
       "displayName": "Windows x64 Release",
       "inherits": "windows-base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "windows-profile",
+      "displayName": "Windows x64 Release with Tracy",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "APEX_ENABLE_PROFILING": "ON",
+        "VCPKG_MANIFEST_FEATURES": "profiling"
+      }
     }
   ],
   "buildPresets": [
     { "name": "windows-debug", "configurePreset": "windows-debug" },
-    { "name": "windows-release", "configurePreset": "windows-release" }
+    { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "windows-profile", "configurePreset": "windows-profile" }
   ],
   "testPresets": [
     {
@@ -51,6 +62,11 @@
     {
       "name": "windows-release",
       "configurePreset": "windows-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-profile",
+      "configurePreset": "windows-profile",
       "output": { "outputOnFailure": true }
     }
   ]
