@@ -11,7 +11,7 @@ Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un 
 | Visual Studio 2026 | 18.12 ou plus récent | Charge de travail « Développement Desktop en C++ ». Fournit MSVC 14.52, CMake et Ninja |
 | Git | récente | |
 | vcpkg | cloné à part | Voir ci-dessous |
-| SDK Vulkan (LunarG) | 1.4.363.1 | Fournit les validation layers (Debug) et `glslc`. Sans lui, la démo tourne sans validation (avertissement dans le log) |
+| SDK Vulkan (LunarG) | 1.4.363.1 | Fournit `glslc`, qui compile les shaders pendant le build, et les validation layers utilisées en Debug. Rouvrir le terminal après l'installation, pour que `VULKAN_SDK` soit défini |
 
 Installation de vcpkg, une seule fois :
 

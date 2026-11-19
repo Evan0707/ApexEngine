@@ -17,6 +17,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 include(cmake/ApexCompileOptions.cmake)
+include(cmake/ApexShaders.cmake)
 
 add_subdirectory(Engine)
 add_subdirectory(Game)

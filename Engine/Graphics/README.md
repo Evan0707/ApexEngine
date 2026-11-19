@@ -19,6 +19,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/DeferredDeleter.h` (`DeferredDeleter`), sans Vulkan, testé sans GPU ;
 - `Graphics/Swapchain.h` (`SwapchainConfig`, `Swapchain`) ;
 - `Graphics/SwapchainState.h` (`FrameDecision`, `SwapchainState`), sans Vulkan, testé sans GPU ;
+- `Graphics/ShaderBinaries.h` : le SPIR-V des shaders, embarqué dans le binaire.
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`).
 
 ## Renderer
@@ -56,6 +57,13 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Piège : quand une frame est sautée après l'attente de sa fence (swapchain périmée), la frame suivante attend la même fence. Le renderer n'appelle alors pas `advanceFrame()` une seconde fois pour ce créneau : sinon le compteur avancerait sans que le GPU ait progressé, et un objet encore lu pourrait être détruit.
 - Les destructions s'exécutent dans l'ordre d'ajout. Une destruction peut en ajouter une autre, qui attend les frames suivantes.
 - `flushAll()` exécute tout ce qui reste, après une attente du GPU (fermeture). Le destructeur l'appelle aussi : le `DeferredDeleter` doit donc être détruit avant le périphérique.
+
+## Shaders
+
+- Sources GLSL 4.60 dans `Graphics/Shaders/`. `glslc`, fourni par le SDK Vulkan, les compile pendant le build : `--target-env=vulkan1.3 -Werror`, avec les informations de débogage en Debug (`-g`, utile dans RenderDoc) et optimisées ailleurs (`-O`). Une erreur ou un avertissement de shader fait échouer le build (section 3.1).
+- `apex_add_shaders()` (`cmake/ApexShaders.cmake`) produit pour chaque shader un fichier `Shaders/<nom>.spv.inc` dans le dossier de build : la liste des mots SPIR-V au format d'un initialiseur C, incluse par `ShaderBinaries.cpp`. Aucun fichier de shader n'est cherché au lancement.
+- Les fichiers inclus par un shader (`#include`, à venir avec les matériaux, G-08) sont suivis : les modifier recompile le shader.
+- `glslc` est cherché dans `%VULKAN_SDK%\Bin`, puis dans le `PATH`. Sans lui, la configuration CMake échoue avec un message qui dit quoi installer.
 
 ## Validation
 

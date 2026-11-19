@@ -27,6 +27,9 @@ jobs:
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+      # glslc compiles the shaders during the build (decision 0006). No Vulkan call runs on the runner.
+      VULKAN_SDK_VERSION: 1.4.363.1
+      VULKAN_SDK: C:\VulkanSDK\1.4.363.1
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +49,30 @@ jobs:
             throw "Visual Studio update failed with exit code $($process.ExitCode)"
           }
           Write-Host "After: $(& $vswhere -latest -products * -property catalog_productDisplayVersion)"
+
+      - name: Cache the Vulkan SDK
+        id: vulkan-sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-${{ runner.os }}-${{ env.VULKAN_SDK_VERSION }}
+
+      - name: Install the Vulkan SDK
+        if: steps.vulkan-sdk-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "$env:RUNNER_TEMP\vulkansdk.exe"
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_SDK_VERSION.exe" -OutFile $installer
+          $process = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList @(
+            '--root', $env:VULKAN_SDK, '--accept-licenses', '--default-answer', '--confirm-command', 'install')
+          if ($process.ExitCode -ne 0) {
+            throw "Vulkan SDK installation failed with exit code $($process.ExitCode)"
+          }
+
+      - name: Check glslc
+        shell: pwsh
+        run: '& "$env:VULKAN_SDK\Bin\glslc.exe" --version'
 
       - name: Install vcpkg at the manifest baseline
         shell: pwsh

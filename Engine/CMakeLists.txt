@@ -40,6 +40,8 @@ add_library(ApexEngine STATIC
     Graphics/FrameSync.h
     Graphics/Renderer.cpp
     Graphics/Renderer.h
+    Graphics/ShaderBinaries.cpp
+    Graphics/ShaderBinaries.h
     Graphics/Swapchain.cpp
     Graphics/Swapchain.h
     Graphics/SwapchainState.cpp
@@ -57,6 +59,11 @@ add_library(ApexEngine STATIC
     Platform/Window.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
+
+apex_add_shaders(ApexEngine
+    Graphics/Shaders/Triangle.frag
+    Graphics/Shaders/Triangle.vert
+)
 
 # Include root: #include "Core/Version.h"
 target_include_directories(ApexEngine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
