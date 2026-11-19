@@ -19,6 +19,8 @@ add_library(ApexEngine STATIC
     Core/MainLoop.h
     Core/Version.cpp
     Core/Version.h
+    Input/ActionMap.cpp
+    Input/ActionMap.h
     Platform/Event.h
     Platform/Key.cpp
     Platform/Key.h

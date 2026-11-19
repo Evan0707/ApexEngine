@@ -8,6 +8,7 @@ add_executable(ApexTests
     Core/LoggerTests.cpp
     Core/MainLoopTests.cpp
     Core/VersionTests.cpp
+    Input/ActionMapTests.cpp
     Platform/KeyTests.cpp
 )
 
