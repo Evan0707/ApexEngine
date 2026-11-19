@@ -28,16 +28,22 @@ add_library(ApexEngine STATIC
     Core/Profiling.h
     Core/Version.cpp
     Core/Version.h
+    Debug/ColorSpace.cpp
+    Debug/ColorSpace.h
     Debug/DebugUi.cpp
     Debug/DebugUi.h
     Debug/FrameTimeStats.cpp
     Debug/FrameTimeStats.h
     Debug/ImGuiBackend.cpp
     Debug/ImGuiBackend.h
+    Debug/InputCapture.cpp
+    Debug/InputCapture.h
     Debug/LogHistory.cpp
     Debug/LogHistory.h
     Debug/LogHistorySink.cpp
     Debug/LogHistorySink.h
+    Debug/StatsPanel.cpp
+    Debug/StatsPanel.h
     Graphics/DeferredDeleter.cpp
     Graphics/DeferredDeleter.h
     Graphics/Device.cpp

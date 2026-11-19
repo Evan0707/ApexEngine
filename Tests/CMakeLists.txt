@@ -8,7 +8,9 @@ add_executable(ApexTests
     Core/LoggerTests.cpp
     Core/MainLoopTests.cpp
     Core/VersionTests.cpp
+    Debug/ColorSpaceTests.cpp
     Debug/FrameTimeStatsTests.cpp
+    Debug/InputCaptureTests.cpp
     Debug/LogHistoryTests.cpp
     Game/CommandLineTests.cpp
     Game/DefaultBindingsTests.cpp

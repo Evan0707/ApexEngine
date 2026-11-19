@@ -1,5 +1,8 @@
 #include "DemoApp.h"
 
+#include "Debug/InputCapture.h"
+#include "Debug/StatsPanel.h"
+
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -51,15 +54,18 @@ findActions(const input::ActionMap& actions, const std::array<std::string_view, 
 
 } // namespace
 
-core::Result<DemoApp> DemoApp::create(platform::Window& window, graphics::Renderer& renderer,
-                                      debug::DebugUi& debugUi, core::Logger& logger, input::ActionMap actions,
+core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionMap actions,
                                       std::optional<std::uint64_t> maxFrames) {
-    DemoApp app(window, renderer, debugUi, logger, std::move(actions));
+    DemoApp app(systems, std::move(actions));
     app.m_maxFrames = maxFrames;
 
     const core::Result<input::ActionId> toggleCursor = findAction(app.m_actions, "ToggleCursor");
     if (!toggleCursor) {
         return std::unexpected(toggleCursor.error());
+    }
+    const core::Result<input::ActionId> toggleDebug = findAction(app.m_actions, "ToggleDebug");
+    if (!toggleDebug) {
+        return std::unexpected(toggleDebug.error());
     }
     auto frameButtons = findActions(app.m_actions, kFrameButtons);
     if (!frameButtons) {
@@ -79,6 +85,7 @@ core::Result<DemoApp> DemoApp::create(platform::Window& window, graphics::Render
     }
 
     app.m_toggleCursor = *toggleCursor;
+    app.m_toggleDebug = *toggleDebug;
     app.m_frameButtons = std::move(*frameButtons);
     app.m_gameplayButtons = std::move(*gameplayButtons);
     for (const input::ActionId id : *keyAxes) {
@@ -89,10 +96,10 @@ core::Result<DemoApp> DemoApp::create(platform::Window& window, graphics::Render
     return app;
 }
 
-DemoApp::DemoApp(platform::Window& window, graphics::Renderer& renderer, debug::DebugUi& debugUi,
-                 core::Logger& logger, input::ActionMap actions)
-    : m_window(&window), m_renderer(&renderer), m_debugUi(&debugUi), m_logger(&logger),
-      m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {}
+DemoApp::DemoApp(const DemoSystems& systems, input::ActionMap actions)
+    : m_window(&systems.window), m_renderer(&systems.renderer), m_debugUi(&systems.debugUi),
+      m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_actions(std::move(actions)),
+      m_frame(m_actions), m_simulation(m_actions) {}
 
 bool DemoApp::processInput() {
     if (m_maxFrames && m_frameCount == *m_maxFrames) {
@@ -100,12 +107,15 @@ bool DemoApp::processInput() {
         return false;
     }
     ++m_frameCount;
+    measureFrame();
 
     const std::span<const platform::Event> events = m_window->pollEvents();
     handleWindowEvents(events);
 
-    // Sequence documented in Engine/Input/README.md.
-    m_frame.apply(m_actions, events);
+    // What the debug interface uses does not reach the game. Sequence documented in Engine/Input/README.md.
+    const std::vector<platform::Event> gameEvents =
+        debug::filterCapturedEvents(events, m_debugUi->wantsKeyboard(), m_debugUi->wantsMouse());
+    m_frame.apply(m_actions, gameEvents);
     handleFrameActions();
     m_simulation.accumulate(m_frame);
     m_frame.clearTransient();
@@ -140,8 +150,23 @@ void DemoApp::handleFrameActions() {
     }
     if (m_frame.wasPressed(m_toggleCursor)) {
         m_window->setCursorCaptured(!m_window->isCursorCaptured());
+        m_debugUi->setMouseInput(!m_window->isCursorCaptured());
         m_logger->info("Cursor {}", m_window->isCursorCaptured() ? "captured" : "released");
     }
+    if (m_frame.wasPressed(m_toggleDebug)) {
+        m_debugUi->setPanelVisible(!m_debugUi->panelVisible());
+    }
+}
+
+void DemoApp::measureFrame() {
+    // Real time is read here, outside the simulation (G-05): it only feeds the debug panel.
+    const auto now = std::chrono::steady_clock::now();
+    if (m_frameStart) {
+        const double frameSeconds = std::chrono::duration<double>(now - *m_frameStart).count();
+        const double waitSeconds = m_renderer->lastFrameCounters().waitSeconds;
+        m_frameTimes.addFrame({frameSeconds, frameSeconds - waitSeconds});
+    }
+    m_frameStart = now;
 }
 
 void DemoApp::simulate(const core::FixedStep& step) {
@@ -187,7 +212,11 @@ void DemoApp::logMouseLook(const core::FixedStep& step) {
 void DemoApp::extract(double /*alpha*/) {}
 
 void DemoApp::render() {
-    m_debugUi->buildFrame();
+    m_debugUi->buildFrame(debug::DebugPanelData{.frameTimes = m_frameTimes,
+                                                .counters = m_renderer->lastFrameCounters(),
+                                                .memory = m_renderer->memoryStats(),
+                                                .entityCount = 0,
+                                                .log = *m_logHistory});
     if (!m_failed) {
         stopOnRenderError(m_renderer->renderFrame());
     }

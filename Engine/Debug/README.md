@@ -2,25 +2,29 @@
 
 **Rôle :** outils de débogage : panneau ImGui affiché par F1, console des derniers avertissements et erreurs, statistiques de frame (cahier des charges, section 5.9).
 
-**État (phase 2, tâche 10) :** statistiques de temps de frame, historique des logs et intégration de Dear ImGui (note de décision 0008). Le panneau de la section 5.9 arrive avec la tâche 11 ; pour l'instant, une petite fenêtre affiche la version d'ImGui et les FPS.
+**État (fin de phase 2) :** panneau de debug de la section 5.9 (Dear ImGui, note de décision 0008), affiché par F1 : FPS, temps CPU et temps de frame, entités, objets dessinés, triangles, mémoire GPU, console des 100 derniers avertissements et erreurs. Les éléments P1 du panneau arrivent en phase 7.
 
 ## Interface publique
 
 | En-tête | Contenu |
 |---|---|
-| `Debug/FrameTimeStats.h` | `FrameTimeStats` : `addFrame()`, `averageSeconds()`, `maxSeconds()`, `framesPerSecond()`, `frameCount()` |
+| `Debug/FrameTimeStats.h` | `FrameSample`, `FrameTimeStats` : `addFrame()`, `framesPerSecond()`, `averageFrameSeconds()`, `maxFrameSeconds()`, `averageCpuSeconds()`, `maxCpuSeconds()`, `frameCount()` |
 | `Debug/LogHistory.h` | `LogEntry`, `LogHistory` : `add()`, `snapshot()`, `capacity()` |
 | `Debug/LogHistorySink.h` | `LogHistorySink` : sink du logger qui alimente une `LogHistory` |
-| `Debug/DebugUi.h` | `DebugUi` : `create()`, `buildFrame()`, `wantsKeyboard()`, `wantsMouse()` ; implémente `graphics::RenderOverlay` |
+| `Debug/DebugUi.h` | `DebugUi` : `create()`, `buildFrame()`, `setPanelVisible()`, `panelVisible()`, `setMouseInput()`, `wantsKeyboard()`, `wantsMouse()` ; implémente `graphics::RenderOverlay` |
+| `Debug/StatsPanel.h` | `DebugPanelData` : ce que le panneau affiche, rempli par l'application |
+| `Debug/InputCapture.h` | `filterCapturedEvents()` : retire les événements utilisés par l'interface |
+| `Debug/ColorSpace.h` | `srgbToLinear()` |
 
-En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et Vulkan de Dear ImGui.
+En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et Vulkan de Dear ImGui. `drawStatsPanel()`, déclarée dans `StatsPanel.h`, n'est appelée que par `DebugUi`.
 
 ## Statistiques de frame
 
-- `FrameTimeStats` garde les durées de frame sur une fenêtre glissante, d'une seconde par défaut : FPS, moyenne et maximum « sur une seconde » de la section 5.9.
+- `FrameTimeStats` garde, pour chaque frame, sa durée et son temps CPU, sur une fenêtre glissante d'une seconde de durée de frame par défaut : FPS, moyenne et maximum « sur une seconde » de la section 5.9.
+- Temps CPU d'une frame : sa durée moins le temps passé bloqué sur le GPU ou sur la présentation (`FrameCounters::waitSeconds`, mesuré par le renderer). Avec la vsync, la durée de frame vaut à peu près la période de l'écran ; le temps CPU montre le travail réel. Il est plafonné par la durée de frame.
 - Une frame sort de la fenêtre quand les frames plus récentes couvrent à elles seules toute la fenêtre. La frame la plus récente reste toujours, même si elle dure plus que la fenêtre (cas d'un blocage de plusieurs secondes).
 - Une durée négative ou non finie compte pour 0. Toutes les valeurs valent 0 avant la première frame.
-- Les durées viennent de l'application, qui mesure la frame. Rien ici ne lit l'horloge.
+- Les durées viennent de l'application, qui mesure la frame. Rien ici ne lit l'horloge. Ce temps réel n'alimente que le panneau, jamais la simulation (G-05).
 
 ## Historique des logs
 
@@ -37,6 +41,18 @@ En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et
 - `Game` n'inclut jamais ImGui : `DebugUi` construit lui-même ses fenêtres.
 - Pas de fichier `imgui.ini` ni de log ImGui : rien n'est écrit dans le dossier de lancement.
 - Piège : les couleurs du thème ImGui sont en sRGB et la swapchain est sRGB. Elles sont converties une fois en linéaire au démarrage ; sans cela, l'interface est encodée deux fois et paraît délavée.
+
+## Panneau (F1)
+
+- Masqué au démarrage. L'action `ToggleDebug` (F1) l'affiche ou le masque ; son bouton de fermeture le masque aussi.
+- Contenu (section 5.9) : FPS ; temps CPU par frame et durée de frame, moyenne et maximum sur une seconde ; entités (0 avant le module `World`, phase 5) ; objets dessinés et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
+- La console suit les nouvelles lignes tant que la vue est en bas ; remonter permet de lire les plus anciennes.
+- Les couleurs ajoutées par le panneau sont données en sRGB et converties en linéaire, comme le thème.
+
+## Entrées
+
+- `filterCapturedEvents()` retire des événements ce que l'interface utilise : les appuis de touche quand ImGui a le clavier (les relâchements restent, pour qu'une touche tenue avant soit relâchée), le mouvement de la souris quand ImGui a la souris. Les événements de fenêtre restent toujours.
+- Quand le jeu capture le curseur (mode relatif), `setMouseInput(false)` coupe la souris d'ImGui : le curseur caché ne doit pas survoler le panneau et voler la souris au jeu.
 
 ## Backends (`ImGuiBackend.cpp`)
 

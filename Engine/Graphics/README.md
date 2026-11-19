@@ -51,7 +51,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Trois sommets en dur dans `Renderer.cpp` (position déjà dans l'espace de clip de Vulkan, couleur linéaire), copiés une fois dans un vertex buffer créé par VMA.
 - Pipeline sans descripteur ni push constant (G-02), viewport et scissor dynamiques, dynamic rendering. Pas d'élimination des faces avant la caméra de la phase 3 ; faces avant dans le sens antihoraire, comme glTF.
 - Le pipeline est créé avec la swapchain, pour son format. Si une recréation change le format, l'ancien pipeline passe par la destruction différée.
-- `lastFrameCounters()` : un appel de dessin et un triangle par frame rendue.
+- `lastFrameCounters()` : un appel de dessin et un triangle par frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Remplacé en phase 3 par les meshes, le format de sommet unique et la `RenderScene`.
 
 ## Swapchain

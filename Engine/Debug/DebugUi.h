@@ -2,6 +2,7 @@
 
 #include "Core/Error.h"
 #include "Core/Logger.h"
+#include "Debug/StatsPanel.h"
 #include "Graphics/RenderOverlay.h"
 #include "Graphics/Renderer.h"
 #include "Platform/Window.h"
@@ -34,7 +35,14 @@ public:
 
     // Builds the interface of this frame. Called once per frame, after the input phase and before
     // Renderer::renderFrame.
-    void buildFrame();
+    void buildFrame(const DebugPanelData& data);
+
+    // The panel of spec 5.9, shown and hidden by F1. Hidden at start.
+    void setPanelVisible(bool visible) noexcept;
+    [[nodiscard]] bool panelVisible() const noexcept;
+
+    // Off while the game holds the cursor (relative mode): the hidden cursor must not drive the interface.
+    void setMouseInput(bool enabled);
 
     // ImGui uses the keyboard or the mouse: the game must not react to them.
     [[nodiscard]] bool wantsKeyboard() const;
@@ -46,6 +54,7 @@ private:
     graphics::Renderer* m_renderer;
     ImGuiContext* m_context;
     std::unique_ptr<ImGuiBackend> m_backend;
+    bool m_panelVisible = false;
 };
 
 } // namespace apex::debug

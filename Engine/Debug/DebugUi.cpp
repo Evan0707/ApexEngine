@@ -1,20 +1,15 @@
 #include "Debug/DebugUi.h"
 
+#include "Debug/ColorSpace.h"
 #include "Debug/ImGuiBackend.h"
 
 #include <imgui.h>
 
-#include <cmath>
 #include <utility>
 
 namespace apex::debug {
 
 namespace {
-
-// IEC 61966-2-1.
-[[nodiscard]] float srgbToLinear(float value) noexcept {
-    return value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
-}
 
 // ImGui colors are sRGB, and the sRGB swapchain encodes what the shader writes: without this, the
 // interface is encoded twice and looks washed out.
@@ -60,18 +55,30 @@ DebugUi::~DebugUi() {
     ImGui::DestroyContext(m_context);
 }
 
-void DebugUi::buildFrame() {
+void DebugUi::buildFrame(const DebugPanelData& data) {
     m_backend->newFrame();
     ImGui::NewFrame();
-
-    // Placeholder until the statistics panel: proves the interface is drawn over the scene.
-    ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin("Apex Engine", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-    ImGui::Text("Dear ImGui %s", ImGui::GetVersion());
-    ImGui::Text("%.1f FPS", static_cast<double>(ImGui::GetIO().Framerate));
-    ImGui::End();
-
+    if (m_panelVisible) {
+        drawStatsPanel(data, m_panelVisible);
+    }
     ImGui::Render();
+}
+
+void DebugUi::setPanelVisible(bool visible) noexcept {
+    m_panelVisible = visible;
+}
+
+bool DebugUi::panelVisible() const noexcept {
+    return m_panelVisible;
+}
+
+void DebugUi::setMouseInput(bool enabled) {
+    ImGuiIO& io = ImGui::GetIO();
+    if (enabled) {
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+    } else {
+        io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+    }
 }
 
 bool DebugUi::wantsKeyboard() const {

@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -305,6 +306,7 @@ core::Result<void> Renderer::renderFrame() {
 
     const VkDevice device = state.device->device();
     const FrameResources& frame = state.frames.frame(state.frameIndex);
+    const auto waitStart = std::chrono::steady_clock::now();
     constexpr std::uint64_t kNoTimeout = std::numeric_limits<std::uint64_t>::max();
     if (const VkResult result = vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, kNoTimeout);
         result != VK_SUCCESS) {
@@ -318,6 +320,7 @@ core::Result<void> Renderer::renderFrame() {
     std::uint32_t imageIndex = 0;
     const VkResult acquired = vkAcquireNextImageKHR(device, state.swapchain.handle(), kNoTimeout,
                                                     frame.imageAvailable, VK_NULL_HANDLE, &imageIndex);
+    const std::chrono::duration<double> waited = std::chrono::steady_clock::now() - waitStart;
     if (acquired == VK_ERROR_OUT_OF_DATE_KHR) {
         // Nothing was signaled or submitted: the frame is skipped and the swapchain recreated next time.
         state.swapchainState.markOutOfDate();
@@ -369,6 +372,7 @@ core::Result<void> Renderer::renderFrame() {
         return vulkanError(*state.logger, "vkQueueSubmit2", result);
     }
 
+    state.counters.waitSeconds = waited.count();
     state.slotWaited[state.frameIndex] = false;
     state.frameIndex = (state.frameIndex + 1) % kFramesInFlight;
     state.acquiredImage = imageIndex;
@@ -420,7 +424,10 @@ core::Result<void> Renderer::presentFrame() {
         .pSwapchains = &swapchain,
         .pImageIndices = &imageIndex,
     };
+    const auto presentStart = std::chrono::steady_clock::now();
     const VkResult result = vkQueuePresentKHR(state.device->presentQueue(), &present);
+    state.counters.waitSeconds +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - presentStart).count();
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         state.swapchainState.markOutOfDate();
         return {};

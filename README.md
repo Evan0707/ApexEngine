@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 2 en cours (Vulkan, swapchain, triangle, ImGui).** `ApexDemo` ouvre une fenêtre et y dessine par Vulkan 1.3 un triangle coloré sur fond bleu nuit, fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 2 en cours (Vulkan, swapchain, triangle, ImGui).** `ApexDemo` ouvre une fenêtre et y dessine par Vulkan 1.3 un triangle coloré sur fond bleu nuit, avec un panneau de debug Dear ImGui (F1). Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -56,7 +56,8 @@ Remplacer `windows-debug` par `windows-release` pour la configuration Release, o
 | Z / S, Q / D, A / E | Logue la valeur des axes `MoveForward`, `MoveRight`, `MoveUp` quand elle change |
 | Espace, Maj gauche, F3 | Logue l'appui et le relâchement de `Jump`, `Sprint`, `SwitchCamera` |
 | Échap | Capture ou libère le curseur |
-| F1, F2, F4 | Logue l'appui ; sans effet avant les phases 2 et 7 |
+| F1 | Affiche ou masque le panneau de debug |
+| F2, F4 | Logue l'appui ; sans effet avant la phase 7 |
 | Souris | Logue une fois par seconde le déplacement cumulé, quand elle a bougé |
 | Croix, Alt + F4 | Ferme l'application, code de sortie 0 |
 

@@ -8,6 +8,8 @@
 #include "Core/MainLoop.h"
 #include "Core/Version.h"
 #include "Debug/DebugUi.h"
+#include "Debug/LogHistory.h"
+#include "Debug/LogHistorySink.h"
 #include "Graphics/Renderer.h"
 #include "Graphics/ValidationLog.h"
 #include "Input/ActionMap.h"
@@ -34,6 +36,7 @@ constexpr bool kEnableValidation = true;
 
 // Every system is created here in the order of spec 5.1 and destroyed in reverse order when this returns.
 [[nodiscard]] int runDemo(apex::core::Logger& logger, apex::graphics::ValidationLog& validation,
+                          const apex::debug::LogHistory& logHistory,
                           const apex::game::CommandLineOptions& options) {
     using namespace apex;
 
@@ -62,8 +65,12 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
-    core::Result<game::DemoApp> app =
-        game::DemoApp::create(*window, **renderer, **debugUi, logger, std::move(*actions), options.maxFrames);
+    const game::DemoSystems systems{.window = *window,
+                                    .renderer = **renderer,
+                                    .debugUi = **debugUi,
+                                    .logHistory = logHistory,
+                                    .logger = logger};
+    core::Result<game::DemoApp> app = game::DemoApp::create(systems, std::move(*actions), options.maxFrames);
     if (!app) {
         logger.error("{}", app.error().message);
         return kExitFailure;
@@ -82,8 +89,11 @@ int main(int argc, char* argv[]) {
     using namespace apex;
 
     // Declared first so that they outlive every system: shutdown messages are logged and counted too.
+    // The history outlives the logger, whose sink writes into it.
+    debug::LogHistory logHistory;
     core::Logger logger;
     logger.addSink(std::make_unique<core::ConsoleLogSink>());
+    logger.addSink(std::make_unique<debug::LogHistorySink>(logHistory));
     if (auto fileSink = core::FileLogSink::open("Logs/apex.log")) {
         logger.addSink(std::move(*fileSink));
     } else {
@@ -99,7 +109,7 @@ int main(int argc, char* argv[]) {
         return kExitFailure;
     }
 
-    const int exitCode = runDemo(logger, validation, *options);
+    const int exitCode = runDemo(logger, validation, logHistory, *options);
     if (const std::uint32_t count = validation.messageCount(); count > 0) {
         logger.error("{} Vulkan validation message(s) during the run", count);
         return exitCode == kExitSuccess ? kExitValidationMessages : exitCode;
