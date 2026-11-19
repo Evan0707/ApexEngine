@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 
 namespace apex::game {
@@ -17,6 +18,11 @@ struct CommandLineOptions {
     // --benchmark S: the camera follows a fixed path; after a warm-up, S seconds of frame times are
     // measured and logged, then the demo quits (spec 7.1).
     std::optional<std::uint64_t> benchmarkSeconds;
+    // --assets DIR: the asset folder, instead of the Assets/ copied next to the executable.
+    std::optional<std::string> assetsDirectory;
+    // --model PATH: one more model, relative to the asset folder, placed in front of the camera. A path
+    // that does not load shows the fallback cube (AC-11).
+    std::optional<std::string> extraModel;
 };
 
 // Arguments without the program name. Unknown or malformed options are an InvalidArgument error.

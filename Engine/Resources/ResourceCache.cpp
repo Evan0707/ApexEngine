@@ -28,8 +28,12 @@ ResourceCache::ResourceCache(std::filesystem::path assetsRoot, core::Logger& log
 void ResourceCache::createFallbacks() {
     m_checker = m_textures.add(makeCheckerTexture());
     m_white = m_textures.add(makeWhiteTexture(ColorSpace::Srgb));
-    m_fallbackModel.parts = {ModelPartRef{.mesh = m_meshes.add(makeFallbackMesh()),
-                                          .material = m_materials.add(makeDefaultMaterial())}};
+    m_defaultMaterial = m_materials.add(makeDefaultMaterial());
+    MaterialData fallback = makeDefaultMaterial();
+    fallback.baseColorFactor = glm::vec4(1.0f);
+    fallback.baseColorTexture = m_checker;
+    m_fallbackModel.parts = {
+        ModelPartRef{.mesh = m_meshes.add(makeFallbackMesh()), .material = m_materials.add(fallback)}};
 }
 
 ModelHandle ResourceCache::loadModel(std::string_view path) {
@@ -183,6 +187,10 @@ MeshHandle ResourceCache::fallbackMesh() const noexcept {
 }
 
 MaterialHandle ResourceCache::defaultMaterial() const noexcept {
+    return m_defaultMaterial;
+}
+
+MaterialHandle ResourceCache::fallbackMaterial() const noexcept {
     return m_fallbackModel.parts.front().material;
 }
 

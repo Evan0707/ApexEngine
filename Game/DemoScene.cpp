@@ -18,10 +18,16 @@ constexpr std::size_t kReference = 1;
 constexpr std::size_t kRed = 2;
 constexpr std::size_t kGreen = 3;
 constexpr std::size_t kBlue = 4;
-constexpr std::size_t kCrate = 5;
 // Then five dielectric spheres and five metallic spheres, roughness 0 to 1.
-constexpr std::size_t kFirstDielectricSphere = 6;
-constexpr std::size_t kFirstMetalSphere = 11;
+constexpr std::size_t kFirstDielectricSphere = 5;
+constexpr std::size_t kFirstMetalSphere = 10;
+
+// On the floor, in front of the starting camera. Centered on y = 0.5: a model of 1 m centered on its
+// origin, such as the fallback cube, rests on the floor.
+constexpr glm::vec3 kExtraModelPosition{0.0f, 0.5f, 3.5f};
+
+// Water Bottle: 26 cm tall, centered on its origin.
+constexpr float kBottleHalfHeight = 0.1302f;
 constexpr std::size_t kSpheresPerRow = 5;
 
 constexpr std::uint32_t kSphereSegments = 48;
@@ -45,7 +51,6 @@ std::vector<resources::MaterialData> demoMaterials() {
         {.baseColorFactor = {0.7f, 0.08f, 0.06f, 1.0f}, .metallicFactor = 0.0f, .roughnessFactor = 0.4f},
         {.baseColorFactor = {0.1f, 0.45f, 0.12f, 1.0f}, .metallicFactor = 0.0f, .roughnessFactor = 0.6f},
         {.baseColorFactor = {0.08f, 0.2f, 0.6f, 1.0f}, .metallicFactor = 0.0f, .roughnessFactor = 0.3f},
-        {.baseColorFactor = {0.55f, 0.3f, 0.12f, 1.0f}, .metallicFactor = 0.0f, .roughnessFactor = 0.7f},
     };
     for (std::size_t i = 0; i < kSpheresPerRow; ++i) {
         materials.push_back({.baseColorFactor = {0.8f, 0.8f, 0.8f, 1.0f},
@@ -65,8 +70,8 @@ std::vector<DemoObjectDesc> demoObjects() {
     std::vector<DemoObjectDesc> objects{
         // Top face at y = 0.
         {DemoShape::Cube, kFloor, {.position = {0.0f, -0.1f, 0.0f}, .scale = {30.0f, 0.2f, 30.0f}}},
-        // Reference cube (spec 6.1): 1 m, resting on the floor at the origin.
-        {DemoShape::Cube, kReference, {.position = {0.0f, 0.5f, 0.0f}}},
+        // Reference cube (spec 6.1): 1 m, resting on the floor at the origin, each face labeled.
+        {DemoShape::Cube, kReference, {.position = {0.0f, 0.5f, 0.0f}}, 0.0f, "Models/reference_cube.glb"},
         {DemoShape::Cube, kRed, {.position = {-2.5f, 0.5f, 1.0f}, .rotation = yaw(20.0f)}},
         {DemoShape::Cube,
          kGreen,
@@ -74,8 +79,19 @@ std::vector<DemoObjectDesc> demoObjects() {
         {DemoShape::Cube,
          kBlue,
          {.position = {-1.2f, 0.3f, 2.5f}, .rotation = yaw(45.0f), .scale = glm::vec3(0.6f)}},
-        {DemoShape::Cube, kCrate, {.position = {4.5f, 0.5f, -1.5f}}},
-        {DemoShape::Cube, kCrate, {.position = {4.5f, 1.5f, -1.5f}, .rotation = yaw(10.0f)}},
+        // The crate's origin is at its base.
+        {DemoShape::Cube, kReference, {.position = {4.5f, 0.0f, -1.5f}}, 0.0f, "Models/crate.gltf"},
+        {DemoShape::Cube,
+         kReference,
+         {.position = {4.5f, 1.0f, -1.5f}, .rotation = yaw(10.0f)},
+         0.0f,
+         "Models/crate.gltf"},
+        // On top of the green box.
+        {DemoShape::Cube,
+         kReference,
+         {.position = {2.5f, 1.5f + kBottleHalfHeight, 0.5f}},
+         0.0f,
+         "Models/water_bottle.glb"},
         {DemoShape::Cube, kReference, {.position = {-4.5f, 1.5f, -2.0f}, .scale = {0.6f, 3.0f, 0.6f}}},
         {DemoShape::Cube, kBlue, {.position = {1.8f, 0.4f, 2.2f}, .scale = glm::vec3(0.8f)}, 45.0f},
     };
@@ -97,7 +113,7 @@ glm::vec3 demoAmbient() noexcept {
     return {0.06f, 0.07f, 0.09f};
 }
 
-DemoScene DemoScene::create(resources::ResourceCache& cache) {
+DemoScene DemoScene::create(resources::ResourceCache& cache, std::optional<std::string_view> extraModel) {
     DemoScene scene(cache);
     // Unit sizes: the transforms scale them.
     const std::array<resources::MeshHandle, 2> meshes{
@@ -110,11 +126,21 @@ DemoScene DemoScene::create(resources::ResourceCache& cache) {
         materials.push_back(cache.addMaterial(std::format("Demo material {}", i), materialData[i]));
     }
     for (const DemoObjectDesc& desc : demoObjects()) {
-        const resources::ModelPartRef part{.mesh = meshes[static_cast<std::size_t>(desc.shape)],
-                                           .material = materials[desc.material]};
-        scene.m_objects.push_back(Object{.model = cache.addModel(std::span(&part, 1)),
+        resources::ModelHandle model;
+        if (!desc.model.empty()) {
+            model = cache.loadModel(desc.model);
+        } else {
+            const resources::ModelPartRef part{.mesh = meshes[static_cast<std::size_t>(desc.shape)],
+                                               .material = materials[desc.material]};
+            model = cache.addModel(std::span(&part, 1));
+        }
+        scene.m_objects.push_back(Object{.model = model,
                                          .transform = desc.transform,
                                          .spinRadiansPerSecond = glm::radians(desc.spinDegreesPerSecond)});
+    }
+    if (extraModel) {
+        scene.m_objects.push_back(
+            Object{.model = cache.loadModel(*extraModel), .transform = {.position = kExtraModelPosition}});
     }
     return scene;
 }

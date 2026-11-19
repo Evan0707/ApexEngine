@@ -14,12 +14,15 @@
 #include "Graphics/Renderer.h"
 #include "Graphics/ValidationLog.h"
 #include "Input/ActionMap.h"
+#include "Platform/Paths.h"
 #include "Platform/Window.h"
 #include "Resources/ResourceCache.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -61,8 +64,23 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
-    // Spec 5.1: Resources after Graphics. Asset paths are relative to Assets/ (spec 3.3).
-    resources::ResourceCache cache("Assets", logger);
+    // Spec 5.1: Resources after Graphics. Asset paths are relative to this folder (spec 3.3).
+    std::filesystem::path assetsRoot;
+    if (options.assetsDirectory) {
+        assetsRoot = *options.assetsDirectory;
+    } else if (core::Result<std::filesystem::path> executable = platform::executableDirectory()) {
+        assetsRoot = *executable / "Assets";
+    } else {
+        logger.error("{}", executable.error().message);
+        return kExitFailure;
+    }
+    if (std::error_code error; !std::filesystem::is_directory(assetsRoot, error)) {
+        logger.warning("Asset folder not found: '{}'; models will show as fallback cubes",
+                       assetsRoot.generic_string());
+    } else {
+        logger.info("Asset folder: '{}'", assetsRoot.generic_string());
+    }
+    resources::ResourceCache cache(assetsRoot, logger);
 
     core::Result<std::unique_ptr<debug::DebugUi>> debugUi =
         debug::DebugUi::create(*window, **renderer, logger);
@@ -71,7 +89,7 @@ constexpr bool kEnableValidation = true;
     }
 
     // Loaded last (spec 5.1), destroyed first.
-    game::DemoScene scene = game::DemoScene::create(cache);
+    game::DemoScene scene = game::DemoScene::create(cache, options.extraModel);
     logger.info("Demo scene: {} objects", scene.objectCount());
 
     const game::DemoSystems systems{.window = *window,

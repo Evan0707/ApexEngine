@@ -10,9 +10,14 @@
 |---|---|
 | `Platform/Key.h` | `Key`, `allKeys()`, `keyFromName()`, `keyName()` |
 | `Platform/Event.h` | `Event`, variante de `CloseRequested`, `WindowResized`, `WindowMinimized`, `WindowRestored`, `FocusLost`, `KeyChanged`, `MouseMoved` |
+| `Platform/Paths.h` | `executableDirectory()` : dossier de l'exécutable, où le build copie `Assets/` (décision 0014) |
 | `Platform/Window.h` | `WindowConfig`, `PixelSize`, `NativeEventObserver`, `Window` : `create()`, `pollEvents()`, `isMinimized()`, `sizeInPixels()`, `setCursorCaptured()`, `isCursorCaptured()`, `vulkanInstanceExtensions()`, `createVulkanSurface()`, `nativeHandle()`, `setNativeEventObserver()` |
 
 Aucun en-tête public n'inclut SDL : le module expose ses propres types, et la conversion depuis SDL reste dans ses fichiers `.cpp`. `Window.h` déclare seulement `struct SDL_Window;`, sans rien inclure.
+
+## Dossier de l'exécutable
+
+- `executableDirectory()` renvoie le dossier qui contient l'exécutable en cours, par `SDL_GetBasePath()` (chemin UTF-8 converti en `std::filesystem::path`). Utilisable avant la création de la fenêtre. Échec : `PlatformFailure` avec le message de SDL.
 
 ## Fenêtre
 

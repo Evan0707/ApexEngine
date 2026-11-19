@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 3 en cours (caméra, meshes, profondeur, shader PBR, lumière).** `ApexDemo` dessine par Vulkan 1.3 une scène éclairée (sol, cubes, sphères métalliques et non métalliques) vue par une caméra libre, avec un panneau de debug Dear ImGui (F1). Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 4 en cours (import glTF, textures, matériaux, cache, assets de secours).** `ApexDemo` dessine par Vulkan 1.3 une scène éclairée vue par une caméra libre : sol, cubes, sphères métalliques et non métalliques, et des modèles glTF texturés (cube de référence aux faces marquées, caisses, bouteille). Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -38,12 +38,14 @@ Remplacer `windows-debug` par `windows-release` pour la configuration Release, o
 
 ## La démonstration
 
-`ApexDemo` ouvre une fenêtre de 1920 × 1080 et écrit ses logs dans la console et dans `Logs/apex.log`, relatif au dossier de lancement.
+`ApexDemo` ouvre une fenêtre de 1920 × 1080 et écrit ses logs dans la console et dans `Logs/apex.log`, relatif au dossier de lancement. Il lit ses modèles dans le dossier `Assets` placé à côté de lui : le build l'y copie à chaque compilation.
 
 | Option | Effet |
 |---|---|
 | `--frames N` | Quitte seul après N frames |
 | `--no-vsync` | Désactive la synchronisation verticale, pour les mesures |
+| `--assets DIR` | Dossier des assets ; par défaut, le dossier `Assets` copié à côté de l'exécutable par le build |
+| `--model PATH` | Ajoute un modèle, chemin relatif au dossier des assets, posé au sol devant la caméra. Un modèle introuvable ou invalide est remplacé par un cube en damier magenta, et l'erreur est logée avec le chemin (AC-11) |
 | `--benchmark S` | Mesure de performance (section 7.1) : la caméra suit un cercle autour de la scène ; après 2 s de mise en route, S secondes de frames sont mesurées, le résultat est logué, puis l'application quitte. À lancer en Release avec `--no-vsync` (voir `Docs/benchmark.md`) |
 
 | Code de sortie | Signification |
@@ -74,7 +76,9 @@ La première configuration télécharge et compile les dépendances vcpkg ; les 
 Engine/      bibliothèque statique du moteur, un dossier par module
 Game/        exécutable de démonstration
 Tests/       tests automatisés (Catch2), sans fenêtre ni GPU
+Assets/      modèles et textures de la démonstration, licences dans Assets/LICENSES.md
 Docs/        cahier des charges, architecture, décisions, suivi des heures
+Tools/       scripts Python (génération des assets), voir Tools/README.md
 cmake/       options de compilation communes
 ```
 

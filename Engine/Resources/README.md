@@ -68,7 +68,7 @@
 - Un chargement ne renvoie jamais d'erreur à l'appelant : il renvoie un handle dont l'état dit `Failed`, et l'erreur est écrite dans le log avec le chemin (AC-11). Chemin invalide, fichier absent, fichier corrompu : même traitement.
 - Un modèle chargé devient un `Model` : une liste de parties (`ModelPartRef` : un mesh et un matériau du cache). Ses textures externes passent par `loadTexture()`, donc par le cache ; ses images intégrées sont décodées sans clé de chemin. Une texture en échec n'empêche pas le modèle d'être prêt.
 - Une même image utilisée comme couleur et comme données serait chargée deux fois, une fois par espace de couleur (formats GPU différents).
-- `parts(modèle)` renvoie les parties d'un modèle prêt, sinon celles du modèle de secours : le cube de 1 m et le matériau par défaut (G-03).
+- `parts(modèle)` renvoie les parties d'un modèle prêt, sinon celles du modèle de secours : le cube de 1 m dans le damier magenta (`fallbackMaterial()`), impossible à manquer à l'écran (G-03, AC-11). `defaultMaterial()` reste le matériau par défaut, sans texture.
 - `addMesh()`, `addMaterial()` et `addModel()` ajoutent des ressources faites en code (primitives et matériaux de la démo), sans chemin. Un mesh invalide ou un facteur hors de [0 ; 1] donnent `Failed`, avec une ligne de log.
 - `meshes()`, `textures()` et `materials()` donnent accès en lecture aux pools : le renderer y lit ce qui est devenu prêt ou a été déchargé.
 - `unloadAll()` décharge tout (déchargement de la scène) : chaque handle donné jusque-là devient périmé, et les assets de secours sont recréés.

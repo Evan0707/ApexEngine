@@ -50,12 +50,14 @@ public:
 
     [[nodiscard]] ResourceState state(ModelHandle model) const noexcept;
     [[nodiscard]] ResourceState state(TextureHandle texture) const noexcept;
-    // The parts of a ready model; the fallback model's (a 1 m cube, default material) otherwise.
+    // The parts of a ready model; the fallback model's otherwise: a 1 m cube in the magenta checker.
     [[nodiscard]] std::span<const ModelPartRef> parts(ModelHandle model) const noexcept;
 
     // Built in (spec 5.5), always ready, recreated by unloadAll.
     [[nodiscard]] MeshHandle fallbackMesh() const noexcept;
     [[nodiscard]] MaterialHandle defaultMaterial() const noexcept;
+    // The default material with the checker: the fallback model's, impossible to miss (AC-11).
+    [[nodiscard]] MaterialHandle fallbackMaterial() const noexcept;
     // Given for a texture that is not ready or failed.
     [[nodiscard]] TextureHandle checkerTexture() const noexcept;
     // Given for a material without a texture.
@@ -90,6 +92,7 @@ private:
     std::map<AssetPath, ModelHandle> m_modelPaths;
     std::map<std::pair<AssetPath, ColorSpace>, TextureHandle> m_texturePaths;
     Model m_fallbackModel;
+    MaterialHandle m_defaultMaterial;
     TextureHandle m_checker;
     TextureHandle m_white;
     std::size_t m_filesRead = 0;

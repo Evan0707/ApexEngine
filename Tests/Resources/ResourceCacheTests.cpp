@@ -86,7 +86,9 @@ TEST_CASE("A missing model fails with its path logged and gives the fallback cub
     const auto parts = fixture.cache->parts(missing);
     REQUIRE(parts.size() == 1);
     REQUIRE(parts[0].mesh == fixture.cache->fallbackMesh());
-    REQUIRE(parts[0].material == fixture.cache->defaultMaterial());
+    REQUIRE(parts[0].material == fixture.cache->fallbackMaterial());
+    const MaterialData* fallback = fixture.cache->materials().find(parts[0].material);
+    REQUIRE(fallback->baseColorTexture == fixture.cache->checkerTexture());
     // Not retried: the failure is cached like a success.
     REQUIRE(fixture.cache->loadModel("Models/absent.glb") == missing);
     REQUIRE(fixture.cache->filesRead() == 1);

@@ -106,6 +106,8 @@ add_library(ApexEngine STATIC
     Platform/Event.h
     Platform/Key.cpp
     Platform/Key.h
+    Platform/Paths.cpp
+    Platform/Paths.h
     Platform/Window.cpp
     Platform/Window.h
     Resources/AssetPath.cpp

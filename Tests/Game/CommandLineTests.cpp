@@ -57,3 +57,14 @@ TEST_CASE("The benchmark option sets the measured duration", "[game]") {
     REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 2>{"--benchmark", "0"}).has_value());
     REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 2>{"--benchmark", "1.5"}).has_value());
 }
+
+TEST_CASE("The assets and model options take a path", "[game]") {
+    constexpr std::array<std::string_view, 4> arguments{"--assets", "D:/Data/Assets", "--model",
+                                                        "Models/crate.gltf"};
+    const auto options = parseCommandLine(arguments);
+    REQUIRE(options.has_value());
+    REQUIRE(options->assetsDirectory == "D:/Data/Assets");
+    REQUIRE(options->extraModel == "Models/crate.gltf");
+    REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 1>{"--model"}).has_value());
+    REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 2>{"--assets", ""}).has_value());
+}

@@ -8,6 +8,8 @@
 #include "Resources/ResourceCache.h"
 
 #include <cstddef>
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace apex::game {
@@ -22,10 +24,12 @@ struct DemoObjectDesc {
     ObjectTransform transform;
     // Turns around world +Y by fixed steps, to show the interpolation of spec 5.1.
     float spinDegreesPerSecond = 0.0f;
+    // Asset path of a model; when set, shape and material are not used.
+    std::string_view model = {};
 };
 
-// Phase 3 scene, written in code until the JSON scene of phase 5: a floor, a reference cube of 1 m,
-// boxes, and rows of spheres from smooth to rough.
+// Phase 4 scene, written in code until the JSON scene of phase 5: a floor, the reference cube of 1 m,
+// boxes, two crates and a bottle loaded from glTF files, and rows of spheres from smooth to rough.
 [[nodiscard]] std::vector<resources::MaterialData> demoMaterials();
 [[nodiscard]] std::vector<DemoObjectDesc> demoObjects();
 [[nodiscard]] graphics::RenderLight demoLight() noexcept;
@@ -35,9 +39,10 @@ struct DemoObjectDesc {
 // owns the meshes and materials, and must outlive the scene.
 class DemoScene {
 public:
-    // Adds the scene's primitives and materials to the cache. An invalid one is logged by the cache and
-    // drawn with the fallbacks.
-    [[nodiscard]] static DemoScene create(resources::ResourceCache& cache);
+    // Adds the scene's primitives and materials to the cache and loads its models. What fails is logged
+    // by the cache and drawn with the fallbacks. extraModel: one more model, in front of the camera.
+    [[nodiscard]] static DemoScene create(resources::ResourceCache& cache,
+                                          std::optional<std::string_view> extraModel);
 
     // One fixed step (G-05).
     void simulate(double deltaSeconds) noexcept;
