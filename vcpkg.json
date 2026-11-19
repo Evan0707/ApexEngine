@@ -12,6 +12,7 @@
         "vulkan"
       ]
     },
+    "stb",
     "vk-bootstrap",
     "vulkan-headers",
     "vulkan-loader",

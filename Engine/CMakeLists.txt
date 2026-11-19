@@ -1,5 +1,6 @@
 find_package(glm CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 find_package(VulkanHeaders CONFIG REQUIRED)
 find_package(VulkanLoader CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
@@ -105,13 +106,20 @@ add_library(ApexEngine STATIC
     Platform/Window.h
     Resources/AssetPath.cpp
     Resources/AssetPath.h
+    Resources/FallbackAssets.cpp
+    Resources/FallbackAssets.h
+    Resources/FileReader.cpp
+    Resources/FileReader.h
     Resources/Handles.h
+    Resources/ImageDecoder.cpp
+    Resources/ImageDecoder.h
     Resources/MaterialData.h
     Resources/MeshData.cpp
     Resources/MeshData.h
     Resources/Primitives.cpp
     Resources/Primitives.h
     Resources/ResourcePool.h
+    Resources/TextureData.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
 
@@ -137,6 +145,8 @@ target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
 # Vulkan headers are included only by Graphics (decision 0006); no public header of Graphics needs them.
 target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-bootstrap::vk-bootstrap
                                           GPUOpen::VulkanMemoryAllocator)
+# stb_image is included only by Resources/ImageDecoder.cpp (decision 0013). SYSTEM: its warnings are not ours.
+target_include_directories(ApexEngine SYSTEM PRIVATE "${Stb_INCLUDE_DIR}")
 # Dear ImGui is included only by Debug (decision 0008).
 target_link_libraries(ApexEngine PRIVATE imgui::imgui)
 if(APEX_ENABLE_PROFILING)

@@ -13,6 +13,10 @@
 | `Resources/Primitives.h` | `makeCube(size)`, `makeSphere(radius, segments, rings)` |
 | `Resources/AssetPath.h` | `AssetPath` : `parse()`, `resolveSibling()`, `str()` |
 | `Resources/Handles.h` | `Handle`, `MeshHandle`, `TextureHandle`, `MaterialHandle`, `ModelHandle`, `ResourceState` |
+| `Resources/TextureData.h` | `ColorSpace`, `TextureData` : image décodée en RGBA 8 bits |
+| `Resources/ImageDecoder.h` | `decodeImage()`, `kMaxImageSize` |
+| `Resources/FileReader.h` | `readFile()` |
+| `Resources/FallbackAssets.h` | `makeCheckerTexture()`, `makeWhiteTexture()`, `makeFallbackMesh()`, `makeDefaultMaterial()` |
 | `Resources/ResourcePool.h` | `ResourcePool` : ressources d'un type, avec leur état, désignées par handles |
 
 ## Données
@@ -36,6 +40,18 @@
 - `revision()` change à chaque modification : un lecteur (le renderer) peut ignorer un pool qui n'a pas changé. `forEach()` parcourt les ressources vivantes avec leur état.
 - Pas de verrou : le chargement est synchrone en phase 4.
 
+## Textures
+
+- `TextureData` : image décodée, indépendante du format (G-04), en RGBA 8 bits, lignes de haut en bas, avec l'espace de couleur voulu : sRGB pour une couleur, linéaire pour des données (section 3.3).
+- `decodeImage(octets, nom, espace)` décode un PNG ou un JPG par stb_image (décision 0013), seul fichier du moteur qui l'inclut. Les dimensions sont lues avant le décodage : au-delà de 4096 pixels de côté, l'image est refusée sans être décodée. L'erreur nomme l'image et dit pourquoi.
+- `readFile(chemin)` lit un fichier entier ; `NotFound` s'il n'existe pas, `IoFailure` s'il ne se lit pas, avec le chemin dans le message.
+
+## Assets de secours (section 5.5)
+
+- `makeCheckerTexture()` : damier magenta et noir de 64 × 64 pixels, cases de 8, en sRGB, pour une texture en échec.
+- `makeWhiteTexture()` : un texel blanc, pour un matériau sans texture : multiplier par 1 laisse les facteurs inchangés.
+- `makeFallbackMesh()` : cube de 1 m centré sur l'origine, pour un modèle en échec ; `makeDefaultMaterial()` : le matériau par défaut.
+
 ## Primitives
 
 - `makeCube(size)` : cube centré sur l'origine, `size` mètres de côté, 24 sommets (normales par face), 12 triangles. Chaque face couvre toute la texture, haut de la texture vers le haut de la face (vers −Z pour la face du dessus).
@@ -43,4 +59,4 @@
 
 ## Dépendances
 
-`Core` (et GLM par `Core/Math.h`). Ni Vulkan ni EnTT (section 4.2).
+`Core` (et GLM par `Core/Math.h`). stb_image (décision 0013), dans `ImageDecoder.cpp` uniquement. Ni Vulkan ni EnTT (section 4.2).
