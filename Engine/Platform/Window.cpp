@@ -7,6 +7,8 @@
 // Declares SDL_SetMainReady() only: Game keeps its standard main (decisions 0002 and 0005).
 #define SDL_MAIN_HANDLED
 #include <SDL3/SDL_main.h>
+// Declares its own opaque Vulkan handles: no Vulkan header is included (decision 0009).
+#include <SDL3/SDL_vulkan.h>
 
 #include <algorithm>
 #include <array>
@@ -134,7 +136,7 @@ core::Result<Window> Window::create(const WindowConfig& config, core::Logger& lo
         return core::makeError(core::ErrorCode::PlatformFailure, std::move(message));
     }
 
-    const SDL_WindowFlags flags = config.resizable ? SDL_WINDOW_RESIZABLE : 0;
+    const SDL_WindowFlags flags = SDL_WINDOW_VULKAN | (config.resizable ? SDL_WINDOW_RESIZABLE : 0);
     SDL_Window* window = SDL_CreateWindow(config.title.c_str(), static_cast<int>(config.width),
                                           static_cast<int>(config.height), flags);
     if (window == nullptr) {
@@ -162,8 +164,8 @@ Window::~Window() {
 
 Window::Window(Window&& other) noexcept
     : m_window(std::exchange(other.m_window, nullptr)), m_logger(other.m_logger),
-      m_events(std::move(other.m_events)), m_minimized(other.m_minimized),
-      m_cursorCaptured(other.m_cursorCaptured) {}
+      m_events(std::move(other.m_events)), m_nativeEventObserver(std::move(other.m_nativeEventObserver)),
+      m_minimized(other.m_minimized), m_cursorCaptured(other.m_cursorCaptured) {}
 
 Window& Window::operator=(Window&& other) noexcept {
     if (this != &other) {
@@ -171,6 +173,7 @@ Window& Window::operator=(Window&& other) noexcept {
         m_window = std::exchange(other.m_window, nullptr);
         m_logger = other.m_logger;
         m_events = std::move(other.m_events);
+        m_nativeEventObserver = std::move(other.m_nativeEventObserver);
         m_minimized = other.m_minimized;
         m_cursorCaptured = other.m_cursorCaptured;
     }
@@ -191,6 +194,9 @@ std::span<const Event> Window::pollEvents() {
     m_events.clear();
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+        if (m_nativeEventObserver) {
+            m_nativeEventObserver(&event);
+        }
         switch (event.type) {
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
@@ -234,6 +240,16 @@ bool Window::isMinimized() const noexcept {
     return m_minimized;
 }
 
+PixelSize Window::sizeInPixels() const noexcept {
+    APEX_ASSERT(m_window != nullptr, "sizeInPixels called on a moved-from Window");
+    int width = 0;
+    int height = 0;
+    if (m_minimized || !SDL_GetWindowSizeInPixels(m_window, &width, &height)) {
+        return {};
+    }
+    return {toPixelCount(width), toPixelCount(height)};
+}
+
 void Window::setCursorCaptured(bool captured) {
     APEX_ASSERT(m_window != nullptr, "setCursorCaptured called on a moved-from Window");
     if (captured == m_cursorCaptured) {
@@ -248,6 +264,35 @@ void Window::setCursorCaptured(bool captured) {
 
 bool Window::isCursorCaptured() const noexcept {
     return m_cursorCaptured;
+}
+
+core::Result<std::span<const char* const>> Window::vulkanInstanceExtensions() const {
+    Uint32 count = 0;
+    const char* const* names = SDL_Vulkan_GetInstanceExtensions(&count);
+    if (names == nullptr) {
+        return core::makeError(core::ErrorCode::PlatformFailure,
+                               std::format("Cannot list the Vulkan instance extensions: {}", SDL_GetError()));
+    }
+    return std::span<const char* const>(names, count);
+}
+
+core::Result<std::uint64_t> Window::createVulkanSurface(void* vulkanInstance) {
+    APEX_ASSERT(m_window != nullptr, "createVulkanSurface called on a moved-from Window");
+    APEX_ASSERT(vulkanInstance != nullptr, "createVulkanSurface needs a Vulkan instance");
+    VkSurfaceKHR surface = nullptr;
+    if (!SDL_Vulkan_CreateSurface(m_window, static_cast<VkInstance>(vulkanInstance), nullptr, &surface)) {
+        return core::makeError(core::ErrorCode::PlatformFailure,
+                               std::format("Cannot create the Vulkan surface: {}", SDL_GetError()));
+    }
+    return reinterpret_cast<std::uint64_t>(surface);
+}
+
+void* Window::nativeHandle() const noexcept {
+    return m_window;
+}
+
+void Window::setNativeEventObserver(NativeEventObserver observer) {
+    m_nativeEventObserver = std::move(observer);
 }
 
 } // namespace apex::platform

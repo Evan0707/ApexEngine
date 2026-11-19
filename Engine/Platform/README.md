@@ -2,7 +2,7 @@
 
 **Rôle :** frontière avec le système d'exploitation : fenêtre, événements bruts du clavier et de la souris, capture du curseur (cahier des charges, section 5.2). Seul module autorisé à appeler l'API Windows et à inclure SDL.
 
-**État (fin de phase 1) :** types des touches et des événements, fenêtre SDL3 (notes de décision `0002-sdl3.md` et `0005-precisions-sdl3.md`).
+**État (phase 2) :** types des touches et des événements, fenêtre SDL3 (notes de décision `0002-sdl3.md` et `0005-precisions-sdl3.md`), pont vers `Graphics` et vers le backend ImGui de `Debug` par handles opaques (note `0009-frontieres-platform-graphics-debug.md`).
 
 ## Interface publique
 
@@ -10,7 +10,7 @@
 |---|---|
 | `Platform/Key.h` | `Key`, `allKeys()`, `keyFromName()`, `keyName()` |
 | `Platform/Event.h` | `Event`, variante de `CloseRequested`, `WindowResized`, `WindowMinimized`, `WindowRestored`, `FocusLost`, `KeyChanged`, `MouseMoved` |
-| `Platform/Window.h` | `WindowConfig`, `Window` : `create()`, `pollEvents()`, `isMinimized()`, `setCursorCaptured()`, `isCursorCaptured()` |
+| `Platform/Window.h` | `WindowConfig`, `PixelSize`, `NativeEventObserver`, `Window` : `create()`, `pollEvents()`, `isMinimized()`, `sizeInPixels()`, `setCursorCaptured()`, `isCursorCaptured()`, `vulkanInstanceExtensions()`, `createVulkanSurface()`, `nativeHandle()`, `setNativeEventObserver()` |
 
 Aucun en-tête public n'inclut SDL : le module expose ses propres types, et la conversion depuis SDL reste dans ses fichiers `.cpp`. `Window.h` déclare seulement `struct SDL_Window;`, sans rien inclure.
 
@@ -22,7 +22,20 @@ Aucun en-tête public n'inclut SDL : le module expose ses propres types, et la c
 - Le `Logger` passé à `create()` doit vivre plus longtemps que la fenêtre.
 - `Game` garde un `main` standard : `Window.cpp` inclut `SDL_main.h` avec `SDL_MAIN_HANDLED`, uniquement pour déclarer `SDL_SetMainReady()`, appelé avant l'initialisation. `main` n'est pas redéfini.
 - `pollEvents()` vide la file d'événements du système et renvoie les événements traduits. Le `span` reste valide jusqu'au prochain appel.
+- `sizeInPixels()` renvoie la taille de la zone de dessin, `{0, 0}` quand la fenêtre est réduite ou que le système ne sait pas la donner. C'est la taille à utiliser pour la swapchain.
 - `setCursorCaptured(true)` active le mode souris relatif de SDL : curseur caché et retenu dans la fenêtre, `MouseMoved` continue d'arriver. SDL relâche le curseur quand la fenêtre perd le focus et le reprend au retour du focus. En cas d'échec, un avertissement est écrit et l'état ne change pas.
+
+## Pont vers Vulkan et ImGui
+
+Décision 0009 : `Platform` n'inclut aucun en-tête Vulkan ni ImGui, et aucun type SDL ou Vulkan n'apparaît dans `Window.h`. Les handles traversent la frontière sous forme opaque.
+
+- La fenêtre est créée avec `SDL_WINDOW_VULKAN`.
+- `vulkanInstanceExtensions()` : extensions d'instance demandées par SDL pour présenter dans la fenêtre. Les chaînes appartiennent à SDL et restent valides tant que le sous-système vidéo tourne.
+- `createVulkanSurface(void* vulkanInstance)` : reçoit un `VkInstance`, renvoie un `VkSurfaceKHR` converti en `std::uint64_t`. `Window.cpp` inclut `SDL_vulkan.h`, qui déclare lui-même ces handles. `Graphics` possède la surface et la détruit avant l'instance, donc avant la fenêtre.
+- `nativeHandle()` : le `SDL_Window*`, pour le backend SDL3 d'ImGui.
+- `setNativeEventObserver(observer)` : `pollEvents()` appelle l'observateur avec un `const SDL_Event*` pour chaque événement du système, avant sa traduction, y compris ceux que `Platform` ignore. Le pointeur n'est valide que pendant l'appel. Un observateur vide le retire.
+
+Seuls `Graphics` (surface) et `Debug/ImGuiBackend.cpp` (fenêtre et événements) reconvertissent ces handles.
 
 ## Touches
 
@@ -67,6 +80,6 @@ Tout autre événement est ignoré, de même que les touches sans `Key` nommée.
 
 ## Dépendances
 
-Autorisé : `Core`. SDL3 (3.4.20, lié en `PRIVATE` à `ApexEngine`), inclus seulement dans les fichiers `.cpp` du module. Interdit : Vulkan, Jolt, EnTT. La fonctionnalité `vulkan` du port SDL arrive en phase 2.
+Autorisé : `Core`. SDL3 (3.4.20, lié en `PRIVATE` à `ApexEngine`), inclus seulement dans les fichiers `.cpp` du module. Interdit : Vulkan (aucun en-tête, aucun lien), Jolt, EnTT. Le port SDL est compilé avec sa fonctionnalité `vulkan` (décision 0006).
 
 `ApexEngine` étant une seule cible CMake, la compilation n'empêche pas un autre module d'inclure SDL : le confinement se vérifie en cherchant `#include <SDL3/` hors de `Engine/Platform/`.
