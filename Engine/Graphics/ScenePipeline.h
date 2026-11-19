@@ -8,13 +8,15 @@
 namespace apex::graphics {
 
 // Internal to Graphics. The pipeline of the main pass: vertex format of resources::Vertex, descriptor
-// set 0 of the frame (FrameBuffers), no push constant (G-02), back faces culled, counter-clockwise front
-// faces (spec 3.3), depth test "less", dynamic viewport and scissor, dynamic rendering into the given
-// target (G-09).
+// set 0 of the frame (FrameBuffers) and set 1 of the material (MaterialSets), no push constant (G-02), back
+// faces culled, counter-clockwise front faces (spec 3.3), depth test "less", dynamic viewport and scissor,
+// dynamic rendering into the given target (G-09).
 class ScenePipeline {
 public:
+    // Set 0: frameLayout (FrameBuffers). Set 1: materialLayout (MaterialSets).
     [[nodiscard]] static core::Result<ScenePipeline> create(VkDevice device, const RenderTargetDesc& target,
-                                                            VkDescriptorSetLayout frameLayout);
+                                                            VkDescriptorSetLayout frameLayout,
+                                                            VkDescriptorSetLayout materialLayout);
 
     ScenePipeline() = default;
     ~ScenePipeline();

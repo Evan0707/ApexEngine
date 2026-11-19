@@ -46,7 +46,8 @@ private:
 } // namespace
 
 core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderTargetDesc& target,
-                                                  VkDescriptorSetLayout frameLayout) {
+                                                  VkDescriptorSetLayout frameLayout,
+                                                  VkDescriptorSetLayout materialLayout) {
     ScenePipeline pipeline;
     pipeline.m_device = device;
     pipeline.m_target = target;
@@ -64,10 +65,12 @@ core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderT
     }
     const ShaderModule fragmentModule(device, fragmentHandle);
 
-    // Set 0 only, no push constant: per-object data comes from the per-frame buffer (G-02).
+    const std::array setLayouts{frameLayout, materialLayout};
+    // No push constant: per-object data comes from the per-frame buffer (G-02).
     const VkPipelineLayoutCreateInfo layoutInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-                                                .setLayoutCount = 1,
-                                                .pSetLayouts = &frameLayout};
+                                                .setLayoutCount =
+                                                    static_cast<std::uint32_t>(setLayouts.size()),
+                                                .pSetLayouts = setLayouts.data()};
     if (const VkResult result = vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipeline.m_layout);
         result != VK_SUCCESS) {
         return pipelineError("pipeline layout", result);
@@ -86,7 +89,7 @@ core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderT
 
     const VkVertexInputBindingDescription binding{
         .binding = 0, .stride = sizeof(resources::Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
-    // Only what the shaders read: tangent and UV wait for the textures (phase 4).
+    // Only what the shaders read: the tangent waits for normal maps (P1).
     const std::array attributes{
         VkVertexInputAttributeDescription{.location = 0,
                                           .binding = 0,
@@ -96,6 +99,10 @@ core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderT
                                           .binding = 0,
                                           .format = VK_FORMAT_R32G32B32_SFLOAT,
                                           .offset = offsetof(resources::Vertex, normal)},
+        VkVertexInputAttributeDescription{.location = 3,
+                                          .binding = 0,
+                                          .format = VK_FORMAT_R32G32_SFLOAT,
+                                          .offset = offsetof(resources::Vertex, uv)},
     };
     const VkPipelineVertexInputStateCreateInfo vertexInput{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,

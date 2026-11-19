@@ -18,6 +18,7 @@ constexpr std::array<std::uint8_t, 4> kBlack{0, 0, 0, 255};
 
 TextureData makeCheckerTexture() {
     TextureData texture;
+    texture.name = "Fallback checker";
     texture.width = kCheckerSize;
     texture.height = kCheckerSize;
     texture.colorSpace = ColorSpace::Srgb;
@@ -33,7 +34,8 @@ TextureData makeCheckerTexture() {
 }
 
 TextureData makeWhiteTexture(ColorSpace colorSpace) {
-    return TextureData{.width = 1, .height = 1, .pixels = {255, 255, 255, 255}, .colorSpace = colorSpace};
+    return TextureData{
+        .name = "White", .width = 1, .height = 1, .pixels = {255, 255, 255, 255}, .colorSpace = colorSpace};
 }
 
 MeshData makeFallbackMesh() {

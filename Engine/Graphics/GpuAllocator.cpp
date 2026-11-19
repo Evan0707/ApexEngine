@@ -128,11 +128,11 @@ void GpuAllocator::destroyBuffer(const GpuBuffer& buffer) noexcept {
     vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
 }
 
-core::Result<GpuImage> GpuAllocator::createImage(std::string_view name, const VkImageCreateInfo& info) {
+core::Result<GpuImage> GpuAllocator::createImage(std::string_view name, const VkImageCreateInfo& info,
+                                                 bool dedicated) {
     VmaAllocationCreateInfo allocationInfo{};
     allocationInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    // Render targets are large and recreated with the swapchain: their own memory block each.
-    allocationInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    allocationInfo.flags = dedicated ? VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT : 0;
 
     GpuImage image;
     if (const VkResult result =

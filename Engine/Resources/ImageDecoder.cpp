@@ -58,6 +58,7 @@ core::Result<TextureData> decodeImage(std::span<const std::byte> bytes, std::str
     }
 
     TextureData texture;
+    texture.name = name;
     texture.width = static_cast<std::uint32_t>(width);
     texture.height = static_cast<std::uint32_t>(height);
     texture.colorSpace = colorSpace;

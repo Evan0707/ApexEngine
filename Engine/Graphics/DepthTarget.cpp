@@ -28,7 +28,7 @@ core::Result<DepthTarget> DepthTarget::create(const Device& device, GpuAllocator
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    core::Result<GpuImage> image = allocator.createImage("Depth buffer", imageInfo);
+    core::Result<GpuImage> image = allocator.createImage("Depth buffer", imageInfo, true);
     if (!image) {
         return std::unexpected(image.error());
     }

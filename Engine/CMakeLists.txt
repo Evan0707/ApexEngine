@@ -71,6 +71,10 @@ add_library(ApexEngine STATIC
     Graphics/GpuMemoryStats.h
     Graphics/GpuMesh.cpp
     Graphics/GpuMesh.h
+    Graphics/GpuTexture.cpp
+    Graphics/GpuTexture.h
+    Graphics/MaterialSets.cpp
+    Graphics/MaterialSets.h
     Graphics/MaterialTable.cpp
     Graphics/MaterialTable.h
     Graphics/Projection.cpp

@@ -10,6 +10,8 @@
 #include "Graphics/FrameSync.h"
 #include "Graphics/GpuAllocator.h"
 #include "Graphics/GpuMesh.h"
+#include "Graphics/GpuTexture.h"
+#include "Graphics/MaterialSets.h"
 #include "Graphics/MaterialTable.h"
 #include "Graphics/ResourceMirror.h"
 #include "Graphics/ScenePipeline.h"
@@ -43,6 +45,9 @@ constexpr std::uint32_t kFramesInFlight = 2;
 
 // Room in the per-frame material table, default material included.
 constexpr std::uint32_t kMaxMaterials = 256;
+// Material descriptor sets alive at once: every material twice (a set waiting for deferred destruction
+// and its replacement), plus the default material's.
+constexpr std::uint32_t kMaxMaterialSets = 2 * kMaxMaterials + 2;
 // Room in the per-frame object buffer; objects beyond are not drawn, with a warning.
 constexpr std::uint32_t kMaxObjects = 4096;
 
@@ -110,11 +115,18 @@ struct Renderer::State {
     core::Logger* logger = nullptr;
     std::unique_ptr<Device> device;
     std::unique_ptr<GpuAllocator> allocator;
+    // Before the deleter: pending destructions free sets of its pool.
+    MaterialSets materialSets;
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
     UploadContext upload;
     ResourceMirror<resources::MeshHandle, resources::MeshData, GpuMesh> meshes;
     resources::MeshHandle fallbackMesh;
+    ResourceMirror<resources::TextureHandle, resources::TextureData, GpuTexture> textures;
+    // Material sets refer to texture views: all rebuilt when the textures change.
+    ResourceMirror<resources::MaterialHandle, resources::MaterialData, VkDescriptorSet> materialSetMirror;
+    std::optional<VkDescriptorSet> defaultMaterialSet;
+    std::uint64_t textureRevision = std::numeric_limits<std::uint64_t>::max();
     MaterialTable materials{kMaxMaterials};
     FrameBuffers frameBuffers;
     ScenePipeline scenePipeline;
@@ -134,6 +146,7 @@ struct Renderer::State {
     std::vector<DrawItem> drawItems;
     // The mesh of each draw, in draw order. Valid for the frame being recorded only.
     std::vector<const GpuMesh*> drawMeshes;
+    std::vector<VkDescriptorSet> drawMaterialSets;
     std::vector<ObjectGpu> objectData;
     bool warnedTooManyObjects = false;
 
@@ -143,6 +156,8 @@ struct Renderer::State {
         }
         if (allocator) {
             meshes.releaseAll([this](GpuMesh&& mesh) { destroyGpuMesh(*allocator, mesh); });
+            textures.releaseAll(
+                [this](GpuTexture&& texture) { destroyGpuTexture(device->device(), *allocator, texture); });
         }
     }
 
@@ -151,6 +166,11 @@ struct Renderer::State {
     [[nodiscard]] core::Result<void> ensurePipeline();
     // Resolves the handles, sorts by material and fills the frame's buffers.
     void prepareFrame(const RenderScene& scene);
+    // The view of a texture: white for "no texture", the checker when not ready or failed (G-03).
+    [[nodiscard]] VkImageView resolveTexture(resources::TextureHandle texture,
+                                             resources::TextureHandle checker,
+                                             resources::TextureHandle white) const noexcept;
+    void syncMaterialSets(const resources::ResourceCache& cache);
     // The object's mesh, or the fallback mesh when it is not ready (G-03). nullptr before the first sync.
     [[nodiscard]] std::pair<const GpuMesh*, std::uint32_t>
     resolveMesh(const RenderObject& object) const noexcept;
@@ -213,7 +233,7 @@ core::Result<void> Renderer::State::ensurePipeline() {
         return {};
     }
     core::Result<ScenePipeline> created =
-        ScenePipeline::create(device->device(), target, frameBuffers.layout());
+        ScenePipeline::create(device->device(), target, frameBuffers.layout(), materialSets.layout());
     if (!created) {
         logger->error("{}", created.error().message);
         return std::unexpected(created.error());
@@ -255,8 +275,13 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
 
     objectData.clear();
     drawMeshes.clear();
+    drawMaterialSets.clear();
     for (const DrawItem& item : drawItems) {
-        drawMeshes.push_back(resolveMesh(scene.objects[item.objectIndex]).first);
+        const RenderObject& object = scene.objects[item.objectIndex];
+        drawMeshes.push_back(resolveMesh(object).first);
+        const VkDescriptorSet* materialSet = materialSetMirror.find(object.material);
+        drawMaterialSets.push_back(materialSet != nullptr ? *materialSet
+                                                          : defaultMaterialSet.value_or(VK_NULL_HANDLE));
         objectData.push_back(
             makeObjectGpu(scene.objects[item.objectIndex].modelRelativeToCamera, item.materialIndex));
     }
@@ -345,8 +370,19 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t im
 
     counters = FrameCounters{};
     const GpuMesh* boundMesh = nullptr;
+    VkDescriptorSet boundMaterial = VK_NULL_HANDLE;
     for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
         const GpuMesh* mesh = drawMeshes[drawIndex];
+        const VkDescriptorSet materialSet = drawMaterialSets[drawIndex];
+        if (materialSet == VK_NULL_HANDLE) {
+            continue;
+        }
+        // Draws are sorted by material: one bind per material (spec 5.4).
+        if (materialSet != boundMaterial) {
+            vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 1, 1,
+                                    &materialSet, 0, nullptr);
+            boundMaterial = materialSet;
+        }
         if (mesh != boundMesh) {
             const VkDeviceSize offset = 0;
             vkCmdBindVertexBuffers(commands, 0, 1, &mesh->vertices.buffer, &offset);
@@ -413,6 +449,13 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
         return std::unexpected(frameBuffers.error());
     }
     state->frameBuffers = std::move(*frameBuffers);
+
+    core::Result<MaterialSets> materialSets = MaterialSets::create(state->device->device(), kMaxMaterialSets);
+    if (!materialSets) {
+        logger.error("{}", materialSets.error().message);
+        return std::unexpected(materialSets.error());
+    }
+    state->materialSets = std::move(*materialSets);
     const GpuMemoryStats memory = state->allocator->memoryStats();
     constexpr double kMebibyte = 1024.0 * 1024.0;
     logger.info("GPU memory: {:.0f} MiB used, {:.0f} MiB budget{}",
@@ -565,10 +608,71 @@ void Renderer::syncResources(const resources::ResourceCache& cache) {
             state.deleter.enqueue(
                 [allocator = state.allocator.get(), mesh] { destroyGpuMesh(*allocator, mesh); });
         });
+    state.textures.sync(
+        cache.textures(),
+        [&state](resources::TextureHandle,
+                 const resources::TextureData& texture) -> std::optional<GpuTexture> {
+            core::Result<GpuTexture> created = createGpuTexture(state.device->device(), *state.allocator,
+                                                                state.upload, texture.name, texture);
+            if (!created) {
+                state.logger->error("{}", created.error().message);
+                return std::nullopt;
+            }
+            return *created;
+        },
+        [&state](GpuTexture&& texture) {
+            state.deleter.enqueue([device = state.device->device(), allocator = state.allocator.get(),
+                                   texture] { destroyGpuTexture(device, *allocator, texture); });
+        });
+    state.syncMaterialSets(cache);
     if (const std::size_t leftOut = state.materials.sync(cache.materials()); leftOut > 0) {
         state.logger->warning("{} material(s) beyond the table's {} entries get the default material",
                               leftOut, kMaxMaterials);
     }
+}
+
+VkImageView Renderer::State::resolveTexture(resources::TextureHandle texture,
+                                            resources::TextureHandle checker,
+                                            resources::TextureHandle white) const noexcept {
+    const resources::TextureHandle wanted = texture == resources::TextureHandle{} ? white : texture;
+    if (const GpuTexture* found = textures.find(wanted)) {
+        return found->view;
+    }
+    const GpuTexture* fallback = textures.find(checker);
+    return fallback != nullptr ? fallback->view : VK_NULL_HANDLE;
+}
+
+void Renderer::State::syncMaterialSets(const resources::ResourceCache& cache) {
+    const auto freeLater = [this](VkDescriptorSet&& set) {
+        deleter.enqueue([this, set] { materialSets.free(set); });
+    };
+    if (cache.textures().revision() != textureRevision) {
+        textureRevision = cache.textures().revision();
+        materialSetMirror.releaseAll(freeLater);
+        if (defaultMaterialSet) {
+            freeLater(std::move(*defaultMaterialSet));
+        }
+        const VkImageView white = resolveTexture({}, cache.checkerTexture(), cache.whiteTexture());
+        defaultMaterialSet = white != VK_NULL_HANDLE ? materialSets.allocate(white, white) : std::nullopt;
+    }
+    materialSetMirror.sync(
+        cache.materials(),
+        [this, &cache](resources::MaterialHandle,
+                       const resources::MaterialData& material) -> std::optional<VkDescriptorSet> {
+            const VkImageView baseColor =
+                resolveTexture(material.baseColorTexture, cache.checkerTexture(), cache.whiteTexture());
+            const VkImageView metallicRoughness = resolveTexture(
+                material.metallicRoughnessTexture, cache.checkerTexture(), cache.whiteTexture());
+            if (baseColor == VK_NULL_HANDLE || metallicRoughness == VK_NULL_HANDLE) {
+                return std::nullopt;
+            }
+            std::optional<VkDescriptorSet> set = materialSets.allocate(baseColor, metallicRoughness);
+            if (!set) {
+                logger->warning("No room for another material descriptor set: the default material is used");
+            }
+            return set;
+        },
+        freeLater);
 }
 
 GpuMemoryStats Renderer::memoryStats() const {

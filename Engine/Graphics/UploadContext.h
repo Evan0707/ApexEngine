@@ -17,8 +17,16 @@ struct BufferCopy {
     std::span<const std::byte> data;
 };
 
-// Internal to Graphics. Fills device-local buffers through host-visible staging buffers, on the graphics
-// queue, and waits for the copy: meant for loading time, not for every frame.
+// Tightly packed texels for the whole of a one-level image.
+struct ImageCopy {
+    VkImage destination;
+    std::uint32_t width;
+    std::uint32_t height;
+    std::span<const std::byte> data;
+};
+
+// Internal to Graphics. Fills device-local buffers and images through host-visible staging buffers, on
+// the graphics queue, and waits for the copy: meant for loading time, not for every frame.
 class UploadContext {
 public:
     [[nodiscard]] static core::Result<UploadContext> create(VkDevice device, std::uint32_t queueFamily,
@@ -35,9 +43,14 @@ public:
     // the error message.
     [[nodiscard]] core::Result<void> upload(GpuAllocator& allocator, std::string_view name,
                                             std::span<const BufferCopy> copies);
+    // The image goes from UNDEFINED to SHADER_READ_ONLY_OPTIMAL, ready to be sampled.
+    [[nodiscard]] core::Result<void> uploadImage(GpuAllocator& allocator, std::string_view name,
+                                                 const ImageCopy& copy);
 
 private:
     void destroy() noexcept;
+    [[nodiscard]] core::Result<void> begin(std::string_view name);
+    [[nodiscard]] core::Result<void> submitAndWait(std::string_view name);
 
     VkDevice m_device = VK_NULL_HANDLE;
     VkQueue m_queue = VK_NULL_HANDLE;

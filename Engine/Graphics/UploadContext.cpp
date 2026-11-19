@@ -99,18 +99,7 @@ void UploadContext::destroy() noexcept {
     m_device = VK_NULL_HANDLE;
 }
 
-core::Result<void> UploadContext::upload(GpuAllocator& allocator, std::string_view name,
-                                         std::span<const BufferCopy> copies) {
-    StagingBuffers staging(allocator);
-    for (const BufferCopy& copy : copies) {
-        core::Result<GpuBuffer> buffer = allocator.createBufferWithData(
-            std::format("{} (staging)", name), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, copy.data);
-        if (!buffer) {
-            return std::unexpected(buffer.error());
-        }
-        staging.add(*buffer);
-    }
-
+core::Result<void> UploadContext::begin(std::string_view name) {
     if (const VkResult result = vkResetCommandPool(m_device, m_pool, 0); result != VK_SUCCESS) {
         return uploadError("vkResetCommandPool", name, result);
     }
@@ -119,24 +108,13 @@ core::Result<void> UploadContext::upload(GpuAllocator& allocator, std::string_vi
     if (const VkResult result = vkBeginCommandBuffer(m_commands, &beginInfo); result != VK_SUCCESS) {
         return uploadError("vkBeginCommandBuffer", name, result);
     }
-    for (std::size_t i = 0; i < copies.size(); ++i) {
-        const VkBufferCopy region{.size = copies[i].data.size_bytes()};
-        vkCmdCopyBuffer(m_commands, staging[i].buffer, copies[i].destination, 1, &region);
-    }
-    // The second scope reaches later submissions: frames that read these buffers need no barrier of their
-    // own.
-    const VkMemoryBarrier2 barrier{.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-                                   .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
-                                   .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                                   .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                                   .dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT};
-    const VkDependencyInfo dependency{
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .memoryBarrierCount = 1, .pMemoryBarriers = &barrier};
-    vkCmdPipelineBarrier2(m_commands, &dependency);
+    return {};
+}
+
+core::Result<void> UploadContext::submitAndWait(std::string_view name) {
     if (const VkResult result = vkEndCommandBuffer(m_commands); result != VK_SUCCESS) {
         return uploadError("vkEndCommandBuffer", name, result);
     }
-
     const VkCommandBufferSubmitInfo commandInfo{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
                                                 .commandBuffer = m_commands};
     const VkSubmitInfo2 submit{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
@@ -155,6 +133,91 @@ core::Result<void> UploadContext::upload(GpuAllocator& allocator, std::string_vi
         return uploadError("vkWaitForFences", name, result);
     }
     return {};
+}
+
+core::Result<void> UploadContext::upload(GpuAllocator& allocator, std::string_view name,
+                                         std::span<const BufferCopy> copies) {
+    StagingBuffers staging(allocator);
+    for (const BufferCopy& copy : copies) {
+        core::Result<GpuBuffer> buffer = allocator.createBufferWithData(
+            std::format("{} (staging)", name), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, copy.data);
+        if (!buffer) {
+            return std::unexpected(buffer.error());
+        }
+        staging.add(*buffer);
+    }
+    if (core::Result<void> begun = begin(name); !begun) {
+        return begun;
+    }
+    for (std::size_t i = 0; i < copies.size(); ++i) {
+        const VkBufferCopy region{.size = copies[i].data.size_bytes()};
+        vkCmdCopyBuffer(m_commands, staging[i].buffer, copies[i].destination, 1, &region);
+    }
+    // The second scope reaches later submissions: frames that read these buffers need no barrier of their
+    // own.
+    const VkMemoryBarrier2 barrier{.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                                   .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                                   .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                                   .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                   .dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT};
+    const VkDependencyInfo dependency{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .memoryBarrierCount = 1, .pMemoryBarriers = &barrier};
+    vkCmdPipelineBarrier2(m_commands, &dependency);
+    return submitAndWait(name);
+}
+
+core::Result<void> UploadContext::uploadImage(GpuAllocator& allocator, std::string_view name,
+                                              const ImageCopy& copy) {
+    StagingBuffers staging(allocator);
+    core::Result<GpuBuffer> buffer = allocator.createBufferWithData(
+        std::format("{} (staging)", name), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, copy.data);
+    if (!buffer) {
+        return std::unexpected(buffer.error());
+    }
+    staging.add(*buffer);
+    if (core::Result<void> begun = begin(name); !begun) {
+        return begun;
+    }
+
+    const VkImageSubresourceRange whole{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    const VkImageMemoryBarrier2 toTransfer{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                                           .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                                           .srcAccessMask = VK_ACCESS_2_NONE,
+                                           .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                                           .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                                           .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                                           .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                           .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                           .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                           .image = copy.destination,
+                                           .subresourceRange = whole};
+    const VkDependencyInfo beforeCopy{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                      .imageMemoryBarrierCount = 1,
+                                      .pImageMemoryBarriers = &toTransfer};
+    vkCmdPipelineBarrier2(m_commands, &beforeCopy);
+
+    const VkBufferImageCopy region{.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                                   .imageExtent = {copy.width, copy.height, 1}};
+    vkCmdCopyBufferToImage(m_commands, staging[0].buffer, copy.destination,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    // Ready to be sampled by later frames: their fragment shaders wait for the copy.
+    const VkImageMemoryBarrier2 toShader{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                                         .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                                         .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                                         .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                         .dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                                         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                         .image = copy.destination,
+                                         .subresourceRange = whole};
+    const VkDependencyInfo afterCopy{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                     .imageMemoryBarrierCount = 1,
+                                     .pImageMemoryBarriers = &toShader};
+    vkCmdPipelineBarrier2(m_commands, &afterCopy);
+    return submitAndWait(name);
 }
 
 } // namespace apex::graphics

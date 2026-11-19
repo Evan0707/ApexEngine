@@ -59,8 +59,10 @@ public:
     // Immediate: the caller makes sure no frame in flight still uses the buffer (DeferredDeleter).
     void destroyBuffer(const GpuBuffer& buffer) noexcept;
 
-    // Device-local image, for a render target. The name appears in the error message and in VMA.
-    [[nodiscard]] core::Result<GpuImage> createImage(std::string_view name, const VkImageCreateInfo& info);
+    // Device-local image. dedicated: its own memory block, for large render targets recreated with the
+    // swapchain. The name appears in the error message and in VMA.
+    [[nodiscard]] core::Result<GpuImage> createImage(std::string_view name, const VkImageCreateInfo& info,
+                                                     bool dedicated);
     // Immediate, like destroyBuffer.
     void destroyImage(const GpuImage& image) noexcept;
 

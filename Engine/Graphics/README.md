@@ -31,6 +31,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/ScenePipeline.h` (`ScenePipeline`) : le pipeline de la passe principale.
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/ResourceMirror.h` (`ResourceMirror`), sans Vulkan, testé sans GPU ;
+- `Graphics/GpuTexture.h` (`GpuTexture`, `textureFormat()`, `createGpuTexture()`, `destroyGpuTexture()`) ;
+- `Graphics/MaterialSets.h` (`MaterialSets`) : jeux de descripteurs par matériau et sampler ;
 - `Graphics/Projection.h` (`perspectiveProjection()`), sans Vulkan, testé sans GPU ;
 - `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU ;
 - `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
@@ -62,7 +64,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - `renderFrame(scene)` résout les handles de chaque objet (voir « Ressources »). Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
 - Les objets sont triés par matériau puis par mesh, puis leurs données sont écrites dans le buffer de la frame dans cet ordre. Le dessin `i` utilise `firstInstance = i` : le vertex shader lit l'objet par `gl_InstanceIndex` (G-02). Les buffers de sommets et d'indices ne sont liés qu'au changement de mesh.
-- Pipeline (`ScenePipeline`) : jeu de descripteurs 0 de la frame, aucun push constant ; position et normale lues dans le format de sommet unique (tangente et UV attendent les textures, phase 4) ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
+- Pipeline (`ScenePipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale et UV lues dans le format de sommet unique (la tangente attend les normal maps, P1) ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
 
@@ -79,7 +81,11 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Envoi d'un mesh : buffers de sommets et d'indices en mémoire GPU, remplis par des buffers de transit ; l'appel attend la fin de la copie. Un échec est écrit dans le log avec le nom du mesh, et n'est pas retenté tant que le mesh existe (section 5.4).
 - Résolution à chaque frame (G-03) : un mesh pas encore envoyé, en échec, périmé ou absent du GPU donne le mesh de secours du cache (cube de 1 m). Un matériau dans le même cas donne l'entrée 0 de la table, le matériau par défaut. Aucun pointeur vers les données du cache n'est gardé d'une frame à l'autre.
 - Table des matériaux (note 0011) : l'emplacement `i` du pool de matériaux du cache est l'entrée `i + 1` de la table ; au-delà de 256 entrées, un avertissement est écrit et les matériaux suivants reçoivent le matériau par défaut. La table est reconstruite quand le pool change, puis recopiée dans le buffer de chaque frame : retirer un matériau ne gêne pas une frame en vol.
-- À la destruction du renderer, tous les meshes encore présents sur le GPU sont libérés.
+- Textures : une image GPU par texture prête, un seul niveau (mipmaps en P1), RGBA 8 bits, format `R8G8B8A8_SRGB` pour une couleur et `R8G8B8A8_UNORM` pour des données (section 3.3). La copie passe de `UNDEFINED` à `SHADER_READ_ONLY_OPTIMAL` et une barrière la rend visible aux fragment shaders des frames suivantes. Un échec est écrit dans le log avec le nom de la texture.
+- Jeu de descripteurs par matériau (section 5.4, note 0014), le jeu 1 : texture de couleur de base (binding 0) et texture métal-rugosité (binding 1), par un seul sampler linéaire et répétant. Un handle de texture par défaut (« pas de texture ») donne la texture blanche ; une texture en chargement, en échec ou périmée donne le damier magenta (G-03).
+- Les jeux renvoient à des vues d'image : quand le pool de textures change, tous les jeux de matériau sont refaits, et les anciens libérés par la destruction différée. Le matériau par défaut a son propre jeu (deux textures blanches). Si le pool de descripteurs est plein, un avertissement est écrit et le matériau reçoit le jeu par défaut.
+- Les dessins sont triés par matériau : le jeu 1 n'est lié qu'au changement de matériau.
+- À la destruction du renderer, tous les meshes et toutes les textures encore présents sur le GPU sont libérés.
 
 ## Données par frame (G-02)
 
@@ -109,7 +115,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - Toute la mémoire GPU passe par `GpuAllocator`, qui encapsule VMA (note 0007). Il est créé après le périphérique, détruit après tous les buffers et avant le périphérique.
 - `createBufferWithData(name, usage, data)` crée un buffer visible par le CPU et le remplit une fois : suffisant pour de petites données statiques (le triangle). Les transferts par buffer intermédiaire viendront avec les meshes. Un échec renvoie `ErrorCode::GpuFailure` avec le nom du buffer (section 5.4).
-- `createImage(name, info)` crée une image en mémoire GPU, dans son propre bloc (cibles de rendu). `destroyImage()` la libère immédiatement.
+- `createImage(name, info, dedicated)` crée une image en mémoire GPU ; dans son propre bloc pour une cible de rendu (`dedicated`), sous-allouée pour une texture. `destroyImage()` la libère immédiatement.
 - `memoryStats()` additionne l'usage et le budget des tas `DEVICE_LOCAL` (section 5.9). Le budget est exact quand `VK_EXT_memory_budget` est disponible (activée si le pilote la propose), estimé sinon. La valeur est écrite dans le log au démarrage.
 - L'implémentation de VMA compile sans avertissement en `/W4` : aucun avertissement n'est désactivé.
 
@@ -125,7 +131,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - Sources GLSL 4.60 dans `Graphics/Shaders/`. `glslc`, fourni par le SDK Vulkan, les compile pendant le build : `--target-env=vulkan1.3 -Werror`, avec les informations de débogage en Debug (`-g`, utile dans RenderDoc) et optimisées ailleurs (`-O`). Une erreur ou un avertissement de shader fait échouer le build (section 3.1).
 - `apex_add_shaders()` (`cmake/ApexShaders.cmake`) produit pour chaque shader un fichier `Shaders/<nom>.spv.inc` dans le dossier de build : la liste des mots SPIR-V au format d'un initialiseur C, incluse par `ShaderBinaries.cpp`. Aucun fichier de shader n'est cherché au lancement.
-- Les fichiers inclus par un shader (`#include`) sont suivis par les fichiers de dépendances de `glslc` : les modifier recompile le shader. `Frame.glsl` déclare les données par frame, `Material.glsl` la table des matériaux (seul accès des shaders aux matériaux, G-08), `Pbr.glsl` l'éclairage.
+- Les fichiers inclus par un shader (`#include`) sont suivis par les fichiers de dépendances de `glslc` : les modifier recompile le shader. `Frame.glsl` déclare les données par frame, `Material.glsl` la table des matériaux, leurs textures et `sampleMaterial()` (seul accès des shaders aux matériaux, G-08), `Pbr.glsl` l'éclairage.
 - Shaders de la scène : `Scene.vert` lit l'objet par `gl_InstanceIndex` et passe la position et la normale en espace de rendu ; `Scene.frag` calcule l'éclairage.
 
 ## Éclairage (phase 3)
