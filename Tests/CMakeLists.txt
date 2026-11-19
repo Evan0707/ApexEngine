@@ -39,6 +39,7 @@ add_executable(ApexTests
     Resources/PrimitivesTests.cpp
     Resources/ResourceCacheTests.cpp
     Resources/ResourcePoolTests.cpp
+    Serialization/ConfigTests.cpp
     Serialization/SceneJsonTests.cpp
     Serialization/SceneLoaderTests.cpp
     Serialization/SceneRoundTripTests.cpp
@@ -56,7 +57,8 @@ add_executable(ApexTests
 target_include_directories(ApexTests PRIVATE "${PROJECT_SOURCE_DIR}/Game")
 # Small files written by Tools/generate_assets.py; read in place, never written by the tests.
 target_compile_definitions(ApexTests PRIVATE APEX_TEST_DATA_DIR="${PROJECT_SOURCE_DIR}/Tests/Data"
-                                             APEX_ASSETS_DIR="${PROJECT_SOURCE_DIR}/Assets")
+                                             APEX_ASSETS_DIR="${PROJECT_SOURCE_DIR}/Assets"
+                                             APEX_CONFIG_DIR="${PROJECT_SOURCE_DIR}/Config")
 target_link_libraries(ApexTests PRIVATE Apex::Engine Catch2::Catch2WithMain)
 
 include(Catch)

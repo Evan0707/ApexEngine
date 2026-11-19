@@ -13,33 +13,6 @@ namespace apex::serialization {
 
 namespace {
 
-// Reads the optional field `key` of `object` with `read(value, context, path)`. Nothing happens when the
-// field is absent.
-template <typename T, typename Reader>
-[[nodiscard]] core::Result<void> readOptional(const Json& object, std::string_view key,
-                                              const JsonContext& context, std::string_view parent, T& target,
-                                              Reader&& read) {
-    const auto found = object.find(key);
-    if (found == object.end()) {
-        return {};
-    }
-    auto value = read(*found, context, joinField(parent, key));
-    if (!value) {
-        return std::unexpected(value.error());
-    }
-    target = std::move(*value);
-    return {};
-}
-
-[[nodiscard]] core::Result<float> readPositive(const Json& value, const JsonContext& context,
-                                               std::string_view field) {
-    const core::Result<float> number = readNumber(value, context, field);
-    if (number && !(*number > 0.0f)) {
-        return jsonError(context, field, "must be greater than 0");
-    }
-    return number;
-}
-
 [[nodiscard]] core::Result<float> readNonNegative(const Json& value, const JsonContext& context,
                                                   std::string_view field) {
     const core::Result<float> number = readNumber(value, context, field);

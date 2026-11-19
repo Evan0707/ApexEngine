@@ -11,6 +11,7 @@
 #include <initializer_list>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace apex::serialization {
 
@@ -48,7 +49,29 @@ struct JsonContext {
 [[nodiscard]] core::Result<std::string> readString(const Json& value, const JsonContext& context,
                                                    std::string_view field);
 
+// Strictly positive.
+[[nodiscard]] core::Result<float> readPositive(const Json& value, const JsonContext& context,
+                                               std::string_view field);
+
 // "transform" + "position" -> "transform.position".
 [[nodiscard]] std::string joinField(std::string_view parent, std::string_view key);
+
+// Reads the optional field `key` of `object` into `target` with `read(value, context, path)`. Nothing
+// happens when the field is absent.
+template <typename T, typename Reader>
+[[nodiscard]] core::Result<void> readOptional(const Json& object, std::string_view key,
+                                              const JsonContext& context, std::string_view parent, T& target,
+                                              Reader&& read) {
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        return {};
+    }
+    auto value = read(*found, context, joinField(parent, key));
+    if (!value) {
+        return std::unexpected(value.error());
+    }
+    target = std::move(*value);
+    return {};
+}
 
 } // namespace apex::serialization

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "buttons": [
+    { "action": "Jump", "key": "Space" },
+    { "action": "Sprint", "key": "LeftShift" },
+    { "action": "ToggleCursor", "key": "Escape" },
+    { "action": "ToggleDebug", "key": "F1" },
+    { "action": "ToggleColliders", "key": "F2" },
+    { "action": "SwitchCamera", "key": "F3" },
+    { "action": "ToggleShadows", "key": "F4" }
+  ],
+  "key_axes": [
+    { "action": "MoveForward", "negative": "S", "positive": "W" },
+    { "action": "MoveRight", "negative": "A", "positive": "D" },
+    { "action": "MoveUp", "negative": "Q", "positive": "E" }
+  ],
+  "mouse_axes": [
+    { "action": "LookX", "axis": "x", "scale": 1.0 },
+    { "action": "LookY", "axis": "y", "scale": 1.0 }
+  ]
+}

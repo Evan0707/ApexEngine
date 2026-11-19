@@ -133,6 +133,9 @@ add_library(ApexEngine STATIC
     Resources/ResourceCache.h
     Resources/ResourcePool.h
     Resources/TextureData.h
+    Serialization/ConfigJson.cpp
+    Serialization/EngineConfig.h
+    Serialization/InputConfig.h
     Serialization/Json.cpp
     Serialization/Json.h
     Serialization/SceneDescription.h

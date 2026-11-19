@@ -2,7 +2,7 @@
 
 **Rôle :** lecture et écriture des scènes et de la configuration en JSON (cahier des charges, sections 3.1, 5.2 et 5.6).
 
-**État (phase 5, en cours) :** lecture et écriture d'une scène, version 1 du format (notes de décision 0016 et 0017). La configuration arrive dans la tâche suivante.
+**État (phase 5) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration (notes de décision 0016 et 0017).
 
 ## Interface publique
 
@@ -13,6 +13,8 @@ Aucun en-tête public n'expose de type JSON.
 | `Serialization/SceneDescription.h` | `kSceneVersion`, `TransformDesc`, `MaterialDesc`, `CameraDesc`, `LightDesc`, `EntityDesc`, `SceneDescription` : une scène en données pures, dans les unités du fichier |
 | `Serialization/SceneJson.h` | `parseScene(text, sourceName)`, `writeScene(scene)` |
 | `Serialization/SceneLoader.h` | `instantiateScene()`, `describeScene()`, `loadSceneFile()` |
+| `Serialization/EngineConfig.h` | `kConfigVersion`, `EngineConfig`, `parseEngineConfig()`, `loadEngineConfigFile()` |
+| `Serialization/InputConfig.h` | `ButtonConfig`, `KeyAxisConfig`, `MouseAxisName`, `MouseAxisConfig`, `InputConfig`, `defaultInputConfig()`, `parseInputConfig()`, `loadInputConfigFile()` |
 
 En-tête interne : `Serialization/Json.h`, seul fichier qui inclut nlohmann/json, avec les fonctions de lecture d'un champ et de construction des messages d'erreur.
 
@@ -78,6 +80,32 @@ Un modèle introuvable n'est pas une erreur de scène : le cache l'écrit dans l
 - Un champ inconnu est une erreur, à tous les niveaux (décision 0017) : `postion` ne passe pas inaperçu. Les champs d'une autre forme de collider sont des champs inconnus.
 - Un JSON mal formé donne le message de la bibliothèque, avec la ligne et la colonne. L'exception qu'elle lève est interceptée dans ce module (section 3.1).
 - Un nombre trop grand pour un `float` est refusé.
+
+## Configuration (section 5.2, décision 0017)
+
+Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal à 1. Mêmes règles que pour la scène : champs inconnus refusés, erreur qui nomme le fichier et le champ (`Configuration 'Config/input.json', field 'buttons[2].key': missing`).
+
+`engine.json` : tous les champs sont facultatifs, et un champ absent garde la valeur du cahier des charges.
+
+| Champ | Valeur par défaut | Règle |
+|---|---|---|
+| `window.width`, `window.height` | 1920, 1080 | Entiers, de 1 à 16384 pixels |
+| `free_camera.speed` | 5 | Mètres par seconde, strictement positif |
+| `free_camera.sprint_multiplier` | 4 | Strictement positif |
+| `free_camera.look_sensitivity` | 0,0025 | Radians par pixel de souris, strictement positif |
+
+`input.json` : la table d'actions.
+
+| Tableau | Élément |
+|---|---|
+| `buttons` | `action`, `key` |
+| `key_axes` | `action`, `negative`, `positive` |
+| `mouse_axes` | `action`, `axis` (`"x"` ou `"y"`), `scale` (facultatif, 1 par défaut) |
+
+- Les touches sont des noms de touches physiques (`Space`, `LeftShift`, `W`) : en AZERTY, Z, Q et A sont aux places de W, A et Q (section 3.3).
+- `Serialization` ne connaît ni `Input` ni `Platform` (section 4.2) : il rend une `InputConfig` faite de chaînes. C'est `Game` qui la convertit en table d'actions, et c'est là qu'un nom de touche inconnu est refusé.
+- `defaultInputConfig()` est la table de la section 5.2, utilisée quand `input.json` est absent. Un test vérifie que les deux fichiers du dépôt sont valides et égaux aux valeurs par défaut.
+- `loadEngineConfigFile()` et `loadInputConfigFile()` renvoient `NotFound` quand le fichier n'existe pas : l'appelant choisit alors les valeurs par défaut. Toute autre erreur est une configuration invalide.
 
 ## Dépendances
 

@@ -1,0 +1,288 @@
+#include "Resources/FileReader.h"
+#include "Serialization/EngineConfig.h"
+#include "Serialization/InputConfig.h"
+#include "Serialization/Json.h"
+
+#include <cmath>
+#include <format>
+#include <string>
+#include <vector>
+
+namespace apex::serialization {
+
+namespace {
+
+// Larger than any window a display can show; guards against a typo with too many digits.
+constexpr float kMaxWindowSize = 16384.0f;
+
+// Parses the text, checks that it is an object of the supported version.
+[[nodiscard]] core::Result<Json> parseConfigRoot(std::string_view text, const JsonContext& context) {
+    core::Result<Json> root = parseJson(text, context);
+    if (!root) {
+        return root;
+    }
+    if (core::Result<void> valid = requireObject(*root, context, {}); !valid) {
+        return std::unexpected(valid.error());
+    }
+    const auto version = root->find("version");
+    if (version == root->end()) {
+        return jsonError(context, "version",
+                         std::format("missing; this build reads version {}", kConfigVersion));
+    }
+    if (!version->is_number_integer()) {
+        return jsonError(context, "version", "expected an integer");
+    }
+    if (const auto number = version->get<long long>(); number != kConfigVersion) {
+        return jsonError(
+            context, "version",
+            std::format("version {} is not supported; this build reads version {}", number, kConfigVersion));
+    }
+    return root;
+}
+
+// The text of a file, with NotFound kept as is for the caller to fall back on defaults.
+[[nodiscard]] core::Result<std::string> readConfigFile(const std::filesystem::path& file,
+                                                       std::string_view sourceName) {
+    const core::Result<std::vector<std::byte>> bytes = resources::readFile(file);
+    if (!bytes) {
+        return core::makeError(bytes.error().code,
+                               std::format("Configuration '{}': {}", sourceName, bytes.error().message));
+    }
+    return std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+}
+
+[[nodiscard]] core::Result<std::uint32_t> readWindowSize(const Json& value, const JsonContext& context,
+                                                         std::string_view field) {
+    const core::Result<float> number = readNumber(value, context, field);
+    if (!number) {
+        return std::unexpected(number.error());
+    }
+    if (!value.is_number_integer() || *number < 1.0f || *number > kMaxWindowSize) {
+        return jsonError(context, field,
+                         std::format("expected a whole number of pixels between 1 and {}", kMaxWindowSize));
+    }
+    return static_cast<std::uint32_t>(*number);
+}
+
+// The required string `key` of one binding.
+[[nodiscard]] core::Result<void> readRequiredString(const Json& object, std::string_view key,
+                                                    const JsonContext& context, std::string_view parent,
+                                                    std::string& target) {
+    if (!object.contains(key)) {
+        return jsonError(context, joinField(parent, key), "missing");
+    }
+    return readOptional(object, key, context, parent, target, readString);
+}
+
+// Reads the optional array `key` of the root, one element at a time with `readElement(json, path)`.
+template <typename Element, typename ReadElement>
+[[nodiscard]] core::Result<void> readArray(const Json& root, std::string_view key, const JsonContext& context,
+                                           std::vector<Element>& target, ReadElement&& readElement) {
+    const auto found = root.find(key);
+    if (found == root.end()) {
+        return {};
+    }
+    if (!found->is_array()) {
+        return jsonError(context, key, "expected an array");
+    }
+    for (std::size_t index = 0; index < found->size(); ++index) {
+        const std::string path = std::format("{}[{}]", key, index);
+        const Json& element = (*found)[index];
+        if (core::Result<void> valid = requireObject(element, context, path); !valid) {
+            return valid;
+        }
+        core::Result<Element> value = readElement(element, path);
+        if (!value) {
+            return std::unexpected(value.error());
+        }
+        target.push_back(std::move(*value));
+    }
+    return {};
+}
+
+} // namespace
+
+core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_view sourceName) {
+    const JsonContext context{.kind = "Configuration", .source = sourceName, .entity = {}};
+    const core::Result<Json> root = parseConfigRoot(text, context);
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    if (core::Result<void> known =
+            rejectUnknownFields(*root, {"version", "window", "free_camera"}, context, {});
+        !known) {
+        return std::unexpected(known.error());
+    }
+
+    EngineConfig config;
+    if (const auto window = root->find("window"); window != root->end()) {
+        core::Result<void> read = requireObject(*window, context, "window");
+        if (read) {
+            read = rejectUnknownFields(*window, {"width", "height"}, context, "window");
+        }
+        if (read) {
+            read = readOptional(*window, "width", context, "window", config.windowWidth, readWindowSize);
+        }
+        if (read) {
+            read = readOptional(*window, "height", context, "window", config.windowHeight, readWindowSize);
+        }
+        if (!read) {
+            return std::unexpected(read.error());
+        }
+    }
+    if (const auto camera = root->find("free_camera"); camera != root->end()) {
+        core::Result<void> read = requireObject(*camera, context, "free_camera");
+        if (read) {
+            read = rejectUnknownFields(*camera, {"speed", "sprint_multiplier", "look_sensitivity"}, context,
+                                       "free_camera");
+        }
+        if (read) {
+            read =
+                readOptional(*camera, "speed", context, "free_camera", config.freeCameraSpeed, readPositive);
+        }
+        if (read) {
+            read = readOptional(*camera, "sprint_multiplier", context, "free_camera",
+                                config.freeCameraSprintMultiplier, readPositive);
+        }
+        if (read) {
+            read = readOptional(*camera, "look_sensitivity", context, "free_camera",
+                                config.freeCameraLookSensitivity, readPositive);
+        }
+        if (!read) {
+            return std::unexpected(read.error());
+        }
+    }
+    return config;
+}
+
+core::Result<EngineConfig> loadEngineConfigFile(const std::filesystem::path& file,
+                                                std::string_view sourceName) {
+    const core::Result<std::string> text = readConfigFile(file, sourceName);
+    if (!text) {
+        return std::unexpected(text.error());
+    }
+    return parseEngineConfig(*text, sourceName);
+}
+
+InputConfig defaultInputConfig() {
+    return InputConfig{
+        .buttons =
+            {
+                {"Jump", "Space"},
+                {"Sprint", "LeftShift"},
+                {"ToggleCursor", "Escape"},
+                {"ToggleDebug", "F1"},
+                {"ToggleColliders", "F2"},
+                {"SwitchCamera", "F3"},
+                {"ToggleShadows", "F4"},
+            },
+        .keyAxes =
+            {
+                {"MoveForward", "S", "W"},
+                {"MoveRight", "A", "D"},
+                {"MoveUp", "Q", "E"},
+            },
+        .mouseAxes =
+            {
+                {"LookX", MouseAxisName::X, 1.0f},
+                {"LookY", MouseAxisName::Y, 1.0f},
+            },
+    };
+}
+
+core::Result<InputConfig> parseInputConfig(std::string_view text, std::string_view sourceName) {
+    const JsonContext context{.kind = "Configuration", .source = sourceName, .entity = {}};
+    const core::Result<Json> root = parseConfigRoot(text, context);
+    if (!root) {
+        return std::unexpected(root.error());
+    }
+    if (core::Result<void> known =
+            rejectUnknownFields(*root, {"version", "buttons", "key_axes", "mouse_axes"}, context, {});
+        !known) {
+        return std::unexpected(known.error());
+    }
+
+    InputConfig config;
+    core::Result<void> read =
+        readArray(*root, "buttons", context, config.buttons,
+                  [&](const Json& element, std::string_view path) -> core::Result<ButtonConfig> {
+                      ButtonConfig button;
+                      core::Result<void> field =
+                          rejectUnknownFields(element, {"action", "key"}, context, path);
+                      if (field) {
+                          field = readRequiredString(element, "action", context, path, button.action);
+                      }
+                      if (field) {
+                          field = readRequiredString(element, "key", context, path, button.key);
+                      }
+                      if (!field) {
+                          return std::unexpected(field.error());
+                      }
+                      return button;
+                  });
+    if (read) {
+        read = readArray(
+            *root, "key_axes", context, config.keyAxes,
+            [&](const Json& element, std::string_view path) -> core::Result<KeyAxisConfig> {
+                KeyAxisConfig axis;
+                core::Result<void> field =
+                    rejectUnknownFields(element, {"action", "negative", "positive"}, context, path);
+                if (field) {
+                    field = readRequiredString(element, "action", context, path, axis.action);
+                }
+                if (field) {
+                    field = readRequiredString(element, "negative", context, path, axis.negativeKey);
+                }
+                if (field) {
+                    field = readRequiredString(element, "positive", context, path, axis.positiveKey);
+                }
+                if (!field) {
+                    return std::unexpected(field.error());
+                }
+                return axis;
+            });
+    }
+    if (read) {
+        read = readArray(
+            *root, "mouse_axes", context, config.mouseAxes,
+            [&](const Json& element, std::string_view path) -> core::Result<MouseAxisConfig> {
+                MouseAxisConfig axis;
+                std::string name;
+                core::Result<void> field =
+                    rejectUnknownFields(element, {"action", "axis", "scale"}, context, path);
+                if (field) {
+                    field = readRequiredString(element, "action", context, path, axis.action);
+                }
+                if (field) {
+                    field = readRequiredString(element, "axis", context, path, name);
+                }
+                if (field) {
+                    field = readOptional(element, "scale", context, path, axis.scale, readNumber);
+                }
+                if (!field) {
+                    return std::unexpected(field.error());
+                }
+                if (name != "x" && name != "y") {
+                    return jsonError(context, joinField(path, "axis"),
+                                     std::format("unknown axis \"{}\"; expected \"x\" or \"y\"", name));
+                }
+                axis.axis = name == "x" ? MouseAxisName::X : MouseAxisName::Y;
+                return axis;
+            });
+    }
+    if (!read) {
+        return std::unexpected(read.error());
+    }
+    return config;
+}
+
+core::Result<InputConfig> loadInputConfigFile(const std::filesystem::path& file,
+                                              std::string_view sourceName) {
+    const core::Result<std::string> text = readConfigFile(file, sourceName);
+    if (!text) {
+        return std::unexpected(text.error());
+    }
+    return parseInputConfig(*text, sourceName);
+}
+
+} // namespace apex::serialization

@@ -1,0 +1,144 @@
+#include "Serialization/EngineConfig.h"
+#include "Serialization/InputConfig.h"
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+
+#include <filesystem>
+#include <initializer_list>
+#include <string>
+#include <string_view>
+
+using namespace apex::serialization;
+using Catch::Matchers::ContainsSubstring;
+
+namespace {
+
+constexpr std::string_view kEngine = "Config/engine.json";
+constexpr std::string_view kInput = "Config/input.json";
+
+template <typename Config>
+void requireError(const apex::core::Result<Config>& config, std::string_view source,
+                  std::initializer_list<std::string_view> pieces) {
+    REQUIRE_FALSE(config.has_value());
+    CAPTURE(config.error().message);
+    REQUIRE_THAT(config.error().message, ContainsSubstring(std::string(source)));
+    for (const std::string_view piece : pieces) {
+        REQUIRE_THAT(config.error().message, ContainsSubstring(std::string(piece)));
+    }
+}
+
+} // namespace
+
+TEST_CASE("The engine configuration reads the window and the free camera", "[serialization]") {
+    const auto config = parseEngineConfig(R"({
+        "version": 1,
+        "window": { "width": 1280, "height": 720 },
+        "free_camera": { "speed": 8.5, "sprint_multiplier": 2, "look_sensitivity": 0.001 }
+    })",
+                                          kEngine);
+    REQUIRE(config.has_value());
+    REQUIRE(config->windowWidth == 1280);
+    REQUIRE(config->windowHeight == 720);
+    REQUIRE(config->freeCameraSpeed == 8.5f);
+    REQUIRE(config->freeCameraSprintMultiplier == 2.0f);
+    REQUIRE(config->freeCameraLookSensitivity == 0.001f);
+}
+
+TEST_CASE("Fields left out of the engine configuration keep the specification's values", "[serialization]") {
+    const auto config = parseEngineConfig(R"({"version": 1, "window": {"width": 800}})", kEngine);
+    REQUIRE(config.has_value());
+    REQUIRE(config->windowWidth == 800);
+    REQUIRE(config->windowHeight == 1080);
+    REQUIRE(config->freeCameraSpeed == 5.0f);
+    REQUIRE(config->freeCameraSprintMultiplier == 4.0f);
+    REQUIRE(*parseEngineConfig(R"({"version": 1})", kEngine) == EngineConfig{});
+}
+
+TEST_CASE("An invalid engine configuration names the file and the field", "[serialization]") {
+    requireError(parseEngineConfig(R"({"window": {}})", kEngine), kEngine, {"field 'version'"});
+    requireError(parseEngineConfig(R"({"version": 3})", kEngine), kEngine, {"version 3 is not supported"});
+    requireError(parseEngineConfig(R"({"version": 1, "window": {"width": 0}})", kEngine), kEngine,
+                 {"field 'window.width'"});
+    requireError(parseEngineConfig(R"({"version": 1, "window": {"height": 720.5}})", kEngine), kEngine,
+                 {"field 'window.height'", "whole number"});
+    requireError(parseEngineConfig(R"({"version": 1, "window": {"widht": 1280}})", kEngine), kEngine,
+                 {"field 'window.widht'", "unknown field"});
+    requireError(parseEngineConfig(R"({"version": 1, "free_camera": {"speed": -1}})", kEngine), kEngine,
+                 {"field 'free_camera.speed'", "greater than 0"});
+    requireError(parseEngineConfig(R"({"version": 1, "vsync": true})", kEngine), kEngine, {"field 'vsync'"});
+    requireError(parseEngineConfig("{", kEngine), kEngine, {"invalid JSON"});
+}
+
+TEST_CASE("The input configuration reads buttons, key axes and mouse axes", "[serialization]") {
+    const auto config = parseInputConfig(R"({
+        "version": 1,
+        "buttons": [ {"action": "Jump", "key": "Space"} ],
+        "key_axes": [ {"action": "MoveForward", "negative": "S", "positive": "W"} ],
+        "mouse_axes": [ {"action": "LookY", "axis": "y", "scale": -0.5}, {"action": "LookX", "axis": "x"} ]
+    })",
+                                         kInput);
+    REQUIRE(config.has_value());
+    REQUIRE(config->buttons == std::vector<ButtonConfig>{{"Jump", "Space"}});
+    REQUIRE(config->keyAxes == std::vector<KeyAxisConfig>{{"MoveForward", "S", "W"}});
+    REQUIRE(config->mouseAxes.size() == 2);
+    REQUIRE(config->mouseAxes[0].axis == MouseAxisName::Y);
+    REQUIRE(config->mouseAxes[0].scale == -0.5f);
+    REQUIRE(config->mouseAxes[1].scale == 1.0f);
+    REQUIRE(*parseInputConfig(R"({"version": 1})", kInput) == InputConfig{});
+}
+
+TEST_CASE("An invalid input configuration names the file and the binding", "[serialization]") {
+    requireError(parseInputConfig(R"({"version": 1, "buttons": [{"action": "Jump"}]})", kInput), kInput,
+                 {"field 'buttons[0].key'", "missing"});
+    requireError(
+        parseInputConfig(
+            R"({"version": 1, "buttons": [{"action": "A", "key": "B"}, {"action": "", "key": "C"}]})",
+            kInput),
+        kInput, {"field 'buttons[1].action'", "empty"});
+    requireError(parseInputConfig(R"({"version": 1, "buttons": {"Jump": "Space"}})", kInput), kInput,
+                 {"field 'buttons'", "expected an array"});
+    requireError(
+        parseInputConfig(R"({"version": 1, "key_axes": [{"action": "M", "negative": "S", "postive": "W"}]})",
+                         kInput),
+        kInput, {"field 'key_axes[0].postive'", "unknown field"});
+    requireError(
+        parseInputConfig(R"({"version": 1, "mouse_axes": [{"action": "Look", "axis": "z"}]})", kInput),
+        kInput, {"field 'mouse_axes[0].axis'", "\"z\""});
+    requireError(parseInputConfig(R"({"version": 1, "mouse_axes": [5]})", kInput), kInput,
+                 {"field 'mouse_axes[0]'", "expected an object"});
+}
+
+TEST_CASE("The default input configuration is the table of spec 5.2 by physical key", "[serialization]") {
+    const InputConfig config = defaultInputConfig();
+    REQUIRE(config.buttons.size() == 7);
+    REQUIRE(config.buttons[0] == ButtonConfig{"Jump", "Space"});
+    // AZERTY Z, Q, A sit where QWERTY has W, A, Q.
+    REQUIRE(config.keyAxes == std::vector<KeyAxisConfig>{
+                                  {"MoveForward", "S", "W"}, {"MoveRight", "A", "D"}, {"MoveUp", "Q", "E"}});
+    REQUIRE(config.mouseAxes.size() == 2);
+}
+
+TEST_CASE("The configuration files of the repository are valid and equal to the defaults",
+          "[serialization]") {
+    const std::filesystem::path folder(APEX_CONFIG_DIR);
+    const auto engine = loadEngineConfigFile(folder / "engine.json", kEngine);
+    if (!engine) {
+        FAIL(engine.error().message);
+    }
+    REQUIRE(*engine == EngineConfig{});
+    const auto input = loadInputConfigFile(folder / "input.json", kInput);
+    if (!input) {
+        FAIL(input.error().message);
+    }
+    REQUIRE(*input == defaultInputConfig());
+}
+
+TEST_CASE("A missing configuration file is reported as not found", "[serialization]") {
+    const std::filesystem::path folder(APEX_CONFIG_DIR);
+    const auto engine = loadEngineConfigFile(folder / "absent.json", "Config/absent.json");
+    REQUIRE_FALSE(engine.has_value());
+    REQUIRE(engine.error().code == apex::core::ErrorCode::NotFound);
+    REQUIRE(loadInputConfigFile(folder / "absent.json", "Config/absent.json").error().code ==
+            apex::core::ErrorCode::NotFound);
+}

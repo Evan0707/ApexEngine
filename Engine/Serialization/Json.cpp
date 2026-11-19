@@ -82,6 +82,14 @@ core::Result<std::string> readString(const Json& value, const JsonContext& conte
     return text;
 }
 
+core::Result<float> readPositive(const Json& value, const JsonContext& context, std::string_view field) {
+    const core::Result<float> number = readNumber(value, context, field);
+    if (number && !(*number > 0.0f)) {
+        return jsonError(context, field, "must be greater than 0");
+    }
+    return number;
+}
+
 std::string joinField(std::string_view parent, std::string_view key) {
     return parent.empty() ? std::string(key) : std::format("{}.{}", parent, key);
 }
