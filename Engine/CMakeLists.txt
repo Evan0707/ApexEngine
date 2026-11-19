@@ -133,6 +133,8 @@ add_library(ApexEngine STATIC
     Resources/ResourcePool.h
     Resources/TextureData.h
     World/Components.h
+    World/RenderExtraction.cpp
+    World/RenderExtraction.h
     World/Rotation.cpp
     World/Rotation.h
     World/SceneQueries.cpp

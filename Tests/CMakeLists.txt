@@ -39,6 +39,7 @@ add_executable(ApexTests
     Resources/PrimitivesTests.cpp
     Resources/ResourceCacheTests.cpp
     Resources/ResourcePoolTests.cpp
+    World/RenderExtractionTests.cpp
     World/RotationTests.cpp
     World/SceneQueriesTests.cpp
     # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
