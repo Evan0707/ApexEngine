@@ -13,6 +13,8 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/FrameCounters.h` | `FrameCounters` : appels de dessin et triangles de la dernière frame |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
+| `Graphics/GpuHandles.h` | `GpuHandle`, `MeshHandle`, `MaterialHandle` : désignent un objet GPU du renderer, périmés quand l'objet est détruit |
+| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
 | `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
@@ -27,7 +29,10 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
 - `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : format et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
 - `Graphics/TrianglePipeline.h` (`TriangleVertex`, `TrianglePipeline`).
-- `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`).
+- `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
+- `Graphics/HandlePool.h` (`HandlePool`), sans Vulkan, testé sans GPU ;
+- `Graphics/Projection.h` (`perspectiveProjection()`), sans Vulkan, testé sans GPU ;
+- `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU.
 
 ## Renderer
 
@@ -53,6 +58,14 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Le pipeline est créé avec la swapchain, pour son format. Si une recréation change le format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : un appel de dessin et un triangle par frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Remplacé en phase 3 par les meshes, le format de sommet unique et la `RenderScene`.
+
+## Scène et projection (phase 3)
+
+- `RenderScene` (G-01) : caméra, lumière directionnelle, terme ambiant et liste d'objets, copiés par l'application à chaque frame. Aucun pointeur vers les objets du jeu.
+- Espace de rendu : l'espace monde translaté pour que la caméra soit à l'origine (G-07). `RenderCamera::view` n'est qu'une rotation, et `RenderObject::modelRelativeToCamera` porte la position de l'objet relative à la caméra. La conversion depuis `WorldPosition` se fait dans l'extraction, jamais dans `Graphics`.
+- `perspectiveProjection()` est le seul endroit qui connaît l'espace de clip de Vulkan (section 3.3) : vue main droite tournée vers −Z, profondeur de 0 (plan proche) à 1 (plan lointain), Y inversé pour que le haut de la vue soit en haut de l'écran. Une face antihoraire vue de la caméra reste une face avant pour Vulkan : un test le vérifie avec la formule d'aire de la spécification Vulkan.
+- Handles (`MeshHandle`, `MaterialHandle`) : un index et une génération. Détruire l'objet rend le handle périmé, même quand l'emplacement est réutilisé. Le handle par défaut n'est jamais valide.
+- La liste d'objets est triée par matériau, puis par mesh, en gardant l'ordre de la scène dans un groupe (`sortDrawItems()`, section 5.4).
 
 ## Swapchain
 

@@ -16,6 +16,9 @@ add_executable(ApexTests
     Game/CommandLineTests.cpp
     Game/DefaultBindingsTests.cpp
     Graphics/DeferredDeleterTests.cpp
+    Graphics/DrawListTests.cpp
+    Graphics/HandlePoolTests.cpp
+    Graphics/ProjectionTests.cpp
     Graphics/ShaderBinariesTests.cpp
     Graphics/SwapchainStateTests.cpp
     Graphics/ValidationLogTests.cpp

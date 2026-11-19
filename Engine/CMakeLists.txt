@@ -49,6 +49,8 @@ add_library(ApexEngine STATIC
     Debug/StatsPanel.h
     Graphics/DeferredDeleter.cpp
     Graphics/DeferredDeleter.h
+    Graphics/DrawList.cpp
+    Graphics/DrawList.h
     Graphics/Device.cpp
     Graphics/Device.h
     Graphics/FrameCounters.h
@@ -56,8 +58,13 @@ add_library(ApexEngine STATIC
     Graphics/FrameSync.h
     Graphics/GpuAllocator.cpp
     Graphics/GpuAllocator.h
+    Graphics/GpuHandles.h
     Graphics/GpuMemoryStats.h
+    Graphics/HandlePool.h
+    Graphics/Projection.cpp
+    Graphics/Projection.h
     Graphics/RenderOverlay.h
+    Graphics/RenderScene.h
     Graphics/Renderer.cpp
     Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
