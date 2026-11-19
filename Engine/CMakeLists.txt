@@ -1,4 +1,7 @@
 add_library(ApexEngine STATIC
+    Core/Assert.cpp
+    Core/Assert.h
+    Core/Error.h
     Core/Version.cpp
     Core/Version.h
 )

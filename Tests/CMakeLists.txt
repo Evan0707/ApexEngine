@@ -1,6 +1,8 @@
 find_package(Catch2 3 CONFIG REQUIRED)
 
 add_executable(ApexTests
+    Core/AssertTests.cpp
+    Core/ErrorTests.cpp
     Core/LanguageTests.cpp
     Core/VersionTests.cpp
 )
