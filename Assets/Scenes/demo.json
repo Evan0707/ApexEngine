@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "ambient": [0.06, 0.07, 0.09],
+  "entities": [
+    {
+      "id": "sun",
+      "name": "Soleil",
+      "light": { "direction": [-0.4, -1.0, -0.35], "color": [1.0, 0.95, 0.88], "intensity": 3.0 }
+    },
+    {
+      "id": "camera",
+      "name": "Caméra libre",
+      "transform": { "position": [0.0, 2.5, 7.0], "rotation_deg": [-15, 0, 0] },
+      "camera": { "fov_deg": 70, "near": 0.1, "far": 500 }
+    },
+
+    {
+      "id": "floor",
+      "name": "Sol",
+      "transform": { "position": [0.0, -0.1, 0.0], "scale": [30.0, 0.2, 30.0] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.35, 0.36, 0.38], "metallic": 0.0, "roughness": 0.9 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+    {
+      "id": "reference_cube",
+      "name": "Cube de référence (1 m)",
+      "transform": { "position": [0.0, 0.5, 0.0] },
+      "mesh": "Models/reference_cube.glb"
+    },
+
+    {
+      "id": "red_cube",
+      "transform": { "position": [-2.5, 0.5, 1.0], "rotation_deg": [0, 20, 0] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.7, 0.08, 0.06], "metallic": 0.0, "roughness": 0.4 }
+    },
+    {
+      "id": "green_box",
+      "transform": { "position": [2.5, 0.75, 0.5], "rotation_deg": [0, -15, 0], "scale": [1.5, 1.5, 1.5] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.1, 0.45, 0.12], "metallic": 0.0, "roughness": 0.6 }
+    },
+    {
+      "id": "blue_cube",
+      "transform": { "position": [-1.2, 0.3, 2.5], "rotation_deg": [0, 45, 0], "scale": [0.6, 0.6, 0.6] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.08, 0.2, 0.6], "metallic": 0.0, "roughness": 0.3 }
+    },
+    {
+      "id": "spinner",
+      "name": "Cube tournant",
+      "transform": { "position": [1.8, 0.4, 2.2], "scale": [0.8, 0.8, 0.8] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.08, 0.2, 0.6], "metallic": 0.0, "roughness": 0.3 }
+    },
+    {
+      "id": "pillar",
+      "transform": { "position": [-4.5, 1.5, -2.0], "scale": [0.6, 3.0, 0.6] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.5 }
+    },
+
+    {
+      "id": "crate_01",
+      "name": "Caisse",
+      "transform": { "position": [4.5, 0.0, -1.5] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+    {
+      "id": "crate_02",
+      "name": "Caisse",
+      "transform": { "position": [4.5, 1.0, -1.5], "rotation_deg": [0, 10, 0] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+    {
+      "id": "water_bottle",
+      "name": "Bouteille",
+      "transform": { "position": [2.5, 1.6302, 0.5] },
+      "mesh": "Models/water_bottle.glb"
+    },
+
+    { "id": "sphere_plain_000", "transform": { "position": [-4.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.0 } },
+    { "id": "sphere_plain_025", "transform": { "position": [-2.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.25 } },
+    { "id": "sphere_plain_050", "transform": { "position": [0.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.5 } },
+    { "id": "sphere_plain_075", "transform": { "position": [2.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.75 } },
+    { "id": "sphere_plain_100", "transform": { "position": [4.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 1.0 } },
+
+    { "id": "sphere_gold_000", "transform": { "position": [-4.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.0 } },
+    { "id": "sphere_gold_025", "transform": { "position": [-2.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.25 } },
+    { "id": "sphere_gold_050", "transform": { "position": [0.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.5 } },
+    { "id": "sphere_gold_075", "transform": { "position": [2.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.75 } },
+    { "id": "sphere_gold_100", "transform": { "position": [4.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 1.0 } }
+  ]
+}

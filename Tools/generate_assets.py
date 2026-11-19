@@ -165,6 +165,45 @@ def cube_geometry(size, uv_rect):
     return positions, normals, uvs, indices
 
 
+def sphere_geometry(radius, segments, rings):
+    """Same layout as resources::makeSphere: poles on Y, u around from +Z towards +X, v from the north pole."""
+    positions, normals, uvs, indices = [], [], [], []
+    for ring in range(rings + 1):
+        v = ring / rings
+        polar = v * math.pi
+        for segment in range(segments + 1):
+            u = segment / segments
+            azimuth = u * 2 * math.pi
+            normal = (math.sin(polar) * math.sin(azimuth), math.cos(polar), math.sin(polar) * math.cos(azimuth))
+            positions.append(tuple(component * radius for component in normal))
+            normals.append(normal)
+            uvs.append((u, v))
+    stride = segments + 1
+    for ring in range(rings):
+        for segment in range(segments):
+            top_left = ring * stride + segment
+            bottom_left = top_left + stride
+            # The triangle that would collapse on a pole is skipped.
+            if ring + 1 < rings:
+                indices += [top_left, bottom_left, bottom_left + 1]
+            if ring > 0:
+                indices += [top_left, bottom_left + 1, top_left + 1]
+    return positions, normals, uvs, indices
+
+
+def primitives():
+    """A cube of 1 m and a sphere of 1 m in diameter, white and untextured: scenes color them (decision 0017)."""
+    for name, geometry in (("cube", cube_geometry(1.0, lambda _: (0.0, 0.0, 1.0, 1.0))),
+                           ("sphere", sphere_geometry(0.5, 48, 24))):
+        builder = GltfBuilder()
+        material = builder.material("White", metallic=0.0, roughness=0.5)
+        positions, normals, uvs, indices = geometry
+        title = name.capitalize()
+        mesh = builder.mesh(title, [builder.primitive(positions, normals, uvs, indices, material=material)])
+        builder.node(name=title, mesh=mesh)
+        builder.write_glb(MODELS / (name + ".glb"))
+
+
 def image_bytes(image, fmt, **options):
     stream = io.BytesIO()
     image.save(stream, fmt, **options)
@@ -336,6 +375,7 @@ def main():
     MODELS.mkdir(parents=True, exist_ok=True)
     reference_cube()
     crate()
+    primitives()
     test_data()
     print("Assets written to", MODELS, "and", TEST_DATA)
 

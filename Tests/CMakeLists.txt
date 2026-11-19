@@ -40,6 +40,7 @@ add_executable(ApexTests
     Resources/ResourceCacheTests.cpp
     Resources/ResourcePoolTests.cpp
     Serialization/ConfigTests.cpp
+    Serialization/DemoSceneFileTests.cpp
     Serialization/SceneJsonTests.cpp
     Serialization/SceneLoaderTests.cpp
     Serialization/SceneRoundTripTests.cpp
