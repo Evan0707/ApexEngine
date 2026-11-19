@@ -1,6 +1,7 @@
 #include "CommandLine.h"
 #include "DefaultBindings.h"
 #include "DemoApp.h"
+#include "DemoScene.h"
 
 #include "Core/ConsoleLogSink.h"
 #include "Core/FileLogSink.h"
@@ -65,11 +66,19 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
+    // Loaded last (spec 5.1), destroyed first.
+    core::Result<game::DemoScene> scene = game::DemoScene::create(**renderer);
+    if (!scene) {
+        return kExitFailure;
+    }
+    logger.info("Demo scene: {} objects", scene->objectCount());
+
     const game::DemoSystems systems{.window = *window,
                                     .renderer = **renderer,
                                     .debugUi = **debugUi,
                                     .logHistory = logHistory,
-                                    .logger = logger};
+                                    .logger = logger,
+                                    .scene = *scene};
     core::Result<game::DemoApp> app = game::DemoApp::create(systems, std::move(*actions), options.maxFrames);
     if (!app) {
         logger.error("{}", app.error().message);

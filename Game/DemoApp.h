@@ -1,11 +1,15 @@
 #pragma once
 
+#include "DemoScene.h"
+#include "SceneExtraction.h"
+
 #include "Core/Error.h"
 #include "Core/FramePhases.h"
 #include "Core/Logger.h"
 #include "Debug/DebugUi.h"
 #include "Debug/FrameTimeStats.h"
 #include "Debug/LogHistory.h"
+#include "Graphics/RenderScene.h"
 #include "Graphics/Renderer.h"
 #include "Input/ActionMap.h"
 #include "Input/ActionState.h"
@@ -26,9 +30,10 @@ struct DemoSystems {
     debug::DebugUi& debugUi;
     const debug::LogHistory& logHistory;
     core::Logger& logger;
+    const DemoScene& scene;
 };
 
-// Phase 2 demo: draws the triangle and the debug panel (F1), logs window events and actions, toggles
+// Phase 3 demo: draws the demo scene and the debug panel (F1), logs window events and actions, toggles
 // cursor capture with the ToggleCursor action.
 class DemoApp final : public core::FramePhases {
 public:
@@ -64,6 +69,7 @@ private:
     debug::DebugUi* m_debugUi;
     const debug::LogHistory* m_logHistory;
     core::Logger* m_logger;
+    const DemoScene* m_scene;
     input::ActionMap m_actions;
     input::ActionState m_frame;
     input::ActionState m_simulation;
@@ -75,6 +81,9 @@ private:
     std::vector<AxisLog> m_keyAxes;
     std::vector<input::ActionId> m_mouseAxes;
     std::vector<float> m_mouseTotals;
+
+    CameraView m_camera;
+    graphics::RenderScene m_renderScene;
 
     debug::FrameTimeStats m_frameTimes;
     std::optional<std::chrono::steady_clock::time_point> m_frameStart;

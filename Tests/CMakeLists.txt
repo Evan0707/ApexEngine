@@ -15,6 +15,8 @@ add_executable(ApexTests
     Debug/LogHistoryTests.cpp
     Game/CommandLineTests.cpp
     Game/DefaultBindingsTests.cpp
+    Game/DemoSceneTests.cpp
+    Game/SceneExtractionTests.cpp
     Graphics/DeferredDeleterTests.cpp
     Graphics/DrawListTests.cpp
     Graphics/FrameDataTests.cpp
@@ -32,6 +34,8 @@ add_executable(ApexTests
     # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
     "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"
     "${PROJECT_SOURCE_DIR}/Game/DefaultBindings.cpp"
+    "${PROJECT_SOURCE_DIR}/Game/DemoScene.cpp"
+    "${PROJECT_SOURCE_DIR}/Game/SceneExtraction.cpp"
 )
 
 target_include_directories(ApexTests PRIVATE "${PROJECT_SOURCE_DIR}/Game")

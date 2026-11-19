@@ -78,14 +78,14 @@ add_library(ApexEngine STATIC
     Graphics/Renderer.cpp
     Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
+    Graphics/ScenePipeline.cpp
+    Graphics/ScenePipeline.h
     Graphics/ShaderBinaries.cpp
     Graphics/ShaderBinaries.h
     Graphics/Swapchain.cpp
     Graphics/Swapchain.h
     Graphics/SwapchainState.cpp
     Graphics/SwapchainState.h
-    Graphics/TrianglePipeline.cpp
-    Graphics/TrianglePipeline.h
     Graphics/UploadContext.cpp
     Graphics/UploadContext.h
     Graphics/ValidationLog.cpp
@@ -110,8 +110,8 @@ add_library(ApexEngine STATIC
 add_library(Apex::Engine ALIAS ApexEngine)
 
 apex_add_shaders(ApexEngine
-    Graphics/Shaders/Triangle.frag
-    Graphics/Shaders/Triangle.vert
+    Graphics/Shaders/Scene.frag
+    Graphics/Shaders/Scene.vert
 )
 # Included by the shaders above: tracked through glslc's depfiles, listed here for the IDE.
 target_sources(ApexEngine PRIVATE

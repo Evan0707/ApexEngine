@@ -4,14 +4,17 @@
 #include "Graphics/DeferredDeleter.h"
 #include "Graphics/DepthTarget.h"
 #include "Graphics/Device.h"
+#include "Graphics/DrawList.h"
+#include "Graphics/FrameBuffers.h"
+#include "Graphics/FrameData.h"
 #include "Graphics/FrameSync.h"
 #include "Graphics/GpuAllocator.h"
 #include "Graphics/GpuMesh.h"
 #include "Graphics/HandlePool.h"
 #include "Graphics/MaterialTable.h"
+#include "Graphics/ScenePipeline.h"
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
-#include "Graphics/TrianglePipeline.h"
 #include "Graphics/UploadContext.h"
 #include "Graphics/VulkanBackendAccess.h"
 
@@ -28,6 +31,7 @@
 #include <span>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace apex::graphics {
 
@@ -38,19 +42,14 @@ constexpr std::uint32_t kFramesInFlight = 2;
 
 // Room in the per-frame material table, default material included.
 constexpr std::uint32_t kMaxMaterials = 256;
+// Room in the per-frame object buffer; objects beyond are not drawn, with a warning.
+constexpr std::uint32_t kMaxObjects = 4096;
 
 // Linear color, written to an sRGB swapchain: a dark blue, easy to tell from a black window.
 constexpr VkClearColorValue kClearColor{{0.02f, 0.04f, 0.10f, 1.0f}};
 
 // 32-bit float depth (spec 5.4). Chosen here only, then passed to the pipelines (G-09).
 constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
-
-// Vulkan clip space: +Y points down until the phase 3 projection flips it (spec 3.3). Linear colors.
-constexpr std::array<TriangleVertex, 3> kTriangle{{
-    {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-}};
 
 [[nodiscard]] std::unexpected<core::Error> vulkanError(core::Logger& logger, std::string_view what,
                                                        VkResult result) {
@@ -115,8 +114,8 @@ struct Renderer::State {
     UploadContext upload;
     HandlePool<MeshHandle, GpuMesh> meshes;
     MaterialTable materials{kMaxMaterials};
-    GpuBuffer triangleVertices;
-    TrianglePipeline trianglePipeline;
+    FrameBuffers frameBuffers;
+    ScenePipeline scenePipeline;
     Swapchain swapchain;
     DepthTarget depth;
     FrameCounters counters;
@@ -129,13 +128,15 @@ struct Renderer::State {
     std::array<bool, kFramesInFlight> slotWaited{};
     // Set by renderFrame, consumed by presentFrame.
     std::optional<std::uint32_t> acquiredImage;
+    // Rebuilt each frame; kept to reuse their memory.
+    std::vector<DrawItem> drawItems;
+    std::vector<ObjectGpu> objectData;
+    bool warnedStaleMesh = false;
+    bool warnedTooManyObjects = false;
 
     ~State() {
         if (device) {
             device->waitIdle();
-        }
-        if (allocator && triangleVertices.buffer != VK_NULL_HANDLE) {
-            allocator->destroyBuffer(triangleVertices);
         }
         if (allocator) {
             meshes.forEach([this](const GpuMesh& mesh) { destroyGpuMesh(*allocator, mesh); });
@@ -145,8 +146,10 @@ struct Renderer::State {
     // False when the surface has no area yet: the frame is skipped and the recreation tried again.
     [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
     [[nodiscard]] core::Result<void> ensurePipeline();
-    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
-    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex);
+    // Resolves the handles, sorts by material and fills the frame's buffers.
+    void prepareFrame(const RenderScene& scene);
+    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex, const RenderScene& scene);
+    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex, const RenderScene& scene);
     void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
 };
 
@@ -199,21 +202,60 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
 core::Result<void> Renderer::State::ensurePipeline() {
     const RenderTargetDesc target{
         .colorFormat = swapchain.format(), .depthFormat = depth.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
-    if (trianglePipeline.handle() != VK_NULL_HANDLE && trianglePipeline.target() == target) {
+    if (scenePipeline.handle() != VK_NULL_HANDLE && scenePipeline.target() == target) {
         return {};
     }
-    core::Result<TrianglePipeline> created = TrianglePipeline::create(device->device(), target);
+    core::Result<ScenePipeline> created =
+        ScenePipeline::create(device->device(), target, frameBuffers.layout());
     if (!created) {
         logger->error("{}", created.error().message);
         return std::unexpected(created.error());
     }
     // A frame in flight may still use the old pipeline.
-    deleter.enqueue([old = std::move(trianglePipeline)]() mutable { old = TrianglePipeline(); });
-    trianglePipeline = std::move(*created);
+    deleter.enqueue([old = std::move(scenePipeline)]() mutable { old = ScenePipeline(); });
+    scenePipeline = std::move(*created);
     return {};
 }
 
-void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
+void Renderer::State::prepareFrame(const RenderScene& scene) {
+    drawItems.clear();
+    std::size_t staleMeshes = 0;
+    for (std::uint32_t i = 0; i < scene.objects.size(); ++i) {
+        const RenderObject& object = scene.objects[i];
+        if (meshes.find(object.mesh) == nullptr) {
+            ++staleMeshes;
+            continue;
+        }
+        drawItems.push_back(DrawItem{.objectIndex = i,
+                                     .materialIndex = materials.gpuIndex(object.material),
+                                     .meshIndex = object.mesh.index});
+    }
+    if (staleMeshes > 0 && !warnedStaleMesh) {
+        logger->warning("{} object(s) not drawn: stale mesh handle (logged once)", staleMeshes);
+        warnedStaleMesh = true;
+    }
+    if (drawItems.size() > kMaxObjects) {
+        if (!warnedTooManyObjects) {
+            logger->warning("{} objects to draw, only the first {} are (logged once)", drawItems.size(),
+                            kMaxObjects);
+            warnedTooManyObjects = true;
+        }
+        drawItems.resize(kMaxObjects);
+    }
+    sortDrawItems(drawItems);
+
+    objectData.clear();
+    for (const DrawItem& item : drawItems) {
+        objectData.push_back(
+            makeObjectGpu(scene.objects[item.objectIndex].modelRelativeToCamera, item.materialIndex));
+    }
+    const VkExtent2D extent = swapchain.extent();
+    const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio), objectData, materials.gpuData());
+}
+
+void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex,
+                                  const RenderScene& scene) {
     const VkImage image = swapchain.image(imageIndex);
     // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
     transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -230,7 +272,7 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
 
-    recordScenePass(commands, imageIndex);
+    recordScenePass(commands, imageIndex, scene);
     // Second pass, without depth: the interface is drawn over the scene (decisions 0008 and 0011).
     if (overlay != nullptr) {
         transitionImage(
@@ -248,7 +290,8 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE});
 }
 
-void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
+void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex,
+                                      const RenderScene& scene) {
     const VkRenderingAttachmentInfo colorAttachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = swapchain.imageView(imageIndex),
@@ -284,13 +327,28 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t im
                               .minDepth = 0.0f,
                               .maxDepth = 1.0f};
     const VkRect2D scissor{{0, 0}, extent};
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline.handle());
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.handle());
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
-    const VkDeviceSize offset = 0;
-    vkCmdBindVertexBuffers(commands, 0, 1, &triangleVertices.buffer, &offset);
-    vkCmdDraw(commands, static_cast<std::uint32_t>(kTriangle.size()), 1, 0, 0);
-    counters = FrameCounters{.drawCalls = 1, .triangles = kTriangle.size() / 3};
+    const VkDescriptorSet frameSet = frameBuffers.descriptorSet(frameIndex);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 0, 1,
+                            &frameSet, 0, nullptr);
+
+    counters = FrameCounters{};
+    const GpuMesh* boundMesh = nullptr;
+    for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
+        const GpuMesh* mesh = meshes.find(scene.objects[drawItems[drawIndex].objectIndex].mesh);
+        if (mesh != boundMesh) {
+            const VkDeviceSize offset = 0;
+            vkCmdBindVertexBuffers(commands, 0, 1, &mesh->vertices.buffer, &offset);
+            vkCmdBindIndexBuffer(commands, mesh->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+            boundMesh = mesh;
+        }
+        // firstInstance = place in the object buffer: the shader reads it through gl_InstanceIndex (G-02).
+        vkCmdDrawIndexed(commands, mesh->indexCount, 1, 0, 0, drawIndex);
+        ++counters.drawCalls;
+        counters.triangles += mesh->indexCount / 3;
+    }
 
     vkCmdEndRendering(commands);
 }
@@ -337,13 +395,15 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     }
     state->allocator = std::move(*allocator);
 
-    core::Result<GpuBuffer> vertices = state->allocator->createBufferWithData(
-        "Triangle vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, std::as_bytes(std::span(kTriangle)));
-    if (!vertices) {
-        logger.error("{}", vertices.error().message);
-        return std::unexpected(vertices.error());
+    core::Result<FrameBuffers> frameBuffers = FrameBuffers::create(
+        state->device->device(), *state->allocator,
+        FrameBufferLimits{
+            .framesInFlight = kFramesInFlight, .maxObjects = kMaxObjects, .maxMaterials = kMaxMaterials});
+    if (!frameBuffers) {
+        logger.error("{}", frameBuffers.error().message);
+        return std::unexpected(frameBuffers.error());
     }
-    state->triangleVertices = *vertices;
+    state->frameBuffers = std::move(*frameBuffers);
     const GpuMemoryStats memory = state->allocator->memoryStats();
     constexpr double kMebibyte = 1024.0 * 1024.0;
     logger.info("GPU memory: {:.0f} MiB used, {:.0f} MiB budget{}",
@@ -382,7 +442,7 @@ Renderer::Renderer(ConstructionKey /*key*/, std::unique_ptr<State> state) noexce
 
 Renderer::~Renderer() = default;
 
-core::Result<void> Renderer::renderFrame() {
+core::Result<void> Renderer::renderFrame(const RenderScene& scene) {
     State& state = *m_state;
     APEX_PROFILE_SCOPE("Renderer::renderFrame");
 
@@ -442,7 +502,8 @@ core::Result<void> Renderer::renderFrame() {
     if (const VkResult result = vkBeginCommandBuffer(frame.commandBuffer, &beginInfo); result != VK_SUCCESS) {
         return vulkanError(*state.logger, "vkBeginCommandBuffer", result);
     }
-    state.recordFrame(frame.commandBuffer, imageIndex);
+    state.prepareFrame(scene);
+    state.recordFrame(frame.commandBuffer, imageIndex, scene);
     if (const VkResult result = vkEndCommandBuffer(frame.commandBuffer); result != VK_SUCCESS) {
         return vulkanError(*state.logger, "vkEndCommandBuffer", result);
     }

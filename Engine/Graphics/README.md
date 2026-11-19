@@ -2,7 +2,7 @@
 
 **Rôle :** renderer Vulkan 1.3, seul module qui émet des appels GPU (cahier des charges, sections 4.3 et 5.4, garde-fou G-01).
 
-**État (phase 2, tâche 8) :** périphérique, mémoire GPU (VMA), swapchain sRGB, deux frames en vol, shaders compilés pendant le build. Chaque frame efface la fenêtre en bleu nuit et dessine un triangle coloré. Notes de décision `0006-chaine-vulkan.md` et `0009-frontieres-platform-graphics-debug.md`.
+**État (phase 3) :** périphérique, mémoire GPU (VMA), swapchain sRGB, deux frames en vol, shaders compilés pendant le build, tampon de profondeur, meshes et matériaux, données par frame, `RenderScene` dessinée en une passe principale, interface dans une seconde passe. Notes de décision 0006, 0009 et 0011.
 
 ## Interface publique
 
@@ -11,7 +11,7 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | En-tête | Contenu |
 |---|---|
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
-| `Graphics/FrameCounters.h` | `FrameCounters` : appels de dessin et triangles de la dernière frame |
+| `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
 | `Graphics/GpuHandles.h` | `GpuHandle`, `MeshHandle`, `MaterialHandle` : désignent un objet GPU du renderer, périmés quand l'objet est détruit |
 | `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
@@ -29,7 +29,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
 - `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : formats de couleur et de profondeur et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
 - `Graphics/DepthTarget.h` (`DepthTarget`) : le tampon de profondeur de la passe principale ;
-- `Graphics/TrianglePipeline.h` (`TriangleVertex`, `TrianglePipeline`).
+- `Graphics/ScenePipeline.h` (`ScenePipeline`) : le pipeline de la passe principale.
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/HandlePool.h` (`HandlePool`), sans Vulkan, testé sans GPU ;
 - `Graphics/Projection.h` (`perspectiveProjection()`), sans Vulkan, testé sans GPU ;
@@ -59,13 +59,13 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Profondeur : `D32_SFLOAT` (section 5.4), choisi en un seul endroit (`Renderer.cpp`) et passé aux pipelines (G-09). Test « inférieur », effacement à 1. Le tampon est recréé avec la swapchain, à sa taille ; son contenu n'est pas conservé après la passe. Un seul tampon sert aux deux frames en vol : la barrière du début de frame attend les écritures de profondeur de la frame précédente.
 - Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
 
-## Triangle (phase 2)
+## Passe de scène (phase 3)
 
-- Trois sommets en dur dans `Renderer.cpp` (position déjà dans l'espace de clip de Vulkan, couleur linéaire), copiés une fois dans un vertex buffer créé par VMA.
-- Pipeline sans descripteur ni push constant (G-02), viewport et scissor dynamiques, dynamic rendering. Pas d'élimination des faces avant la caméra de la phase 3 ; faces avant dans le sens antihoraire, comme glTF.
-- Le pipeline est créé avec la swapchain, pour son format. Si une recréation change le format, l'ancien pipeline passe par la destruction différée.
-- `lastFrameCounters()` : un appel de dessin et un triangle par frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
-- Remplacé en phase 3 par les meshes, le format de sommet unique et la `RenderScene`.
+- `renderFrame(scene)` résout les handles de chaque objet : un mesh périmé fait sauter l'objet (avertissement écrit une fois), un matériau périmé donne le matériau par défaut. Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
+- Les objets sont triés par matériau puis par mesh, puis leurs données sont écrites dans le buffer de la frame dans cet ordre. Le dessin `i` utilise `firstInstance = i` : le vertex shader lit l'objet par `gl_InstanceIndex` (G-02). Les buffers de sommets et d'indices ne sont liés qu'au changement de mesh.
+- Pipeline (`ScenePipeline`) : jeu de descripteurs 0 de la frame, aucun push constant ; position et normale lues dans le format de sommet unique (tangente et UV attendent les textures, phase 4) ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
+- `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
+- Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
 
 ## Scène et projection (phase 3)
 

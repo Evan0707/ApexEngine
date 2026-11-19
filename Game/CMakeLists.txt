@@ -5,7 +5,11 @@ add_executable(ApexDemo
     DefaultBindings.h
     DemoApp.cpp
     DemoApp.h
+    DemoScene.cpp
+    DemoScene.h
     main.cpp
+    SceneExtraction.cpp
+    SceneExtraction.h
 )
 
 target_link_libraries(ApexDemo PRIVATE Apex::Engine)

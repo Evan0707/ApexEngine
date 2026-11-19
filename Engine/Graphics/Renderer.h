@@ -6,6 +6,7 @@
 #include "Graphics/GpuHandles.h"
 #include "Graphics/GpuMemoryStats.h"
 #include "Graphics/RenderOverlay.h"
+#include "Graphics/RenderScene.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
 #include "Resources/MaterialData.h"
@@ -47,9 +48,10 @@ public:
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
 
-    // Render phase: acquires a swapchain image, records and submits the frame.
+    // Render phase: acquires a swapchain image, records and submits the frame. The scene is copied: it
+    // can change as soon as this returns (G-01). Objects with a stale mesh handle are skipped.
     // Does nothing while the window is minimized (spec 5.2). An error means the device is unusable.
-    [[nodiscard]] core::Result<void> renderFrame();
+    [[nodiscard]] core::Result<void> renderFrame(const RenderScene& scene);
     // Presentation phase: presents the image of the last renderFrame, if there is one.
     [[nodiscard]] core::Result<void> presentFrame();
 

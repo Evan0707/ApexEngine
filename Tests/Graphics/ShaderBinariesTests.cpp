@@ -21,7 +21,7 @@ void requireSpirv(std::span<const std::uint32_t> words) {
 
 } // namespace
 
-TEST_CASE("The triangle shaders are embedded as SPIR-V", "[graphics]") {
-    requireSpirv(apex::graphics::triangleVertexShader());
-    requireSpirv(apex::graphics::triangleFragmentShader());
+TEST_CASE("The scene shaders are embedded as SPIR-V", "[graphics]") {
+    requireSpirv(apex::graphics::sceneVertexShader());
+    requireSpirv(apex::graphics::sceneFragmentShader());
 }

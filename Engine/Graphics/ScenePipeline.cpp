@@ -1,7 +1,9 @@
-#include "Graphics/TrianglePipeline.h"
+#include "Graphics/ScenePipeline.h"
 
 #include "Graphics/ShaderBinaries.h"
+#include "Resources/MeshData.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -14,9 +16,8 @@ namespace apex::graphics {
 namespace {
 
 [[nodiscard]] std::unexpected<core::Error> pipelineError(std::string_view what, VkResult result) {
-    return core::makeError(
-        core::ErrorCode::GpuFailure,
-        std::format("Cannot create the triangle {}: VkResult {}", what, static_cast<int>(result)));
+    return core::makeError(core::ErrorCode::GpuFailure, std::format("Cannot create the scene {}: VkResult {}",
+                                                                    what, static_cast<int>(result)));
 }
 
 // Destroys the module at the end of pipeline creation: a pipeline does not need it afterwards.
@@ -44,26 +45,29 @@ private:
 
 } // namespace
 
-core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const RenderTargetDesc& target) {
-    TrianglePipeline pipeline;
+core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderTargetDesc& target,
+                                                  VkDescriptorSetLayout frameLayout) {
+    ScenePipeline pipeline;
     pipeline.m_device = device;
     pipeline.m_target = target;
 
     VkShaderModule vertexHandle = VK_NULL_HANDLE;
-    if (const VkResult result = createModule(device, triangleVertexShader(), vertexHandle);
+    if (const VkResult result = createModule(device, sceneVertexShader(), vertexHandle);
         result != VK_SUCCESS) {
         return pipelineError("vertex shader module", result);
     }
     const ShaderModule vertexModule(device, vertexHandle);
     VkShaderModule fragmentHandle = VK_NULL_HANDLE;
-    if (const VkResult result = createModule(device, triangleFragmentShader(), fragmentHandle);
+    if (const VkResult result = createModule(device, sceneFragmentShader(), fragmentHandle);
         result != VK_SUCCESS) {
         return pipelineError("fragment shader module", result);
     }
     const ShaderModule fragmentModule(device, fragmentHandle);
 
-    // No descriptor and no push constant: per-object data will come from a per-frame buffer (G-02).
-    const VkPipelineLayoutCreateInfo layoutInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    // Set 0 only, no push constant: per-object data comes from the per-frame buffer (G-02).
+    const VkPipelineLayoutCreateInfo layoutInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                                                .setLayoutCount = 1,
+                                                .pSetLayouts = &frameLayout};
     if (const VkResult result = vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipeline.m_layout);
         result != VK_SUCCESS) {
         return pipelineError("pipeline layout", result);
@@ -81,16 +85,17 @@ core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const R
     };
 
     const VkVertexInputBindingDescription binding{
-        .binding = 0, .stride = sizeof(TriangleVertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
+        .binding = 0, .stride = sizeof(resources::Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
+    // Only what the shaders read: tangent and UV wait for the textures (phase 4).
     const std::array attributes{
         VkVertexInputAttributeDescription{.location = 0,
                                           .binding = 0,
                                           .format = VK_FORMAT_R32G32B32_SFLOAT,
-                                          .offset = offsetof(TriangleVertex, position)},
+                                          .offset = offsetof(resources::Vertex, position)},
         VkVertexInputAttributeDescription{.location = 1,
                                           .binding = 0,
                                           .format = VK_FORMAT_R32G32B32_SFLOAT,
-                                          .offset = offsetof(TriangleVertex, color)},
+                                          .offset = offsetof(resources::Vertex, normal)},
     };
     const VkPipelineVertexInputStateCreateInfo vertexInput{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -106,11 +111,11 @@ core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const R
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
         .scissorCount = 1};
-    // No culling before the camera of phase 3. Front faces are counter-clockwise, as in glTF (spec 3.3).
+    // Front faces are counter-clockwise, as in glTF (spec 3.3); the projection keeps them so.
     const VkPipelineRasterizationStateCreateInfo rasterization{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_NONE,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .lineWidth = 1.0f};
     const VkPipelineMultisampleStateCreateInfo multisample{
@@ -162,16 +167,16 @@ core::Result<TrianglePipeline> TrianglePipeline::create(VkDevice device, const R
     return pipeline;
 }
 
-TrianglePipeline::~TrianglePipeline() {
+ScenePipeline::~ScenePipeline() {
     destroy();
 }
 
-TrianglePipeline::TrianglePipeline(TrianglePipeline&& other) noexcept
+ScenePipeline::ScenePipeline(ScenePipeline&& other) noexcept
     : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)),
       m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)),
       m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)), m_target(other.m_target) {}
 
-TrianglePipeline& TrianglePipeline::operator=(TrianglePipeline&& other) noexcept {
+ScenePipeline& ScenePipeline::operator=(ScenePipeline&& other) noexcept {
     if (this != &other) {
         destroy();
         m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
@@ -182,7 +187,7 @@ TrianglePipeline& TrianglePipeline::operator=(TrianglePipeline&& other) noexcept
     return *this;
 }
 
-void TrianglePipeline::destroy() noexcept {
+void ScenePipeline::destroy() noexcept {
     if (m_device == VK_NULL_HANDLE) {
         return;
     }
@@ -192,11 +197,15 @@ void TrianglePipeline::destroy() noexcept {
     m_layout = VK_NULL_HANDLE;
 }
 
-VkPipeline TrianglePipeline::handle() const noexcept {
+VkPipeline ScenePipeline::handle() const noexcept {
     return m_pipeline;
 }
 
-const RenderTargetDesc& TrianglePipeline::target() const noexcept {
+VkPipelineLayout ScenePipeline::layout() const noexcept {
+    return m_layout;
+}
+
+const RenderTargetDesc& ScenePipeline::target() const noexcept {
     return m_target;
 }
 

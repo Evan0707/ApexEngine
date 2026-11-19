@@ -98,8 +98,12 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
 
 DemoApp::DemoApp(const DemoSystems& systems, input::ActionMap actions)
     : m_window(&systems.window), m_renderer(&systems.renderer), m_debugUi(&systems.debugUi),
-      m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_actions(std::move(actions)),
-      m_frame(m_actions), m_simulation(m_actions) {}
+      m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_scene(&systems.scene),
+      m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {
+    // Fixed view over the scene until the free camera.
+    m_camera.position = {0.0f, 2.5f, 7.0f};
+    m_camera.orientation = glm::angleAxis(glm::radians(-15.0f), core::kWorldRight);
+}
 
 bool DemoApp::processInput() {
     if (m_maxFrames && m_frameCount == *m_maxFrames) {
@@ -209,7 +213,10 @@ void DemoApp::logMouseLook(const core::FixedStep& step) {
     m_mouseTotals.assign(m_mouseTotals.size(), 0.0f);
 }
 
-void DemoApp::extract(double /*alpha*/) {}
+void DemoApp::extract(double /*alpha*/) {
+    m_renderScene.camera = makeRenderCamera(m_camera);
+    m_scene->extract(m_camera.position, m_renderScene);
+}
 
 void DemoApp::render() {
     m_debugUi->buildFrame(debug::DebugPanelData{.frameTimes = m_frameTimes,
@@ -218,7 +225,7 @@ void DemoApp::render() {
                                                 .entityCount = 0,
                                                 .log = *m_logHistory});
     if (!m_failed) {
-        stopOnRenderError(m_renderer->renderFrame());
+        stopOnRenderError(m_renderer->renderFrame(m_renderScene));
     }
 }
 
