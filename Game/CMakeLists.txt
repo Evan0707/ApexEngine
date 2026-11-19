@@ -7,6 +7,8 @@ add_executable(ApexDemo
     DemoApp.h
     DemoScene.cpp
     DemoScene.h
+    FreeCamera.cpp
+    FreeCamera.h
     main.cpp
     SceneExtraction.cpp
     SceneExtraction.h

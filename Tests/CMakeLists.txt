@@ -16,6 +16,7 @@ add_executable(ApexTests
     Game/CommandLineTests.cpp
     Game/DefaultBindingsTests.cpp
     Game/DemoSceneTests.cpp
+    Game/FreeCameraTests.cpp
     Game/SceneExtractionTests.cpp
     Graphics/DeferredDeleterTests.cpp
     Graphics/DrawListTests.cpp
@@ -35,6 +36,7 @@ add_executable(ApexTests
     "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"
     "${PROJECT_SOURCE_DIR}/Game/DefaultBindings.cpp"
     "${PROJECT_SOURCE_DIR}/Game/DemoScene.cpp"
+    "${PROJECT_SOURCE_DIR}/Game/FreeCamera.cpp"
     "${PROJECT_SOURCE_DIR}/Game/SceneExtraction.cpp"
 )
 
