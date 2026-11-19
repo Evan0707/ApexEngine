@@ -1,7 +1,7 @@
 # 0008 — Ajout de Dear ImGui (interface de debug)
 
 **Date :** 19 novembre 2026
-**Statut :** proposée
+**Statut :** acceptée (validée par le développeur le 19 novembre 2026)
 
 ## Contexte
 
