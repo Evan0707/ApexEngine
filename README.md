@@ -83,6 +83,7 @@ cmake/       options de compilation communes
 - `Docs/cahier_des_charges.md` : spécification du prototype (v0.3), source de vérité.
 - `Docs/architecture.md` : architecture et revue des garde-fous.
 - `Docs/decisions/` : notes de décision.
+- `Docs/benchmark.md` : machine de référence, protocole et résultats des mesures de performance.
 - `Docs/suivi_heures.md` : heures prévues et réelles par phase.
 - `AGENTS.md` : règles pour les agents IA.
 - `ThirdPartyLicenses.md` : licences des dépendances.

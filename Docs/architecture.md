@@ -2,13 +2,13 @@
 
 Ce document décrit l'architecture réellement en place. Il est complété à la fin de chaque phase. La cible est décrite dans `cahier_des_charges.md`, section 4.
 
-## État actuel (phase 2)
+## État actuel (phase 3)
 
 | Cible CMake | Type | Contenu |
 |---|---|---|
-| `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Graphics`, `Debug`, et le SPIR-V des shaders |
-| `ApexDemo` | Exécutable | Dessine un triangle par Vulkan, affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions |
-| `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Graphics`, `Debug` et de la démo, sans fenêtre ni GPU |
+| `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Debug`, et le SPIR-V des shaders |
+| `ApexDemo` | Exécutable | Dessine une scène éclairée (sol, cubes, sphères) vue par une caméra libre, affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
+| `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Debug` et de la démo, sans fenêtre ni GPU |
 | `Apex::Options` | Cible d'interface | Options de compilation communes : C++23, avertissements en erreurs |
 
 Presets : `windows-debug`, `windows-release`, et `windows-profile` (Release instrumenté par Tracy, décision 0003). Les trois sont compilés et testés par la CI, qui installe aussi le SDK Vulkan pour `glslc`.
@@ -19,28 +19,31 @@ Les shaders GLSL sont compilés en SPIR-V par `glslc` pendant le build (`cmake/A
 
 | Module | Rôle | Dépend de | Bibliothèque tierce | Documentation |
 |---|---|---|---|---|
-| Core | Erreurs, assertions, logger, pas fixe, boucle principale, macros de profilage | Bibliothèque standard | Tracy, dans `Core/Profiling.h` uniquement et seulement avec `windows-profile` | `Engine/Core/README.md` |
+| Core | Erreurs, assertions, logger, pas fixe, boucle principale, macros de profilage, mathématiques, `WorldPosition` | Bibliothèque standard | GLM, inclus par `Core/Math.h` uniquement ; Tracy, dans `Core/Profiling.h` uniquement et seulement avec `windows-profile` | `Engine/Core/README.md` |
 | Platform | Touches physiques, événements, fenêtre, pont vers Vulkan et ImGui par handles opaques | Core | SDL3, dans `Platform/*.cpp` uniquement | `Engine/Platform/README.md` |
 | Input | Table des actions, état des actions | Core, Platform | Aucune | `Engine/Input/README.md` |
-| Graphics | Périphérique Vulkan 1.3, mémoire GPU, swapchain, frames en vol, destruction différée, triangle | Core, Platform | Vulkan-Headers, Vulkan-Loader, vk-bootstrap, VMA, dans `Graphics` uniquement | `Engine/Graphics/README.md` |
-| Debug | Statistiques de frame, historique des logs, interface Dear ImGui, panneau de la section 5.9 | Core, Platform, Graphics | Dear ImGui dans `Debug` ; SDL et Vulkan dans `Debug/ImGuiBackend.cpp` uniquement | `Engine/Debug/README.md` |
+| Resources | Données CPU des meshes et des matériaux, primitives cube et sphère | Core | Aucune (GLM par `Core`) | `Engine/Resources/README.md` |
+| Graphics | Périphérique Vulkan 1.3, mémoire GPU, swapchain, frames en vol, destruction différée, profondeur, meshes, matériaux, données par frame, `RenderScene`, éclairage PBR | Core, Platform, Resources | Vulkan-Headers, Vulkan-Loader, vk-bootstrap, VMA, dans `Graphics` uniquement | `Engine/Graphics/README.md` |
+| Debug | Statistiques de frame, mesure de performance, historique des logs, interface Dear ImGui, panneau de la section 5.9 | Core, Platform, Graphics | Dear ImGui dans `Debug` ; SDL et Vulkan dans `Debug/ImGuiBackend.cpp` uniquement | `Engine/Debug/README.md` |
 
-`Game` contient la démonstration : la table d'actions par défaut (`DefaultBindings`), les options de ligne de commande (`CommandLine`) et l'implémentation des phases de la frame (`DemoApp`). Il n'inclut ni SDL, ni Vulkan, ni ImGui.
+`Game` contient la démonstration : la table d'actions par défaut (`DefaultBindings`), les options de ligne de commande (`CommandLine`), la scène écrite en code jusqu'à la phase 5 (`DemoScene`), la caméra libre (`FreeCamera`), l'extraction vers l'espace de rendu (`SceneExtraction`, qui passera dans `World` en phase 5) et l'implémentation des phases de la frame (`DemoApp`). Il n'inclut ni SDL, ni Vulkan, ni ImGui.
 
 ## Frontières entre modules (décision 0009)
 
 - `Platform` crée la surface Vulkan sans inclure Vulkan : `Window::createVulkanSurface()` reçoit l'instance et renvoie la surface sous forme de handles opaques.
 - `Graphics` n'expose aucun type Vulkan, sauf dans `Graphics/VulkanBackendAccess.h`, réservé au backend ImGui de `Debug`.
-- L'interface de debug est dessinée par l'intermédiaire de `graphics::RenderOverlay`, à la fin de la passe principale du renderer.
+- L'interface de debug est dessinée par l'intermédiaire de `graphics::RenderOverlay`, dans une seconde passe, après la scène (décision 0011).
+- `Graphics` ne reçoit du jeu qu'une `RenderScene` (G-01) : caméra, lumière, terme ambiant et objets (handles de mesh et de matériau, matrice relative à la caméra), copiés à chaque frame.
+- Le panneau de debug ne connaît pas la caméra : il modifie une `DebugControls` que l'application applique (décision 0011).
 
-## Déroulement d'une frame (phase 2)
+## Déroulement d'une frame (phase 3)
 
-`Game/main.cpp` crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre, table d'actions, renderer, interface de debug, application. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
+`Game/main.cpp` crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre, table d'actions, renderer, interface de debug, scène de démonstration (meshes et matériaux envoyés au GPU), application. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
 
 1. **Entrées.** `DemoApp::processInput` mesure la durée de la frame précédente pour le panneau, puis vide la file d'événements de la fenêtre. Les événements bruts passent aussi à ImGui. Ceux qu'ImGui utilise sont retirés avant que l'état `frame` applique le reste. Les actions qui ne relèvent pas de la simulation (capture du curseur, panneau de debug) sont traitées ici. L'état `frame` est ensuite fusionné dans l'état `simulation`. Une demande de fermeture arrête la boucle.
-2. **Simulation.** De zéro à quatre pas de 1/60 s. Chaque pas lit uniquement l'état `simulation`, puis vide ses fronts.
-3. **Extraction.** Vide en phase 2.
-4. **Rendu.** `DebugUi::buildFrame` construit l'interface. `Renderer::renderFrame` attend la fence du créneau de frame, acquiert une image, enregistre la passe (effacement, triangle, interface) et la soumet. Fenêtre réduite : rien n'est rendu.
+2. **Simulation.** De zéro à quatre pas de 1/60 s. Chaque pas lit uniquement l'état `simulation`, puis vide ses fronts. La caméra libre (axes, course, souris si le curseur est capturé) et le cube tournant avancent d'un pas ; l'état précédent est gardé pour l'interpolation.
+3. **Extraction.** Caméra et cube tournant sont interpolés entre les deux derniers pas (`alpha`, section 5.1). Les positions monde deviennent des matrices relatives à la caméra (G-07), écrites dans la `RenderScene`.
+4. **Rendu.** `DebugUi::buildFrame` construit l'interface. `Renderer::renderFrame(scene)` attend la fence du créneau de frame, acquiert une image, résout les handles, trie les objets par matériau, écrit les données de la frame (caméra, lumière, objets, matériaux), enregistre la passe de scène (couleur et profondeur) puis la passe de l'interface, et soumet. Fenêtre réduite : rien n'est rendu.
 5. **Présentation.** `Renderer::presentFrame` présente l'image. Avec la vsync, l'attente se fait ici ou dans l'acquisition suivante.
 
 Logs : console, `Logs/apex.log` relatif au dossier de lancement, et console du panneau de debug pour les avertissements et les erreurs.
@@ -59,6 +62,8 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 | 0007 | 2 | Ajout de Vulkan Memory Allocator |
 | 0008 | 2 | Ajout de Dear ImGui, backends SDL3 et Vulkan |
 | 0009 | 2 | Frontières entre `Platform`, `Graphics` et `Debug` : handles opaques, en-tête réservé au backend ImGui |
+| 0010 | 3 | Ajout de GLM, point d'inclusion unique `Core/Math.h` |
+| 0011 | 3 | Rendu de la phase 3 : module `Resources` dès la phase 3, table des matériaux, champ de vision dans le panneau, caméra par pas fixes |
 
 ## Revue des garde-fous (AC-17)
 
@@ -66,16 +71,16 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 
 | ID | Phase 0 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 | Phase 7 | Phase 8 |
 |---|---|---|---|---|---|---|---|---|---|
-| G-01 | sans objet | sans objet | conforme | | | | | | |
-| G-02 | sans objet | sans objet | conforme | | | | | | |
-| G-03 | sans objet | sans objet | sans objet | | | | | | |
-| G-04 | sans objet | sans objet | sans objet | | | | | | |
-| G-05 | sans objet | conforme | conforme | | | | | | |
-| G-06 | conforme | conforme | conforme | | | | | | |
-| G-07 | sans objet | sans objet | sans objet | | | | | | |
-| G-08 | sans objet | sans objet | sans objet | | | | | | |
-| G-09 | sans objet | sans objet | conforme | | | | | | |
-| G-10 | conforme | conforme | conforme | | | | | | |
+| G-01 | sans objet | sans objet | conforme | conforme | | | | | |
+| G-02 | sans objet | sans objet | conforme | conforme | | | | | |
+| G-03 | sans objet | sans objet | sans objet | sans objet | | | | | |
+| G-04 | sans objet | sans objet | sans objet | conforme | | | | | |
+| G-05 | sans objet | conforme | conforme | conforme | | | | | |
+| G-06 | conforme | conforme | conforme | conforme | | | | | |
+| G-07 | sans objet | sans objet | sans objet | conforme | | | | | |
+| G-08 | sans objet | sans objet | sans objet | conforme | | | | | |
+| G-09 | sans objet | sans objet | conforme | conforme | | | | | |
+| G-10 | conforme | conforme | conforme | conforme | | | | | |
 
 Détail de la phase 1 :
 
@@ -91,3 +96,16 @@ Détail de la phase 2 :
 - **G-06 :** toujours aucune variable `static` modifiable dans `Engine/` ni `Game/` (recherche faite). Renderer, allocateur GPU, interface de debug et historique des logs sont des objets possédés par `main` et passés par référence. `ValidationLog` est utilisable depuis plusieurs threads (compteur atomique, testé depuis 8 threads), comme `LogHistory` (mutex, testé pendant que 4 threads loguent). Dear ImGui garde un pointeur global vers son contexte, un état interne à la bibliothèque comme celui de Tracy (décision 0008).
 - **G-09 :** le format de la cible et le nombre d'échantillons sont passés à la création des pipelines : `RenderTargetDesc` pour le triangle, format de la swapchain pour ImGui. Le format de la swapchain est choisi en un seul endroit (`Swapchain.cpp`), et les pipelines suivent ce format quand une recréation le change. Pas encore de tampon de profondeur (phase 3).
 - **G-10 :** `#include <SDL3/…>` dans `Platform/Window.cpp` et `Debug/ImGuiBackend.cpp` ; `#include <vulkan/…>`, `VkBootstrap.h` et `vk_mem_alloc.h` dans `Graphics`, plus `vulkan.h` dans `Debug/ImGuiBackend.cpp` ; `#include <imgui…>` dans `Debug` ; aucun dans `Game` ; aucune API Windows (recherches faites). Espace de clip de Vulkan et couleurs linéaires sur une swapchain sRGB (section 3.3) ; l'inversion de Y par la projection arrive avec la caméra en phase 3.
+
+Détail de la phase 3 :
+
+- **G-01 :** `Graphics` ne reçoit du jeu qu'une `RenderScene` copiée à chaque frame : handles de mesh et de matériau, matrices, caméra, lumière. Aucun pointeur vers les objets du jeu. Les appels Vulkan restent dans `Graphics` et dans `Debug/ImGuiBackend.cpp` (recherche faite).
+- **G-02 :** les données par objet (matrice du modèle, matrice des normales, index de matériau) sont dans un storage buffer par frame en vol ; le dessin `i` utilise `firstInstance = i`, et `Scene.vert` lit l'objet par `gl_InstanceIndex`. Aucun push constant (recherche faite).
+- **G-03 :** sans objet jusqu'à la phase 4 (cache et handles avec état de `Resources`). Les handles GPU de `Graphics` ont déjà une génération : un handle périmé ne désigne jamais un autre objet ; un mesh périmé n'est pas dessiné, un matériau périmé donne le matériau par défaut. Aucun pointeur de ressource n'est gardé d'une frame à l'autre.
+- **G-04 :** `Graphics` ne connaît que `resources::MeshData` et `resources::MaterialData`, indépendants de tout format de fichier. Pas encore d'importeur : cgltf et stb arrivent en phase 4.
+- **G-05 :** la caméra libre et le cube tournant avancent dans `simulate`, par pas fixes ; l'extraction les interpole avec `alpha`. Le temps réel n'est lu que par `MainLoop::run`, par `DemoApp` (panneau de debug et mesure de performance) et par le renderer (temps bloqué sur le GPU) ; aucune de ces valeurs n'atteint `simulate`.
+- **G-06 :** aucune variable `static` modifiable dans `Engine/` ni `Game/` (recherche faite). La scène de démonstration, la caméra, les réglages du panneau et l'enregistreur de mesure sont des objets possédés par l'application.
+- **G-07 :** les positions monde sont des `WorldPosition` (`Core/WorldPosition.h`). `Game/SceneExtraction.cpp` est le seul endroit qui les convertit : la soustraction de la position de la caméra précède tout produit de matrices (test à 10 km de l'origine). `RenderCamera::view` n'est qu'une rotation.
+- **G-08 :** un matériau est un jeu de données (`MaterialData`), copié dans une table par frame ; un seul pipeline pour tous les objets. Les shaders accèdent aux matériaux par `Shaders/Material.glsl` uniquement.
+- **G-09 :** formats de couleur et de profondeur et nombre d'échantillons passent par `RenderTargetDesc` à la création du pipeline ; le format de profondeur est choisi en un seul endroit (`Renderer.cpp`), la taille du tampon de profondeur suit la swapchain.
+- **G-10 :** confinement vérifié par recherche : Vulkan, vk-bootstrap et VMA dans `Graphics` et `Debug/ImGuiBackend.cpp` ; SDL dans `Platform/Window.cpp` et `Debug/ImGuiBackend.cpp` ; ImGui dans `Debug` ; GLM par `Core/Math.h` uniquement ; aucune API Windows. Conventions de la section 3.3 testées : repère main droite, +Y vers le haut, rotation positive vers la gauche, faces avant antihoraires des primitives, profondeur de 0 à 1 et inversion de Y dans la seule projection, face antihoraire toujours avant pour Vulkan.
