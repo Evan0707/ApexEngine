@@ -28,7 +28,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
 - `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : formats de couleur et de profondeur et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
 - `Graphics/DepthTarget.h` (`DepthTarget`) : le tampon de profondeur de la passe principale ;
-- `Graphics/ScenePipeline.h` (`ScenePipeline`) : le pipeline de la passe principale.
+- `Graphics/ScenePipeline.h` (`ScenePipeline`) : le pipeline de la passe principale ;
+- `Graphics/RendererState.h` : l'état privé du `Renderer` et ses limites (frames en vol, objets, matériaux).
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/ResourceMirror.h` (`ResourceMirror`), sans Vulkan, testé sans GPU ;
 - `Graphics/GpuTexture.h` (`GpuTexture`, `textureFormat()`, `createGpuTexture()`, `destroyGpuTexture()`) ;
@@ -46,7 +47,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Renderer::create(window, logger, validation, config)` crée le périphérique. Échec : `ErrorCode::GpuFailure` (ou `PlatformFailure` si SDL ne peut pas créer la surface), avec un message qui dit ce qui manque. Le message est aussi écrit dans le log.
 - La fenêtre, le logger et le `ValidationLog` doivent vivre plus longtemps que le renderer. Le renderer n'est ni copiable ni déplaçable : il est tenu par un `std::unique_ptr`.
 - Le destructeur attend la fin du travail du GPU, puis détruit la swapchain et les objets des frames, exécute les destructions différées restantes, et détruit enfin le périphérique, la surface et l'instance.
-- `Renderer.h` n'expose aucun type Vulkan : l'état du renderer est une structure privée, définie dans `Renderer.cpp`.
+- `Renderer.h` n'expose aucun type Vulkan : l'état du renderer est une structure privée, définie dans l'en-tête interne `RendererState.h` et partagée par trois fichiers. `Renderer.cpp` tient le périphérique, la swapchain et la boucle de frame ; `RendererResources.cpp` le reflet GPU du cache de ressources ; `RendererRecording.cpp` la liste de dessin et l'enregistrement des commandes.
 - La swapchain est créée dès `create()` quand la fenêtre a une taille : le backend Vulkan d'ImGui a besoin de son format à l'initialisation.
 - `setOverlay()` : l'overlay enregistré dessine dans une seconde passe, après la scène et sans profondeur (notes 0008 et 0011).
 

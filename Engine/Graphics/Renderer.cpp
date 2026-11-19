@@ -1,68 +1,25 @@
 #include "Graphics/Renderer.h"
 
 #include "Core/Profiling.h"
-#include "Graphics/DeferredDeleter.h"
-#include "Graphics/DepthTarget.h"
-#include "Graphics/Device.h"
-#include "Graphics/DrawList.h"
-#include "Graphics/FrameBuffers.h"
-#include "Graphics/FrameData.h"
-#include "Graphics/FrameSync.h"
-#include "Graphics/GpuAllocator.h"
-#include "Graphics/GpuMesh.h"
-#include "Graphics/GpuTexture.h"
-#include "Graphics/MaterialSets.h"
-#include "Graphics/MaterialTable.h"
-#include "Graphics/ResourceMirror.h"
-#include "Graphics/ScenePipeline.h"
-#include "Graphics/Swapchain.h"
-#include "Graphics/SwapchainState.h"
-#include "Graphics/UploadContext.h"
+#include "Graphics/RendererState.h"
 #include "Graphics/VulkanBackendAccess.h"
-#include "Resources/ResourceCache.h"
-
-#include <vulkan/vulkan.h>
 
 #include <algorithm>
-#include <array>
 #include <chrono>
-#include <cstddef>
 #include <cstdint>
 #include <format>
 #include <limits>
 #include <optional>
-#include <span>
+#include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 namespace apex::graphics {
 
 namespace {
 
-// Spec 5.4.
-constexpr std::uint32_t kFramesInFlight = 2;
-
-// Room in the per-frame material table, default material included.
-constexpr std::uint32_t kMaxMaterials = 256;
-// Material descriptor sets alive at once: every material twice (a set waiting for deferred destruction
-// and its replacement), plus the default material's.
-constexpr std::uint32_t kMaxMaterialSets = 2 * kMaxMaterials + 2;
-// Room in the per-frame object buffer; objects beyond are not drawn, with a warning.
-constexpr std::uint32_t kMaxObjects = 4096;
-
-// Linear color, written to an sRGB swapchain: a dark blue, easy to tell from a black window.
-constexpr VkClearColorValue kClearColor{{0.02f, 0.04f, 0.10f, 1.0f}};
-
 // 32-bit float depth (spec 5.4). Chosen here only, then passed to the pipelines (G-09).
 constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
-
-[[nodiscard]] std::unexpected<core::Error> vulkanError(core::Logger& logger, std::string_view what,
-                                                       VkResult result) {
-    std::string message = std::format("{} failed: VkResult {}", what, static_cast<int>(result));
-    logger.error("{}", message);
-    return core::makeError(core::ErrorCode::GpuFailure, std::move(message));
-}
 
 [[nodiscard]] std::string_view presentModeName(bool vsync) noexcept {
     return vsync ? "vsync on" : "vsync off";
@@ -73,112 +30,13 @@ constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
            format == VK_FORMAT_A8B8G8R8_SRGB_PACK32;
 }
 
-struct ImageBarrier {
-    VkImage image;
-    VkImageAspectFlags aspect;
-    VkImageLayout from;
-    VkImageLayout to;
-    VkPipelineStageFlags2 srcStage;
-    VkAccessFlags2 srcAccess;
-    VkPipelineStageFlags2 dstStage;
-    VkAccessFlags2 dstAccess;
-};
-
-void transitionImage(VkCommandBuffer commands, const ImageBarrier& transition) {
-    const VkImageMemoryBarrier2 barrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = transition.srcStage,
-        .srcAccessMask = transition.srcAccess,
-        .dstStageMask = transition.dstStage,
-        .dstAccessMask = transition.dstAccess,
-        .oldLayout = transition.from,
-        .newLayout = transition.to,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = transition.image,
-        .subresourceRange = {transition.aspect, 0, 1, 0, 1},
-    };
-    const VkDependencyInfo dependency{
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &barrier,
-    };
-    vkCmdPipelineBarrier2(commands, &dependency);
-}
-
 } // namespace
 
-// Members are destroyed in reverse order: swapchain and frames, then the deleter (which may still free
-// buffers), then the allocator, then the device.
-struct Renderer::State {
-    platform::Window* window = nullptr;
-    core::Logger* logger = nullptr;
-    std::unique_ptr<Device> device;
-    std::unique_ptr<GpuAllocator> allocator;
-    // Before the deleter: pending destructions free sets of its pool.
-    MaterialSets materialSets;
-    DeferredDeleter deleter{kFramesInFlight};
-    FrameSync frames;
-    UploadContext upload;
-    ResourceMirror<resources::MeshHandle, resources::MeshData, GpuMesh> meshes;
-    resources::MeshHandle fallbackMesh;
-    ResourceMirror<resources::TextureHandle, resources::TextureData, GpuTexture> textures;
-    // Material sets refer to texture views: all rebuilt when the textures change.
-    ResourceMirror<resources::MaterialHandle, resources::MaterialData, VkDescriptorSet> materialSetMirror;
-    std::optional<VkDescriptorSet> defaultMaterialSet;
-    std::uint64_t textureRevision = std::numeric_limits<std::uint64_t>::max();
-    MaterialTable materials{kMaxMaterials};
-    FrameBuffers frameBuffers;
-    ScenePipeline scenePipeline;
-    Swapchain swapchain;
-    DepthTarget depth;
-    FrameCounters counters;
-    RenderOverlay* overlay = nullptr;
-    bool vsync = true;
-    SwapchainState swapchainState;
-    std::uint32_t frameIndex = 0;
-    // True once the fence of a slot was waited for and the deleter advanced, until the slot is submitted
-    // again.
-    std::array<bool, kFramesInFlight> slotWaited{};
-    // Set by renderFrame, consumed by presentFrame.
-    std::optional<std::uint32_t> acquiredImage;
-    // Rebuilt each frame; kept to reuse their memory.
-    std::vector<DrawItem> drawItems;
-    // The mesh of each draw, in draw order. Valid for the frame being recorded only.
-    std::vector<const GpuMesh*> drawMeshes;
-    std::vector<VkDescriptorSet> drawMaterialSets;
-    std::vector<ObjectGpu> objectData;
-    bool warnedTooManyObjects = false;
-
-    ~State() {
-        if (device) {
-            device->waitIdle();
-        }
-        if (allocator) {
-            meshes.releaseAll([this](GpuMesh&& mesh) { destroyGpuMesh(*allocator, mesh); });
-            textures.releaseAll(
-                [this](GpuTexture&& texture) { destroyGpuTexture(device->device(), *allocator, texture); });
-        }
-    }
-
-    // False when the surface has no area yet: the frame is skipped and the recreation tried again.
-    [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
-    [[nodiscard]] core::Result<void> ensurePipeline();
-    // Resolves the handles, sorts by material and fills the frame's buffers.
-    void prepareFrame(const RenderScene& scene);
-    // The view of a texture: white for "no texture", the checker when not ready or failed (G-03).
-    [[nodiscard]] VkImageView resolveTexture(resources::TextureHandle texture,
-                                             resources::TextureHandle checker,
-                                             resources::TextureHandle white) const noexcept;
-    void syncMaterialSets(const resources::ResourceCache& cache);
-    // The object's mesh, or the fallback mesh when it is not ready (G-03). nullptr before the first sync.
-    [[nodiscard]] std::pair<const GpuMesh*, std::uint32_t>
-    resolveMesh(const RenderObject& object) const noexcept;
-    // After prepareFrame: draws what it resolved.
-    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
-    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex);
-    void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
-};
+std::unexpected<core::Error> vulkanError(core::Logger& logger, std::string_view what, VkResult result) {
+    std::string message = std::format("{} failed: VkResult {}", what, static_cast<int>(result));
+    logger.error("{}", message);
+    return core::makeError(core::ErrorCode::GpuFailure, std::move(message));
+}
 
 core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) {
     // The window can be minimized before its event is polled: it still reports its old size while the
@@ -242,180 +100,6 @@ core::Result<void> Renderer::State::ensurePipeline() {
     deleter.enqueue([old = std::move(scenePipeline)]() mutable { old = ScenePipeline(); });
     scenePipeline = std::move(*created);
     return {};
-}
-
-std::pair<const GpuMesh*, std::uint32_t>
-Renderer::State::resolveMesh(const RenderObject& object) const noexcept {
-    if (const GpuMesh* mesh = meshes.find(object.mesh)) {
-        return {mesh, object.mesh.index};
-    }
-    return {meshes.find(fallbackMesh), fallbackMesh.index};
-}
-
-void Renderer::State::prepareFrame(const RenderScene& scene) {
-    drawItems.clear();
-    for (std::uint32_t i = 0; i < scene.objects.size(); ++i) {
-        const RenderObject& object = scene.objects[i];
-        const auto [mesh, meshIndex] = resolveMesh(object);
-        if (mesh == nullptr) {
-            continue;
-        }
-        drawItems.push_back(DrawItem{
-            .objectIndex = i, .materialIndex = materials.gpuIndex(object.material), .meshIndex = meshIndex});
-    }
-    if (drawItems.size() > kMaxObjects) {
-        if (!warnedTooManyObjects) {
-            logger->warning("{} objects to draw, only the first {} are (logged once)", drawItems.size(),
-                            kMaxObjects);
-            warnedTooManyObjects = true;
-        }
-        drawItems.resize(kMaxObjects);
-    }
-    sortDrawItems(drawItems);
-
-    objectData.clear();
-    drawMeshes.clear();
-    drawMaterialSets.clear();
-    for (const DrawItem& item : drawItems) {
-        const RenderObject& object = scene.objects[item.objectIndex];
-        drawMeshes.push_back(resolveMesh(object).first);
-        const VkDescriptorSet* materialSet = materialSetMirror.find(object.material);
-        drawMaterialSets.push_back(materialSet != nullptr ? *materialSet
-                                                          : defaultMaterialSet.value_or(VK_NULL_HANDLE));
-        objectData.push_back(
-            makeObjectGpu(scene.objects[item.objectIndex].modelRelativeToCamera, item.materialIndex));
-    }
-    const VkExtent2D extent = swapchain.extent();
-    const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio), objectData, materials.gpuData());
-}
-
-void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
-    const VkImage image = swapchain.image(imageIndex);
-    // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
-    transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE,
-                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                               VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
-    // One depth buffer for both frames in flight: the previous frame's depth writes must be done.
-    constexpr VkPipelineStageFlags2 kDepthStages =
-        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-    transitionImage(commands, {depth.image(), VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
-                               VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
-                               VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
-
-    recordScenePass(commands, imageIndex);
-    // Second pass, without depth: the interface is drawn over the scene (decisions 0008 and 0011).
-    if (overlay != nullptr) {
-        transitionImage(
-            commands,
-            {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-             VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
-        recordOverlayPass(commands, imageIndex);
-    }
-
-    transitionImage(commands,
-                    {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                     VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE});
-}
-
-void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
-    const VkRenderingAttachmentInfo colorAttachment{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swapchain.imageView(imageIndex),
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue = {.color = kClearColor},
-    };
-    // Depth is not needed after the pass.
-    const VkRenderingAttachmentInfo depthAttachment{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = depth.view(),
-        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .clearValue = {.depthStencil = {1.0f, 0}},
-    };
-    const VkRenderingInfo rendering{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {{0, 0}, swapchain.extent()},
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachment,
-        .pDepthAttachment = &depthAttachment,
-    };
-    vkCmdBeginRendering(commands, &rendering);
-
-    const VkExtent2D extent = swapchain.extent();
-    const VkViewport viewport{.x = 0.0f,
-                              .y = 0.0f,
-                              .width = static_cast<float>(extent.width),
-                              .height = static_cast<float>(extent.height),
-                              .minDepth = 0.0f,
-                              .maxDepth = 1.0f};
-    const VkRect2D scissor{{0, 0}, extent};
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.handle());
-    vkCmdSetViewport(commands, 0, 1, &viewport);
-    vkCmdSetScissor(commands, 0, 1, &scissor);
-    const VkDescriptorSet frameSet = frameBuffers.descriptorSet(frameIndex);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 0, 1,
-                            &frameSet, 0, nullptr);
-
-    counters = FrameCounters{};
-    const GpuMesh* boundMesh = nullptr;
-    VkDescriptorSet boundMaterial = VK_NULL_HANDLE;
-    for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
-        const GpuMesh* mesh = drawMeshes[drawIndex];
-        const VkDescriptorSet materialSet = drawMaterialSets[drawIndex];
-        if (materialSet == VK_NULL_HANDLE) {
-            continue;
-        }
-        // Draws are sorted by material: one bind per material (spec 5.4).
-        if (materialSet != boundMaterial) {
-            vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 1, 1,
-                                    &materialSet, 0, nullptr);
-            boundMaterial = materialSet;
-        }
-        if (mesh != boundMesh) {
-            const VkDeviceSize offset = 0;
-            vkCmdBindVertexBuffers(commands, 0, 1, &mesh->vertices.buffer, &offset);
-            vkCmdBindIndexBuffer(commands, mesh->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-            boundMesh = mesh;
-        }
-        // firstInstance = place in the object buffer: the shader reads it through gl_InstanceIndex (G-02).
-        vkCmdDrawIndexed(commands, mesh->indexCount, 1, 0, 0, drawIndex);
-        ++counters.drawCalls;
-        counters.triangles += mesh->indexCount / 3;
-    }
-
-    vkCmdEndRendering(commands);
-}
-
-void Renderer::State::recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex) {
-    const VkRenderingAttachmentInfo colorAttachment{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swapchain.imageView(imageIndex),
-        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-    };
-    const VkRenderingInfo rendering{
-        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        .renderArea = {{0, 0}, swapchain.extent()},
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachment,
-    };
-    vkCmdBeginRendering(commands, &rendering);
-    overlay->record(OverlayCommands{.commandBuffer = commands, .colorFormat = swapchain.format()});
-    vkCmdEndRendering(commands);
 }
 
 core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& window, core::Logger& logger,
@@ -587,103 +271,6 @@ core::Result<void> Renderer::renderFrame(const RenderScene& scene) {
     state.frameIndex = (state.frameIndex + 1) % kFramesInFlight;
     state.acquiredImage = imageIndex;
     return {};
-}
-
-void Renderer::syncResources(const resources::ResourceCache& cache) {
-    State& state = *m_state;
-    APEX_PROFILE_SCOPE("Renderer::syncResources");
-    state.fallbackMesh = cache.fallbackMesh();
-    std::size_t uploadedMeshes = 0;
-    std::size_t uploadedTextures = 0;
-    state.meshes.sync(
-        cache.meshes(),
-        [&state, &uploadedMeshes](resources::MeshHandle,
-                                  const resources::MeshData& mesh) -> std::optional<GpuMesh> {
-            core::Result<GpuMesh> created = createGpuMesh(*state.allocator, state.upload, mesh.name, mesh);
-            if (!created) {
-                state.logger->error("{}", created.error().message);
-                return std::nullopt;
-            }
-            ++uploadedMeshes;
-            return *created;
-        },
-        [&state](GpuMesh&& mesh) {
-            // A frame in flight may still draw it.
-            state.deleter.enqueue(
-                [allocator = state.allocator.get(), mesh] { destroyGpuMesh(*allocator, mesh); });
-        });
-    state.textures.sync(
-        cache.textures(),
-        [&state, &uploadedTextures](resources::TextureHandle,
-                                    const resources::TextureData& texture) -> std::optional<GpuTexture> {
-            core::Result<GpuTexture> created = createGpuTexture(state.device->device(), *state.allocator,
-                                                                state.upload, texture.name, texture);
-            if (!created) {
-                state.logger->error("{}", created.error().message);
-                return std::nullopt;
-            }
-            ++uploadedTextures;
-            return *created;
-        },
-        [&state](GpuTexture&& texture) {
-            state.deleter.enqueue([device = state.device->device(), allocator = state.allocator.get(),
-                                   texture] { destroyGpuTexture(device, *allocator, texture); });
-        });
-    state.syncMaterialSets(cache);
-    if (uploadedMeshes + uploadedTextures > 0) {
-        const GpuMemoryStats memory = state.allocator->memoryStats();
-        state.logger->info("GPU upload: {} mesh(es), {} texture(s); GPU memory {:.0f} MiB used",
-                           uploadedMeshes, uploadedTextures,
-                           static_cast<double>(memory.usedBytes) / (1024.0 * 1024.0));
-    }
-    if (const std::size_t leftOut = state.materials.sync(cache.materials()); leftOut > 0) {
-        state.logger->warning("{} material(s) beyond the table's {} entries get the default material",
-                              leftOut, kMaxMaterials);
-    }
-}
-
-VkImageView Renderer::State::resolveTexture(resources::TextureHandle texture,
-                                            resources::TextureHandle checker,
-                                            resources::TextureHandle white) const noexcept {
-    const resources::TextureHandle wanted = texture == resources::TextureHandle{} ? white : texture;
-    if (const GpuTexture* found = textures.find(wanted)) {
-        return found->view;
-    }
-    const GpuTexture* fallback = textures.find(checker);
-    return fallback != nullptr ? fallback->view : VK_NULL_HANDLE;
-}
-
-void Renderer::State::syncMaterialSets(const resources::ResourceCache& cache) {
-    const auto freeLater = [this](VkDescriptorSet&& set) {
-        deleter.enqueue([this, set] { materialSets.free(set); });
-    };
-    if (cache.textures().revision() != textureRevision) {
-        textureRevision = cache.textures().revision();
-        materialSetMirror.releaseAll(freeLater);
-        if (defaultMaterialSet) {
-            freeLater(std::move(*defaultMaterialSet));
-        }
-        const VkImageView white = resolveTexture({}, cache.checkerTexture(), cache.whiteTexture());
-        defaultMaterialSet = white != VK_NULL_HANDLE ? materialSets.allocate(white, white) : std::nullopt;
-    }
-    materialSetMirror.sync(
-        cache.materials(),
-        [this, &cache](resources::MaterialHandle,
-                       const resources::MaterialData& material) -> std::optional<VkDescriptorSet> {
-            const VkImageView baseColor =
-                resolveTexture(material.baseColorTexture, cache.checkerTexture(), cache.whiteTexture());
-            const VkImageView metallicRoughness = resolveTexture(
-                material.metallicRoughnessTexture, cache.checkerTexture(), cache.whiteTexture());
-            if (baseColor == VK_NULL_HANDLE || metallicRoughness == VK_NULL_HANDLE) {
-                return std::nullopt;
-            }
-            std::optional<VkDescriptorSet> set = materialSets.allocate(baseColor, metallicRoughness);
-            if (!set) {
-                logger->warning("No room for another material descriptor set: the default material is used");
-            }
-            return set;
-        },
-        freeLater);
 }
 
 GpuMemoryStats Renderer::memoryStats() const {

@@ -84,6 +84,9 @@ add_library(ApexEngine STATIC
     Graphics/RenderOverlay.h
     Graphics/RenderScene.h
     Graphics/Renderer.cpp
+    Graphics/RendererRecording.cpp
+    Graphics/RendererResources.cpp
+    Graphics/RendererState.h
     Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
     Graphics/ResourceMirror.h
