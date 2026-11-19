@@ -6,9 +6,13 @@
 #include "Graphics/Device.h"
 #include "Graphics/FrameSync.h"
 #include "Graphics/GpuAllocator.h"
+#include "Graphics/GpuMesh.h"
+#include "Graphics/HandlePool.h"
+#include "Graphics/MaterialTable.h"
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
 #include "Graphics/TrianglePipeline.h"
+#include "Graphics/UploadContext.h"
 #include "Graphics/VulkanBackendAccess.h"
 
 #include <vulkan/vulkan.h>
@@ -31,6 +35,9 @@ namespace {
 
 // Spec 5.4.
 constexpr std::uint32_t kFramesInFlight = 2;
+
+// Room in the per-frame material table, default material included.
+constexpr std::uint32_t kMaxMaterials = 256;
 
 // Linear color, written to an sRGB swapchain: a dark blue, easy to tell from a black window.
 constexpr VkClearColorValue kClearColor{{0.02f, 0.04f, 0.10f, 1.0f}};
@@ -105,6 +112,9 @@ struct Renderer::State {
     std::unique_ptr<GpuAllocator> allocator;
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
+    UploadContext upload;
+    HandlePool<MeshHandle, GpuMesh> meshes;
+    MaterialTable materials{kMaxMaterials};
     GpuBuffer triangleVertices;
     TrianglePipeline trianglePipeline;
     Swapchain swapchain;
@@ -126,6 +136,9 @@ struct Renderer::State {
         }
         if (allocator && triangleVertices.buffer != VK_NULL_HANDLE) {
             allocator->destroyBuffer(triangleVertices);
+        }
+        if (allocator) {
+            meshes.forEach([this](const GpuMesh& mesh) { destroyGpuMesh(*allocator, mesh); });
         }
     }
 
@@ -346,6 +359,14 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     }
     state->frames = std::move(*frames);
 
+    core::Result<UploadContext> upload = UploadContext::create(
+        state->device->device(), state->device->graphicsQueueFamily(), state->device->graphicsQueue());
+    if (!upload) {
+        logger.error("{}", upload.error().message);
+        return std::unexpected(upload.error());
+    }
+    state->upload = std::move(*upload);
+
     // Created now when the window has a size: the debug interface needs its format at creation.
     // Otherwise the first renderFrame creates it.
     if (const platform::PixelSize size = window.sizeInPixels(); size.width > 0 && size.height > 0) {
@@ -453,6 +474,36 @@ core::Result<void> Renderer::renderFrame() {
     state.frameIndex = (state.frameIndex + 1) % kFramesInFlight;
     state.acquiredImage = imageIndex;
     return {};
+}
+
+core::Result<MeshHandle> Renderer::createMesh(std::string_view name, const resources::MeshData& mesh) {
+    State& state = *m_state;
+    core::Result<GpuMesh> created = createGpuMesh(*state.allocator, state.upload, name, mesh);
+    if (!created) {
+        state.logger->error("{}", created.error().message);
+        return std::unexpected(created.error());
+    }
+    return state.meshes.add(*created);
+}
+
+void Renderer::destroyMesh(MeshHandle mesh) {
+    State& state = *m_state;
+    if (std::optional<GpuMesh> removed = state.meshes.remove(mesh)) {
+        state.deleter.enqueue(
+            [allocator = state.allocator.get(), gpuMesh = *removed] { destroyGpuMesh(*allocator, gpuMesh); });
+    }
+}
+
+core::Result<MaterialHandle> Renderer::createMaterial(const resources::MaterialData& material) {
+    core::Result<MaterialHandle> handle = m_state->materials.add(material);
+    if (!handle) {
+        m_state->logger->error("{}", handle.error().message);
+    }
+    return handle;
+}
+
+void Renderer::destroyMaterial(MaterialHandle material) {
+    (void)m_state->materials.remove(material);
 }
 
 GpuMemoryStats Renderer::memoryStats() const {

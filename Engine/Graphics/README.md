@@ -17,7 +17,7 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
-| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
+| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `createMesh()`, `destroyMesh()`, `createMaterial()`, `destroyMaterial()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
 
 En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
@@ -33,7 +33,10 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/HandlePool.h` (`HandlePool`), sans Vulkan, testé sans GPU ;
 - `Graphics/Projection.h` (`perspectiveProjection()`), sans Vulkan, testé sans GPU ;
-- `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU.
+- `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU ;
+- `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
+- `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
+- `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`), sans Vulkan, testé sans GPU.
 
 ## Renderer
 
@@ -69,6 +72,12 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `perspectiveProjection()` est le seul endroit qui connaît l'espace de clip de Vulkan (section 3.3) : vue main droite tournée vers −Z, profondeur de 0 (plan proche) à 1 (plan lointain), Y inversé pour que le haut de la vue soit en haut de l'écran. Une face antihoraire vue de la caméra reste une face avant pour Vulkan : un test le vérifie avec la formule d'aire de la spécification Vulkan.
 - Handles (`MeshHandle`, `MaterialHandle`) : un index et une génération. Détruire l'objet rend le handle périmé, même quand l'emplacement est réutilisé. Le handle par défaut n'est jamais valide.
 - La liste d'objets est triée par matériau, puis par mesh, en gardant l'ordre de la scène dans un groupe (`sortDrawItems()`, section 5.4).
+
+## Meshes et matériaux
+
+- `createMesh(name, meshData)` valide le mesh (`resources::validate`), crée ses buffers de sommets et d'indices en mémoire GPU, les remplit par des buffers de transit et attend la fin de la copie : à utiliser au chargement, pas à chaque frame. Une barrière à la fin de la copie rend les données visibles aux frames suivantes. En cas d'échec, l'erreur nomme le mesh et elle est écrite dans le log (section 5.4).
+- `destroyMesh(handle)` retire le mesh tout de suite ; ses buffers passent par la destruction différée. Un handle périmé est ignoré. Les meshes encore présents à la fermeture sont détruits par le renderer.
+- Matériaux (note 0011) : une table de 256 entrées au plus, dont l'entrée 0, le matériau par défaut. `createMaterial()` refuse une table pleine ou un facteur hors de [0 ; 1]. Un objet dont le handle de matériau est périmé ou par défaut reçoit le matériau par défaut. La table est recopiée dans le buffer de chaque frame : retirer un matériau ne gêne pas une frame en vol, et l'emplacement est réutilisé tout de suite.
 
 ## Swapchain
 

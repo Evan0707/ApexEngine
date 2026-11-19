@@ -44,6 +44,9 @@ public:
     // the error message (spec 5.4) and in VMA's statistics.
     [[nodiscard]] core::Result<GpuBuffer>
     createBufferWithData(std::string_view name, VkBufferUsageFlags usage, std::span<const std::byte> data);
+    // Device-local, filled by a copy (UploadContext): meshes. The name appears in the error message.
+    [[nodiscard]] core::Result<GpuBuffer> createDeviceBuffer(std::string_view name, VkDeviceSize size,
+                                                             VkBufferUsageFlags usage);
     // Immediate: the caller makes sure no frame in flight still uses the buffer (DeferredDeleter).
     void destroyBuffer(const GpuBuffer& buffer) noexcept;
 

@@ -62,7 +62,11 @@ add_library(ApexEngine STATIC
     Graphics/GpuAllocator.h
     Graphics/GpuHandles.h
     Graphics/GpuMemoryStats.h
+    Graphics/GpuMesh.cpp
+    Graphics/GpuMesh.h
     Graphics/HandlePool.h
+    Graphics/MaterialTable.cpp
+    Graphics/MaterialTable.h
     Graphics/Projection.cpp
     Graphics/Projection.h
     Graphics/RenderOverlay.h
@@ -78,6 +82,8 @@ add_library(ApexEngine STATIC
     Graphics/SwapchainState.h
     Graphics/TrianglePipeline.cpp
     Graphics/TrianglePipeline.h
+    Graphics/UploadContext.cpp
+    Graphics/UploadContext.h
     Graphics/ValidationLog.cpp
     Graphics/ValidationLog.h
     Graphics/VmaImplementation.cpp

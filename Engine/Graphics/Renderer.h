@@ -3,13 +3,17 @@
 #include "Core/Error.h"
 #include "Core/Logger.h"
 #include "Graphics/FrameCounters.h"
+#include "Graphics/GpuHandles.h"
 #include "Graphics/GpuMemoryStats.h"
 #include "Graphics/RenderOverlay.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
+#include "Resources/MaterialData.h"
+#include "Resources/MeshData.h"
 
 #include <memory>
 #include <string>
+#include <string_view>
 
 namespace apex::graphics {
 
@@ -48,6 +52,16 @@ public:
     [[nodiscard]] core::Result<void> renderFrame();
     // Presentation phase: presents the image of the last renderFrame, if there is one.
     [[nodiscard]] core::Result<void> presentFrame();
+
+    // Uploads the mesh and waits for the copy: meant for loading time. The error names the mesh, and is
+    // logged too (spec 5.4).
+    [[nodiscard]] core::Result<MeshHandle> createMesh(std::string_view name, const resources::MeshData& mesh);
+    // The GPU memory is freed once no frame in flight draws the mesh. A stale handle is ignored.
+    void destroyMesh(MeshHandle mesh);
+    // Fails, with a log line, when the table is full or a factor is outside [0, 1].
+    [[nodiscard]] core::Result<MaterialHandle> createMaterial(const resources::MaterialData& material);
+    // Objects that still use the handle get the default material. A stale handle is ignored.
+    void destroyMaterial(MaterialHandle material);
 
     [[nodiscard]] GpuMemoryStats memoryStats() const;
     // Counters of the last rendered frame. Unchanged by a skipped frame.

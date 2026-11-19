@@ -67,6 +67,30 @@ core::Result<GpuBuffer> GpuAllocator::createBufferWithData(std::string_view name
     return buffer;
 }
 
+core::Result<GpuBuffer> GpuAllocator::createDeviceBuffer(std::string_view name, VkDeviceSize size,
+                                                         VkBufferUsageFlags usage) {
+    APEX_ASSERT(size > 0, "A buffer cannot be empty");
+    const VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                        .size = size,
+                                        .usage = usage,
+                                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+    VmaAllocationCreateInfo allocationInfo{};
+    allocationInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+
+    GpuBuffer buffer;
+    buffer.size = size;
+    if (const VkResult result = vmaCreateBuffer(m_allocator, &bufferInfo, &allocationInfo, &buffer.buffer,
+                                                &buffer.allocation, nullptr);
+        result != VK_SUCCESS) {
+        return core::makeError(core::ErrorCode::GpuFailure,
+                               std::format("Cannot create the GPU buffer '{}' ({} bytes): VkResult {}", name,
+                                           size, static_cast<int>(result)));
+    }
+    const std::string ownedName(name);
+    vmaSetAllocationName(m_allocator, buffer.allocation, ownedName.c_str());
+    return buffer;
+}
+
 void GpuAllocator::destroyBuffer(const GpuBuffer& buffer) noexcept {
     vmaDestroyBuffer(m_allocator, buffer.buffer, buffer.allocation);
 }
