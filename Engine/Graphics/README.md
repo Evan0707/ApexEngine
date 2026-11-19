@@ -2,7 +2,7 @@
 
 **Rôle :** renderer Vulkan 1.3, seul module qui émet des appels GPU (cahier des charges, sections 4.3 et 5.4, garde-fou G-01).
 
-**État (phase 2, tâche 5) :** périphérique, swapchain sRGB et deux frames en vol. Chaque frame efface la fenêtre en bleu nuit ; le triangle arrive avec la tâche 8. Notes de décision `0006-chaine-vulkan.md` et `0009-frontieres-platform-graphics-debug.md`.
+**État (phase 2, tâche 8) :** périphérique, mémoire GPU (VMA), swapchain sRGB, deux frames en vol, shaders compilés pendant le build. Chaque frame efface la fenêtre en bleu nuit et dessine un triangle coloré. Notes de décision `0006-chaine-vulkan.md` et `0009-frontieres-platform-graphics-debug.md`.
 
 ## Interface publique
 
@@ -11,8 +11,9 @@ Aucun en-tête public n'inclut Vulkan : `Game` peut les inclure tous.
 | En-tête | Contenu |
 |---|---|
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
+| `Graphics/FrameCounters.h` | `FrameCounters` : appels de dessin et triangles de la dernière frame |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
-| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()`, `memoryStats()` |
+| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()` |
 
 En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
@@ -21,7 +22,9 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/Swapchain.h` (`SwapchainConfig`, `Swapchain`) ;
 - `Graphics/SwapchainState.h` (`FrameDecision`, `SwapchainState`), sans Vulkan, testé sans GPU ;
 - `Graphics/ShaderBinaries.h` : le SPIR-V des shaders, embarqué dans le binaire ;
-- `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp`.
+- `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
+- `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : format et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
+- `Graphics/TrianglePipeline.h` (`TriangleVertex`, `TrianglePipeline`).
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`).
 
 ## Renderer
@@ -38,6 +41,14 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Le sémaphore « rendu terminé », attendu par la présentation, existe une fois par **image** de la swapchain, et non par frame en vol. Avec un sémaphore par frame, il pourrait être signalé de nouveau alors que la présentation précédente l'attend encore.
 - Le rendu se fait par dynamic rendering, sans render pass. Les transitions d'image utilisent synchronization2.
 - Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
+
+## Triangle (phase 2)
+
+- Trois sommets en dur dans `Renderer.cpp` (position déjà dans l'espace de clip de Vulkan, couleur linéaire), copiés une fois dans un vertex buffer créé par VMA.
+- Pipeline sans descripteur ni push constant (G-02), viewport et scissor dynamiques, dynamic rendering. Pas d'élimination des faces avant la caméra de la phase 3 ; faces avant dans le sens antihoraire, comme glTF.
+- Le pipeline est créé avec la swapchain, pour son format. Si une recréation change le format, l'ancien pipeline passe par la destruction différée.
+- `lastFrameCounters()` : un appel de dessin et un triangle par frame rendue.
+- Remplacé en phase 3 par les meshes, le format de sommet unique et la `RenderScene`.
 
 ## Swapchain
 

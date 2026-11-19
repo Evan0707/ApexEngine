@@ -2,6 +2,7 @@
 
 #include "Core/Error.h"
 #include "Core/Logger.h"
+#include "Graphics/FrameCounters.h"
 #include "Graphics/GpuMemoryStats.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
@@ -46,6 +47,8 @@ public:
     [[nodiscard]] core::Result<void> presentFrame();
 
     [[nodiscard]] GpuMemoryStats memoryStats() const;
+    // Counters of the last rendered frame. Unchanged by a skipped frame.
+    [[nodiscard]] FrameCounters lastFrameCounters() const noexcept;
 
 private:
     std::unique_ptr<State> m_state;

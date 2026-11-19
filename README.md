@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 2 en cours (Vulkan, swapchain, triangle, ImGui).** `ApexDemo` ouvre une fenêtre, l'efface en bleu nuit par Vulkan 1.3 à chaque frame, fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 2 en cours (Vulkan, swapchain, triangle, ImGui).** `ApexDemo` ouvre une fenêtre et y dessine par Vulkan 1.3 un triangle coloré sur fond bleu nuit, fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 

@@ -37,12 +37,14 @@ add_library(ApexEngine STATIC
     Graphics/DeferredDeleter.h
     Graphics/Device.cpp
     Graphics/Device.h
+    Graphics/FrameCounters.h
     Graphics/FrameSync.cpp
     Graphics/FrameSync.h
     Graphics/GpuAllocator.cpp
     Graphics/GpuAllocator.h
     Graphics/GpuMemoryStats.h
     Graphics/Renderer.cpp
+    Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
     Graphics/ShaderBinaries.cpp
     Graphics/ShaderBinaries.h
@@ -50,6 +52,8 @@ add_library(ApexEngine STATIC
     Graphics/Swapchain.h
     Graphics/SwapchainState.cpp
     Graphics/SwapchainState.h
+    Graphics/TrianglePipeline.cpp
+    Graphics/TrianglePipeline.h
     Graphics/ValidationLog.cpp
     Graphics/ValidationLog.h
     Graphics/VmaImplementation.cpp

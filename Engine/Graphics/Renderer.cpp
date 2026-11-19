@@ -7,14 +7,17 @@
 #include "Graphics/GpuAllocator.h"
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
+#include "Graphics/TrianglePipeline.h"
 
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <format>
 #include <limits>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <utility>
 
@@ -27,6 +30,13 @@ constexpr std::uint32_t kFramesInFlight = 2;
 
 // Linear color, written to an sRGB swapchain: a dark blue, easy to tell from a black window.
 constexpr VkClearColorValue kClearColor{{0.02f, 0.04f, 0.10f, 1.0f}};
+
+// Vulkan clip space: +Y points down until the phase 3 projection flips it (spec 3.3). Linear colors.
+constexpr std::array<TriangleVertex, 3> kTriangle{{
+    {{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+    {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+}};
 
 [[nodiscard]] std::unexpected<core::Error> vulkanError(core::Logger& logger, std::string_view what,
                                                        VkResult result) {
@@ -79,7 +89,10 @@ struct Renderer::State {
     std::unique_ptr<GpuAllocator> allocator;
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
+    GpuBuffer triangleVertices;
+    TrianglePipeline trianglePipeline;
     Swapchain swapchain;
+    FrameCounters counters;
     bool vsync = true;
     SwapchainState swapchainState;
     std::uint32_t frameIndex = 0;
@@ -93,11 +106,15 @@ struct Renderer::State {
         if (device) {
             device->waitIdle();
         }
+        if (allocator && triangleVertices.buffer != VK_NULL_HANDLE) {
+            allocator->destroyBuffer(triangleVertices);
+        }
     }
 
     // False when the surface has no area yet: the frame is skipped and the recreation tried again.
     [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
-    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) const;
+    [[nodiscard]] core::Result<void> ensurePipeline();
+    void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
 };
 
 core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) {
@@ -124,6 +141,9 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     // The old swapchain is destroyed here, after the new one was created from it.
     swapchain = std::move(*created);
     swapchainState.recreated(size);
+    if (core::Result<void> pipeline = ensurePipeline(); !pipeline) {
+        return std::unexpected(pipeline.error());
+    }
 
     const VkExtent2D extent = swapchain.extent();
     logger->info("Swapchain: {}x{} pixels, {} images, format {}, {}", extent.width, extent.height,
@@ -134,7 +154,23 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     return true;
 }
 
-void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) const {
+core::Result<void> Renderer::State::ensurePipeline() {
+    const RenderTargetDesc target{.colorFormat = swapchain.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
+    if (trianglePipeline.handle() != VK_NULL_HANDLE && trianglePipeline.target() == target) {
+        return {};
+    }
+    core::Result<TrianglePipeline> created = TrianglePipeline::create(device->device(), target);
+    if (!created) {
+        logger->error("{}", created.error().message);
+        return std::unexpected(created.error());
+    }
+    // A frame in flight may still use the old pipeline.
+    deleter.enqueue([old = std::move(trianglePipeline)]() mutable { old = TrianglePipeline(); });
+    trianglePipeline = std::move(*created);
+    return {};
+}
+
+void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
     const VkImage image = swapchain.image(imageIndex);
     // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
     transitionImage(commands, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -157,6 +193,23 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
         .pColorAttachments = &colorAttachment,
     };
     vkCmdBeginRendering(commands, &rendering);
+
+    const VkExtent2D extent = swapchain.extent();
+    const VkViewport viewport{.x = 0.0f,
+                              .y = 0.0f,
+                              .width = static_cast<float>(extent.width),
+                              .height = static_cast<float>(extent.height),
+                              .minDepth = 0.0f,
+                              .maxDepth = 1.0f};
+    const VkRect2D scissor{{0, 0}, extent};
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline.handle());
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    const VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(commands, 0, 1, &triangleVertices.buffer, &offset);
+    vkCmdDraw(commands, static_cast<std::uint32_t>(kTriangle.size()), 1, 0, 0);
+    counters = FrameCounters{.drawCalls = 1, .triangles = kTriangle.size() / 3};
+
     vkCmdEndRendering(commands);
 
     transitionImage(commands, image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -185,6 +238,14 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
         return std::unexpected(allocator.error());
     }
     state->allocator = std::move(*allocator);
+
+    core::Result<GpuBuffer> vertices = state->allocator->createBufferWithData(
+        "Triangle vertices", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, std::as_bytes(std::span(kTriangle)));
+    if (!vertices) {
+        logger.error("{}", vertices.error().message);
+        return std::unexpected(vertices.error());
+    }
+    state->triangleVertices = *vertices;
     const GpuMemoryStats memory = state->allocator->memoryStats();
     constexpr double kMebibyte = 1024.0 * 1024.0;
     logger.info("GPU memory: {:.0f} MiB used, {:.0f} MiB budget{}",
@@ -302,6 +363,10 @@ core::Result<void> Renderer::renderFrame() {
 
 GpuMemoryStats Renderer::memoryStats() const {
     return m_state->allocator->memoryStats();
+}
+
+FrameCounters Renderer::lastFrameCounters() const noexcept {
+    return m_state->counters;
 }
 
 core::Result<void> Renderer::presentFrame() {
