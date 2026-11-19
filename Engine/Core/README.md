@@ -2,7 +2,7 @@
 
 **Rôle :** socle du moteur. À terme : boucle à pas fixe, temps, logs, erreurs (cahier des charges, sections 4 et 5.1).
 
-**État (fin de phase 1) :** version du moteur, erreurs, assertions, logger, pas fixe, boucle principale et macros de profilage.
+**État (fin de phase 2) :** version du moteur, erreurs (dont `GpuFailure`, ajouté en phase 2), assertions, logger, pas fixe, boucle principale et macros de profilage.
 
 ## Interface publique
 
@@ -33,7 +33,7 @@
 - Le logger est utilisable depuis plusieurs threads. Les sinks sont appelés sous verrou, un message à la fois, dans l'ordre d'ajout ; un sink n'a donc pas à se protéger lui-même.
 - Format d'une ligne : `2026-11-19 14:03:22.123 [warning] message`, heure en UTC.
 - `FileLogSink` crée les dossiers manquants, écrase le fichier de l'exécution précédente et vide son tampon après chaque ligne, pour qu'un plantage ne perde rien.
-- Le panneau ImGui de la phase 2 sera un sink de plus.
+- La console du panneau de debug est un sink de plus : `debug::LogHistorySink`, dans le module `Debug`.
 
 ## Pas fixe et boucle principale
 
@@ -57,4 +57,4 @@
 
 ## Dépendances
 
-Bibliothèque standard (GLM arrivera en phase 2). Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.
+Bibliothèque standard (GLM arrivera en phase 3, décision 0006). Tracy, uniquement dans `Core/Profiling.h` et seulement avec `APEX_ENABLE_PROFILING`. Aucun autre module du moteur.
