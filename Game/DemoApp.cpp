@@ -244,6 +244,10 @@ void DemoApp::logBenchmark() const {
                    "graphics options: none",
                    kBuildName, size.width, size.height, m_vsync ? "on" : "off", counters.drawCalls,
                    counters.triangles);
+    // Compared with the "GPU upload" line: a drift during the run would show here (spec 7.2).
+    constexpr double kMebibyte = 1024.0 * 1024.0;
+    m_logger->info("Benchmark end: GPU memory {:.0f} MiB used",
+                   static_cast<double>(m_renderer->memoryStats().usedBytes) / kMebibyte);
 }
 
 void DemoApp::simulate(const core::FixedStep& step) {

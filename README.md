@@ -46,7 +46,7 @@ Remplacer `windows-debug` par `windows-release` pour la configuration Release, o
 | `--no-vsync` | Désactive la synchronisation verticale, pour les mesures |
 | `--assets DIR` | Dossier des assets ; par défaut, le dossier `Assets` copié à côté de l'exécutable par le build |
 | `--model PATH` | Ajoute un modèle, chemin relatif au dossier des assets, posé au sol devant la caméra. Un modèle introuvable ou invalide est remplacé par un cube en damier magenta, et l'erreur est logée avec le chemin (AC-11) |
-| `--benchmark S` | Mesure de performance (section 7.1) : la caméra suit un cercle autour de la scène ; après 2 s de mise en route, S secondes de frames sont mesurées, le résultat est logué, puis l'application quitte. À lancer en Release avec `--no-vsync` (voir `Docs/benchmark.md`) |
+| `--benchmark S` | Mesure de performance (section 7.1) : la caméra suit un cercle autour de la scène ; après 2 s de mise en route, S secondes de frames sont mesurées, le résultat est logué avec la mémoire GPU de fin de mesure, puis l'application quitte. À lancer en Release avec `--no-vsync` (voir `Docs/benchmark.md`) |
 
 | Code de sortie | Signification |
 |---|---|

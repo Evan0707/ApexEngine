@@ -593,14 +593,18 @@ void Renderer::syncResources(const resources::ResourceCache& cache) {
     State& state = *m_state;
     APEX_PROFILE_SCOPE("Renderer::syncResources");
     state.fallbackMesh = cache.fallbackMesh();
+    std::size_t uploadedMeshes = 0;
+    std::size_t uploadedTextures = 0;
     state.meshes.sync(
         cache.meshes(),
-        [&state](resources::MeshHandle, const resources::MeshData& mesh) -> std::optional<GpuMesh> {
+        [&state, &uploadedMeshes](resources::MeshHandle,
+                                  const resources::MeshData& mesh) -> std::optional<GpuMesh> {
             core::Result<GpuMesh> created = createGpuMesh(*state.allocator, state.upload, mesh.name, mesh);
             if (!created) {
                 state.logger->error("{}", created.error().message);
                 return std::nullopt;
             }
+            ++uploadedMeshes;
             return *created;
         },
         [&state](GpuMesh&& mesh) {
@@ -610,14 +614,15 @@ void Renderer::syncResources(const resources::ResourceCache& cache) {
         });
     state.textures.sync(
         cache.textures(),
-        [&state](resources::TextureHandle,
-                 const resources::TextureData& texture) -> std::optional<GpuTexture> {
+        [&state, &uploadedTextures](resources::TextureHandle,
+                                    const resources::TextureData& texture) -> std::optional<GpuTexture> {
             core::Result<GpuTexture> created = createGpuTexture(state.device->device(), *state.allocator,
                                                                 state.upload, texture.name, texture);
             if (!created) {
                 state.logger->error("{}", created.error().message);
                 return std::nullopt;
             }
+            ++uploadedTextures;
             return *created;
         },
         [&state](GpuTexture&& texture) {
@@ -625,6 +630,12 @@ void Renderer::syncResources(const resources::ResourceCache& cache) {
                                    texture] { destroyGpuTexture(device, *allocator, texture); });
         });
     state.syncMaterialSets(cache);
+    if (uploadedMeshes + uploadedTextures > 0) {
+        const GpuMemoryStats memory = state.allocator->memoryStats();
+        state.logger->info("GPU upload: {} mesh(es), {} texture(s); GPU memory {:.0f} MiB used",
+                           uploadedMeshes, uploadedTextures,
+                           static_cast<double>(memory.usedBytes) / (1024.0 * 1024.0));
+    }
     if (const std::size_t leftOut = state.materials.sync(cache.materials()); leftOut > 0) {
         state.logger->warning("{} material(s) beyond the table's {} entries get the default material",
                               leftOut, kMaxMaterials);

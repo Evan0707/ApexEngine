@@ -42,7 +42,7 @@ public:
     GpuAllocator(const GpuAllocator&) = delete;
     GpuAllocator& operator=(const GpuAllocator&) = delete;
 
-    // Host-visible buffer written once at creation: fine for small static data. The name appears in
+    // Host-visible buffer written once at creation: the staging buffers of UploadContext. The name appears in
     // the error message (spec 5.4) and in VMA's statistics.
     [[nodiscard]] core::Result<GpuBuffer>
     createBufferWithData(std::string_view name, VkBufferUsageFlags usage, std::span<const std::byte> data);

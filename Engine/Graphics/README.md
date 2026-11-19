@@ -85,6 +85,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Jeu de descripteurs par matériau (section 5.4, note 0014), le jeu 1 : texture de couleur de base (binding 0) et texture métal-rugosité (binding 1), par un seul sampler linéaire et répétant. Un handle de texture par défaut (« pas de texture ») donne la texture blanche ; une texture en chargement, en échec ou périmée donne le damier magenta (G-03).
 - Les jeux renvoient à des vues d'image : quand le pool de textures change, tous les jeux de matériau sont refaits, et les anciens libérés par la destruction différée. Le matériau par défaut a son propre jeu (deux textures blanches). Si le pool de descripteurs est plein, un avertissement est écrit et le matériau reçoit le jeu par défaut.
 - Les dessins sont triés par matériau : le jeu 1 n'est lié qu'au changement de matériau.
+- Après chaque synchronisation qui a envoyé quelque chose, une ligne de log donne le nombre de meshes et de textures envoyés et la mémoire GPU utilisée : de quoi suivre la dérive mémoire (AC-14, AC-15).
 - À la destruction du renderer, tous les meshes et toutes les textures encore présents sur le GPU sont libérés.
 
 ## Données par frame (G-02)
@@ -116,7 +117,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Toute la mémoire GPU passe par `GpuAllocator`, qui encapsule VMA (note 0007). Il est créé après le périphérique, détruit après tous les buffers et avant le périphérique.
 - `createBufferWithData(name, usage, data)` crée un buffer visible par le CPU et le remplit une fois : suffisant pour de petites données statiques (le triangle). Les transferts par buffer intermédiaire viendront avec les meshes. Un échec renvoie `ErrorCode::GpuFailure` avec le nom du buffer (section 5.4).
 - `createImage(name, info, dedicated)` crée une image en mémoire GPU ; dans son propre bloc pour une cible de rendu (`dedicated`), sous-allouée pour une texture. `destroyImage()` la libère immédiatement.
-- `memoryStats()` additionne l'usage et le budget des tas `DEVICE_LOCAL` (section 5.9). Le budget est exact quand `VK_EXT_memory_budget` est disponible (activée si le pilote la propose), estimé sinon. La valeur est écrite dans le log au démarrage.
+- `memoryStats()` additionne l'usage et le budget des tas `DEVICE_LOCAL` (section 5.9). Avec `VK_EXT_memory_budget`, l'usage est celui de tout le processus dans ces tas : blocs réservés par VMA (plus grands que les ressources qu'ils contiennent), swapchain et allocations du pilote. Sur la machine de référence, la scène de la phase 4 (environ 40 Mio de textures et de meshes) affiche environ 220 Mio ; la valeur à surveiller est sa stabilité dans le temps, pas son niveau. Le budget est exact quand `VK_EXT_memory_budget` est disponible (activée si le pilote la propose), estimé sinon. La valeur est écrite dans le log au démarrage.
 - L'implémentation de VMA compile sans avertissement en `/W4` : aucun avertissement n'est désactivé.
 
 ## Destruction différée

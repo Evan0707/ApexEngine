@@ -33,6 +33,7 @@ build\windows-release\bin\ApexDemo.exe --benchmark 60 --no-vsync
 | Date | Phase | Objets | Triangles | Options graphiques | FPS moyen | Frame moyenne | 99e centile | Maximum | Objectifs |
 |---|---|---|---|---|---|---|---|---|---|
 | 19 novembre 2026 | 3 | 19 | 22 188 | aucune | 1 602 | 0,62 ms | 1,53 ms | 18,12 ms | atteints |
+| 19 novembre 2026 | 4 | 20 | 26 698 | textures (7, sans mipmaps) | 1 399 | 0,71 ms | 1,56 ms | 8,97 ms | atteints |
 
 ### Phase 3 (19 novembre 2026)
 
@@ -41,3 +42,12 @@ Première mesure, demandée par la section 7.1 dès la fin de la phase 3. Scène
 - Les objectifs sont largement atteints, mais la scène compte environ 13 fois moins de triangles que le budget de la scène finale (300 000, section 6.1), sans textures ni ombres. La mesure sert de point de départ, pas de preuve pour la phase 8.
 - Le maximum de 18,12 ms est un accroc isolé : le 99e centile reste à 1,53 ms. Il reste sous les 20 ms ; s'il se répète, une capture Tracy (preset `windows-profile`) dira d'où il vient.
 - Sans synchronisation verticale, l'application rend bien plus d'images que l'écran n'en affiche (60 Hz) : le FPS mesure le rythme de la boucle, pas celui de l'affichage.
+
+### Phase 4 (19 novembre 2026)
+
+Scène de la phase 3 avec des modèles glTF : cube de référence texturé, deux caisses (textures de 512 pixels), bouteille de Khronos (environ 4 500 triangles, textures de 2048 pixels). 83 961 frames en 60 s.
+
+- Le FPS moyen baisse de 13 % (1 602 à 1 399) : échantillonnage de deux textures par fragment, un jeu de descripteurs lié par matériau, 4 500 triangles de plus. Le 99e centile ne bouge presque pas (1,53 à 1,56 ms).
+- Le maximum descend à 8,97 ms : l'accroc de 18 ms de la phase 3 ne s'est pas reproduit.
+- Mémoire GPU : 223 Mio après les envois (voir `Engine/Graphics/README.md` pour ce qu'elle compte). Cette mesure ne relevait pas la valeur de fin ; le résumé du benchmark la donne désormais (ligne `Benchmark end`), pour suivre la dérive demandée par la section 7.2.
+
