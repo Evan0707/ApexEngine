@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DemoScene.h"
+#include "FreeCamera.h"
 #include "SceneExtraction.h"
 
 #include "Core/Error.h"
@@ -30,11 +31,12 @@ struct DemoSystems {
     debug::DebugUi& debugUi;
     const debug::LogHistory& logHistory;
     core::Logger& logger;
-    const DemoScene& scene;
+    DemoScene& scene;
 };
 
-// Phase 3 demo: draws the demo scene and the debug panel (F1), logs window events and actions, toggles
-// cursor capture with the ToggleCursor action.
+// Phase 3 demo: draws the demo scene seen by the free camera, and the debug panel (F1). Logs window
+// events and actions, toggles cursor capture with the ToggleCursor action; the mouse turns the camera
+// only while the cursor is captured.
 class DemoApp final : public core::FramePhases {
 public:
     // maxFrames: quit after that many frames.
@@ -61,6 +63,7 @@ private:
     void handleWindowEvents(std::span<const platform::Event> events);
     void handleFrameActions();
     void logMouseLook(const core::FixedStep& step);
+    void stepCamera(const core::FixedStep& step);
     void measureFrame();
     void stopOnRenderError(const core::Result<void>& result);
 
@@ -69,20 +72,29 @@ private:
     debug::DebugUi* m_debugUi;
     const debug::LogHistory* m_logHistory;
     core::Logger* m_logger;
-    const DemoScene* m_scene;
+    DemoScene* m_scene;
     input::ActionMap m_actions;
     input::ActionState m_frame;
     input::ActionState m_simulation;
 
     input::ActionId m_toggleCursor{};
     input::ActionId m_toggleDebug{};
+    input::ActionId m_sprint{};
+    input::ActionId m_moveForward{};
+    input::ActionId m_moveRight{};
+    input::ActionId m_moveUp{};
+    input::ActionId m_lookX{};
+    input::ActionId m_lookY{};
     std::vector<input::ActionId> m_frameButtons;
     std::vector<input::ActionId> m_gameplayButtons;
     std::vector<AxisLog> m_keyAxes;
     std::vector<input::ActionId> m_mouseAxes;
     std::vector<float> m_mouseTotals;
 
-    CameraView m_camera;
+    FreeCameraSettings m_cameraSettings;
+    FreeCameraState m_previousCamera;
+    FreeCameraState m_camera;
+    debug::DebugControls m_controls;
     graphics::RenderScene m_renderScene;
 
     debug::FrameTimeStats m_frameTimes;

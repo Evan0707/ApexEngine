@@ -19,8 +19,15 @@ struct DebugPanelData {
     const LogHistory& log;
 };
 
+// Settings the panel can change (decision 0011). Owned by the application, which applies them.
+struct DebugControls {
+    float verticalFovDegrees = 70.0f;
+    float minVerticalFovDegrees = 50.0f;
+    float maxVerticalFovDegrees = 100.0f;
+};
+
 // Internal to Debug: draws the panel with Dear ImGui, inside DebugUi::buildFrame. open becomes false when
 // the panel is closed with its own button.
-void drawStatsPanel(const DebugPanelData& data, bool& open);
+void drawStatsPanel(const DebugPanelData& data, DebugControls& controls, bool& open);
 
 } // namespace apex::debug

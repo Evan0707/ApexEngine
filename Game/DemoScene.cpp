@@ -75,6 +75,7 @@ std::vector<DemoObjectDesc> demoObjects() {
         {DemoShape::Cube, kCrate, {.position = {4.5f, 0.5f, -1.5f}}},
         {DemoShape::Cube, kCrate, {.position = {4.5f, 1.5f, -1.5f}, .rotation = yaw(10.0f)}},
         {DemoShape::Cube, kReference, {.position = {-4.5f, 1.5f, -2.0f}, .scale = {0.6f, 3.0f, 0.6f}}},
+        {DemoShape::Cube, kBlue, {.position = {1.8f, 0.4f, 2.2f}, .scale = glm::vec3(0.8f)}, 45.0f},
     };
     for (std::size_t i = 0; i < kSpheresPerRow; ++i) {
         const float x = -4.0f + 2.0f * static_cast<float>(i);
@@ -119,7 +120,8 @@ core::Result<DemoScene> DemoScene::create(graphics::Renderer& renderer) {
     for (const DemoObjectDesc& desc : demoObjects()) {
         scene.m_objects.push_back(Object{.mesh = scene.m_meshes[static_cast<std::size_t>(desc.shape)],
                                          .material = scene.m_materials[desc.material],
-                                         .transform = desc.transform});
+                                         .transform = desc.transform,
+                                         .spinRadiansPerSecond = glm::radians(desc.spinDegreesPerSecond)});
     }
     return scene;
 }
@@ -142,15 +144,31 @@ DemoScene::DemoScene(DemoScene&& other) noexcept
     : m_renderer(std::exchange(other.m_renderer, nullptr)), m_meshes(std::move(other.m_meshes)),
       m_materials(std::move(other.m_materials)), m_objects(std::move(other.m_objects)) {}
 
-void DemoScene::extract(const core::WorldPosition& cameraPosition, graphics::RenderScene& scene) const {
+void DemoScene::simulate(double deltaSeconds) noexcept {
+    for (Object& object : m_objects) {
+        object.previousSpin = object.spin;
+        // Wrapped together, so that the interpolation never goes the long way round.
+        object.spin += object.spinRadiansPerSecond * static_cast<float>(deltaSeconds);
+        if (object.spin > glm::two_pi<float>()) {
+            object.spin -= glm::two_pi<float>();
+            object.previousSpin -= glm::two_pi<float>();
+        }
+    }
+}
+
+void DemoScene::extract(const core::WorldPosition& cameraPosition, float alpha,
+                        graphics::RenderScene& scene) const {
     scene.light = demoLight();
     scene.ambient = demoAmbient();
     scene.objects.clear();
     for (const Object& object : m_objects) {
+        ObjectTransform transform = object.transform;
+        const float spin = glm::mix(object.previousSpin, object.spin, alpha);
+        transform.rotation = glm::angleAxis(spin, core::kWorldUp) * transform.rotation;
         scene.objects.push_back(graphics::RenderObject{
             .mesh = object.mesh,
             .material = object.material,
-            .modelRelativeToCamera = modelRelativeToCamera(object.transform, cameraPosition),
+            .modelRelativeToCamera = modelRelativeToCamera(transform, cameraPosition),
         });
     }
 }

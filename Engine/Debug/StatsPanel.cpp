@@ -40,6 +40,11 @@ void drawSceneSection(const DebugPanelData& data) {
                 static_cast<double>(data.memory.budgetBytes) / kBytesPerMebibyte);
 }
 
+void drawCameraSection(DebugControls& controls) {
+    ImGui::SliderFloat("Field of view", &controls.verticalFovDegrees, controls.minVerticalFovDegrees,
+                       controls.maxVerticalFovDegrees, "%.0f degrees", ImGuiSliderFlags_AlwaysClamp);
+}
+
 void drawLogSection(const LogHistory& log) {
     const std::vector<LogEntry> entries = log.snapshot();
     ImGui::Text("Warnings and errors: %zu (last %zu kept)", entries.size(), log.capacity());
@@ -67,13 +72,15 @@ void drawLogSection(const LogHistory& log) {
 
 } // namespace
 
-void drawStatsPanel(const DebugPanelData& data, bool& open) {
+void drawStatsPanel(const DebugPanelData& data, DebugControls& controls, bool& open) {
     ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(520.0f, 420.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(520.0f, 460.0f), ImGuiCond_FirstUseEver);
     if (ImGui::Begin("Debug (F1)", &open)) {
         drawFrameSection(data.frameTimes);
         ImGui::Separator();
         drawSceneSection(data);
+        ImGui::Separator();
+        drawCameraSection(controls);
         ImGui::Separator();
         drawLogSection(data.log);
     }

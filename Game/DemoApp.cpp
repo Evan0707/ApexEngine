@@ -86,6 +86,13 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
 
     app.m_toggleCursor = *toggleCursor;
     app.m_toggleDebug = *toggleDebug;
+    // Present: findActions above checked every name.
+    app.m_sprint = *app.m_actions.find("Sprint");
+    app.m_moveForward = *app.m_actions.find("MoveForward");
+    app.m_moveRight = *app.m_actions.find("MoveRight");
+    app.m_moveUp = *app.m_actions.find("MoveUp");
+    app.m_lookX = *app.m_actions.find("LookX");
+    app.m_lookY = *app.m_actions.find("LookY");
     app.m_frameButtons = std::move(*frameButtons);
     app.m_gameplayButtons = std::move(*gameplayButtons);
     for (const input::ActionId id : *keyAxes) {
@@ -100,9 +107,12 @@ DemoApp::DemoApp(const DemoSystems& systems, input::ActionMap actions)
     : m_window(&systems.window), m_renderer(&systems.renderer), m_debugUi(&systems.debugUi),
       m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_scene(&systems.scene),
       m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {
-    // Fixed view over the scene until the free camera.
-    m_camera.position = {0.0f, 2.5f, 7.0f};
-    m_camera.orientation = glm::angleAxis(glm::radians(-15.0f), core::kWorldRight);
+    // In front of the reference cube, looking slightly down at the scene.
+    m_camera = FreeCameraState{.position = {0.0f, 2.5f, 7.0f}, .yaw = 0.0f, .pitch = glm::radians(-15.0f)};
+    m_previousCamera = m_camera;
+    m_controls.verticalFovDegrees = m_cameraSettings.defaultVerticalFovDegrees;
+    m_controls.minVerticalFovDegrees = m_cameraSettings.minVerticalFovDegrees;
+    m_controls.maxVerticalFovDegrees = m_cameraSettings.maxVerticalFovDegrees;
 }
 
 bool DemoApp::processInput() {
@@ -190,8 +200,25 @@ void DemoApp::simulate(const core::FixedStep& step) {
         }
     }
     logMouseLook(step);
+    stepCamera(step);
+    m_scene->simulate(step.deltaSeconds);
 
     m_simulation.clearTransient();
+}
+
+void DemoApp::stepCamera(const core::FixedStep& step) {
+    // Released cursor: the mouse belongs to the interface, not to the camera.
+    const bool looking = m_window->isCursorCaptured();
+    const FreeCameraInput input{
+        .forward = m_simulation.axis(m_moveForward),
+        .right = m_simulation.axis(m_moveRight),
+        .up = m_simulation.axis(m_moveUp),
+        .sprint = m_simulation.isHeld(m_sprint),
+        .lookX = looking ? m_simulation.axis(m_lookX) : 0.0f,
+        .lookY = looking ? m_simulation.axis(m_lookY) : 0.0f,
+    };
+    m_previousCamera = m_camera;
+    m_camera = stepFreeCamera(m_camera, input, step.deltaSeconds, m_cameraSettings);
 }
 
 void DemoApp::logMouseLook(const core::FixedStep& step) {
@@ -213,9 +240,15 @@ void DemoApp::logMouseLook(const core::FixedStep& step) {
     m_mouseTotals.assign(m_mouseTotals.size(), 0.0f);
 }
 
-void DemoApp::extract(double /*alpha*/) {
-    m_renderScene.camera = makeRenderCamera(m_camera);
-    m_scene->extract(m_camera.position, m_renderScene);
+void DemoApp::extract(double alpha) {
+    const FreeCameraState camera = interpolate(m_previousCamera, m_camera, static_cast<float>(alpha));
+    const CameraView view{
+        .position = camera.position,
+        .orientation = freeCameraOrientation(camera),
+        .verticalFovRadians = glm::radians(clampVerticalFov(m_controls.verticalFovDegrees, m_cameraSettings)),
+    };
+    m_renderScene.camera = makeRenderCamera(view);
+    m_scene->extract(view.position, static_cast<float>(alpha), m_renderScene);
 }
 
 void DemoApp::render() {
@@ -223,7 +256,8 @@ void DemoApp::render() {
                                                 .counters = m_renderer->lastFrameCounters(),
                                                 .memory = m_renderer->memoryStats(),
                                                 .entityCount = 0,
-                                                .log = *m_logHistory});
+                                                .log = *m_logHistory},
+                          m_controls);
     if (!m_failed) {
         stopOnRenderError(m_renderer->renderFrame(m_renderScene));
     }

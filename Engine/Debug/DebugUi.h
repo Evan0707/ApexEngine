@@ -34,8 +34,8 @@ public:
     DebugUi& operator=(const DebugUi&) = delete;
 
     // Builds the interface of this frame. Called once per frame, after the input phase and before
-    // Renderer::renderFrame.
-    void buildFrame(const DebugPanelData& data);
+    // Renderer::renderFrame. The panel's widgets write into controls.
+    void buildFrame(const DebugPanelData& data, DebugControls& controls);
 
     // The panel of spec 5.9, shown and hidden by F1. Hidden at start.
     void setPanelVisible(bool visible) noexcept;

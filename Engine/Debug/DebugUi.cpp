@@ -55,11 +55,11 @@ DebugUi::~DebugUi() {
     ImGui::DestroyContext(m_context);
 }
 
-void DebugUi::buildFrame(const DebugPanelData& data) {
+void DebugUi::buildFrame(const DebugPanelData& data, DebugControls& controls) {
     m_backend->newFrame();
     ImGui::NewFrame();
     if (m_panelVisible) {
-        drawStatsPanel(data, m_panelVisible);
+        drawStatsPanel(data, controls, m_panelVisible);
     }
     ImGui::Render();
 }
