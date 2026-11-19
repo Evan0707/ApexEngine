@@ -1,4 +1,8 @@
 add_executable(ApexDemo
+    DefaultBindings.cpp
+    DefaultBindings.h
+    DemoApp.cpp
+    DemoApp.h
     main.cpp
 )
 

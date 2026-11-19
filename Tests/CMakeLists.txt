@@ -1,17 +1,23 @@
 find_package(Catch2 3 CONFIG REQUIRED)
 
 add_executable(ApexTests
+    Core/AssertTests.cpp
+    Core/ErrorTests.cpp
+    Core/FixedTimestepTests.cpp
     Core/LanguageTests.cpp
+    Core/LoggerTests.cpp
+    Core/MainLoopTests.cpp
     Core/VersionTests.cpp
+    Game/DefaultBindingsTests.cpp
+    Input/ActionMapTests.cpp
+    Input/ActionStateTests.cpp
+    Platform/KeyTests.cpp
+    # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
+    "${PROJECT_SOURCE_DIR}/Game/DefaultBindings.cpp"
 )
 
+target_include_directories(ApexTests PRIVATE "${PROJECT_SOURCE_DIR}/Game")
 target_link_libraries(ApexTests PRIVATE Apex::Engine Catch2::Catch2WithMain)
 
 include(Catch)
 catch_discover_tests(ApexTests)
-
-# Phase 0 smoke test. Remove in phase 1: CI has no display once ApexDemo opens a window.
-add_test(NAME Smoke.ApexDemo COMMAND ApexDemo)
-set_tests_properties(Smoke.ApexDemo PROPERTIES
-    PASS_REGULAR_EXPRESSION "Apex Engine ${PROJECT_VERSION_MAJOR}\\.${PROJECT_VERSION_MINOR}\\.${PROJECT_VERSION_PATCH}"
-)

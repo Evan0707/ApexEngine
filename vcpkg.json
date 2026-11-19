@@ -4,6 +4,21 @@
   "version-string": "0.1.0",
   "builtin-baseline": "d13c536672dced4b8c671955ea7d057a1b7a1ff8",
   "dependencies": [
-    "catch2"
-  ]
+    "catch2",
+    "sdl3"
+  ],
+  "features": {
+    "profiling": {
+      "description": "Tracy CPU profiler client, used by the windows-profile preset",
+      "dependencies": [
+        {
+          "name": "tracy",
+          "default-features": false,
+          "features": [
+            "on-demand"
+          ]
+        }
+      ]
+    }
+  }
 }

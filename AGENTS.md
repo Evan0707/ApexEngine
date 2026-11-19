@@ -6,7 +6,7 @@ Instructions pour tout agent IA qui travaille sur ce dépôt. À lire en entier 
 
 - Prototype de moteur 3D en C++23, Windows x64, Vulkan 1.3.
 - **Source de vérité :** `Docs/cahier_des_charges.md` (v0.3). Si ce fichier et le cahier des charges se contredisent, le cahier des charges l'emporte : signale l'écart au lieu de trancher seul.
-- **Phase en cours : 0 (socle).** Cette ligne est mise à jour par le développeur à chaque changement de phase. Ne travaille pas sur une phase ultérieure.
+- **Phase en cours : 1 (Core, fenêtre, boucle à pas fixe, logs, actions).** Cette ligne est mise à jour par le développeur à chaque changement de phase. Ne travaille pas sur une phase ultérieure.
 - Priorité : une petite expérience 3D complète et robuste. Rien de ce qui est hors périmètre (cahier des charges, section 2.2) ne doit être ajouté.
 
 ## 2. Commandes
@@ -20,6 +20,8 @@ ctest --preset windows-debug
 ```
 
 Même chose avec `windows-release`. L'exécutable est dans `build/<preset>/bin/`.
+
+`windows-profile` : Release instrumenté par Tracy (`APEX_ENABLE_PROFILING=ON`, décision 0003).
 
 Formatage, avant chaque commit (clang-format 18.1.3, la version vérifiée par la CI) :
 
@@ -60,7 +62,8 @@ Confinement des bibliothèques tierces :
 - en-têtes Jolt : `Physics` uniquement ;
 - en-têtes SDL : `Platform` et le backend ImGui de `Debug` uniquement ;
 - cgltf et stb : `Resources` uniquement ;
-- nlohmann/json : `Serialization` uniquement.
+- nlohmann/json : `Serialization` uniquement ;
+- en-têtes Tracy : `Core/Profiling.h` uniquement.
 
 ## 5. Garde-fous (obligatoires, vérifiés par AC-17)
 

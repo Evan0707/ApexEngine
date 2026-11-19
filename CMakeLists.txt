@@ -8,6 +8,8 @@ endif()
 
 option(APEX_BUILD_TESTS "Build the automated tests" ON)
 option(APEX_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
+# Needs the vcpkg manifest feature "profiling" (VCPKG_MANIFEST_FEATURES), as set by the windows-profile preset.
+option(APEX_ENABLE_PROFILING "Instrument the engine with Tracy" OFF)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
