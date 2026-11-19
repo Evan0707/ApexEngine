@@ -11,8 +11,8 @@ if(MSVC)
             "(compiler 19.52) or newer: update Visual Studio 2026 to 18.12 or later.")
     endif()
 
+    # The language standard is set for the whole project in the root CMakeLists.txt.
     target_compile_options(apex_options INTERFACE
-        /std:c++23
         /W4
         /permissive-
         /utf-8
@@ -23,7 +23,6 @@ if(MSVC)
     endif()
 else()
     # Not a supported target; kept so a port stays possible (G-10).
-    target_compile_features(apex_options INTERFACE cxx_std_23)
     target_compile_options(apex_options INTERFACE -Wall -Wextra -Wpedantic)
     if(APEX_WARNINGS_AS_ERRORS)
         target_compile_options(apex_options INTERFACE -Werror)
