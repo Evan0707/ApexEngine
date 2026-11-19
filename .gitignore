@@ -17,3 +17,6 @@ CMakeUserPresets.json
 # Runtime
 /Logs/
 *.rdc
+
+# Python environment of Tools/ (decision 0014)
+/Tools/.venv/
