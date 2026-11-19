@@ -19,7 +19,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.preset }}
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +29,23 @@ jobs:
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
     steps:
       - uses: actions/checkout@v4
+
+      # The hosted image lags behind the MSVC 14.52 requirement; remove this step once it ships VS 18.12+.
+      - name: Update Visual Studio to MSVC 14.52 or newer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          Write-Host "Before: $(& $vswhere -latest -products * -property catalog_productDisplayVersion)"
+          $bootstrapper = "$env:RUNNER_TEMP\vs_enterprise.exe"
+          Invoke-WebRequest https://aka.ms/vs/18/stable/vs_enterprise.exe -OutFile $bootstrapper
+          $process = Start-Process -FilePath $bootstrapper -Wait -PassThru -ArgumentList @(
+            'update', '--installPath', "`"$vs`"", '--quiet', '--wait', '--norestart', '--nocache')
+          if ($process.ExitCode -notin 0, 3010) {
+            throw "Visual Studio update failed with exit code $($process.ExitCode)"
+          }
+          Write-Host "After: $(& $vswhere -latest -products * -property catalog_productDisplayVersion)"
 
       - name: Install vcpkg at the manifest baseline
         shell: pwsh
