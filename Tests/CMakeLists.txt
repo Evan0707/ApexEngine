@@ -3,8 +3,10 @@ find_package(Catch2 3 CONFIG REQUIRED)
 add_executable(ApexTests
     Core/AssertTests.cpp
     Core/ErrorTests.cpp
+    Core/FixedTimestepTests.cpp
     Core/LanguageTests.cpp
     Core/LoggerTests.cpp
+    Core/MainLoopTests.cpp
     Core/VersionTests.cpp
 )
 

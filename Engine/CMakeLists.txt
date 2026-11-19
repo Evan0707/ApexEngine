@@ -6,10 +6,15 @@ add_library(ApexEngine STATIC
     Core/Error.h
     Core/FileLogSink.cpp
     Core/FileLogSink.h
+    Core/FixedTimestep.cpp
+    Core/FixedTimestep.h
+    Core/FramePhases.h
     Core/Logger.cpp
     Core/Logger.h
     Core/LogSink.cpp
     Core/LogSink.h
+    Core/MainLoop.cpp
+    Core/MainLoop.h
     Core/Version.cpp
     Core/Version.h
 )
