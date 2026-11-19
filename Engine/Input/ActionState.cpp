@@ -40,7 +40,8 @@ void ActionState::apply(const ActionMap& map, std::span<const platform::Event> e
 void ActionState::changeKey(const ActionMap& map, platform::Key key, bool pressed) noexcept {
     const std::size_t index = std::to_underlying(key);
     APEX_ASSERT(index < kKeyCount, "Key value does not fit the held key table");
-    if (m_heldKeys[index] == pressed) {
+    // The assertion is compiled out in Release: never index past the table.
+    if (index >= kKeyCount || m_heldKeys[index] == pressed) {
         return;
     }
     m_heldKeys[index] = pressed;
@@ -69,6 +70,7 @@ void ActionState::changeKey(const ActionMap& map, platform::Key key, bool presse
 }
 
 void ActionState::accumulate(const ActionState& frame) noexcept {
+    APEX_ASSERT(&frame != this, "An ActionState cannot accumulate itself");
     APEX_ASSERT(frame.m_slots.size() == m_slots.size(), "ActionStates were built from different ActionMaps");
     m_heldKeys = frame.m_heldKeys;
     for (std::size_t i = 0; i < m_slots.size(); ++i) {
