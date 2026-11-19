@@ -42,6 +42,8 @@ add_library(ApexEngine STATIC
     Graphics/Renderer.h
     Graphics/Swapchain.cpp
     Graphics/Swapchain.h
+    Graphics/SwapchainState.cpp
+    Graphics/SwapchainState.h
     Graphics/ValidationLog.cpp
     Graphics/ValidationLog.h
     Input/ActionMap.cpp

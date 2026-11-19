@@ -5,6 +5,7 @@
 #include "Graphics/Device.h"
 #include "Graphics/FrameSync.h"
 #include "Graphics/Swapchain.h"
+#include "Graphics/SwapchainState.h"
 
 #include <vulkan/vulkan.h>
 
@@ -77,9 +78,7 @@ struct Renderer::State {
     FrameSync frames;
     Swapchain swapchain;
     bool vsync = true;
-    // Size the swapchain was last created for. A different window size triggers a recreation.
-    platform::PixelSize swapchainSize;
-    bool recreateRequested = true;
+    SwapchainState swapchainState;
     std::uint32_t frameIndex = 0;
     // True once the fence of a slot was waited for and the deleter advanced, until the slot is submitted
     // again.
@@ -93,11 +92,24 @@ struct Renderer::State {
         }
     }
 
-    [[nodiscard]] core::Result<void> recreateSwapchain(platform::PixelSize size);
+    // False when the surface has no area yet: the frame is skipped and the recreation tried again.
+    [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
     void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) const;
 };
 
-core::Result<void> Renderer::State::recreateSwapchain(platform::PixelSize size) {
+core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) {
+    // The window can be minimized before its event is polled: it still reports its old size while the
+    // surface already has none, and a swapchain cannot be created for it.
+    VkSurfaceCapabilitiesKHR capabilities{};
+    if (const VkResult result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalDevice(),
+                                                                          device->surface(), &capabilities);
+        result != VK_SUCCESS) {
+        return vulkanError(*logger, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", result);
+    }
+    if (capabilities.currentExtent.width == 0 || capabilities.currentExtent.height == 0) {
+        return false;
+    }
+
     // Simple and always correct: no frame in flight can still use the old images or semaphores.
     device->waitIdle();
     core::Result<Swapchain> created =
@@ -108,8 +120,7 @@ core::Result<void> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     }
     // The old swapchain is destroyed here, after the new one was created from it.
     swapchain = std::move(*created);
-    swapchainSize = size;
-    recreateRequested = false;
+    swapchainState.recreated(size);
 
     const VkExtent2D extent = swapchain.extent();
     logger->info("Swapchain: {}x{} pixels, {} images, format {}, {}", extent.width, extent.height,
@@ -117,7 +128,7 @@ core::Result<void> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     if (!isSrgb(swapchain.format())) {
         logger->warning("The swapchain format is not sRGB: colors will look too dark");
     }
-    return {};
+    return true;
 }
 
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) const {
@@ -187,13 +198,18 @@ core::Result<void> Renderer::renderFrame() {
     APEX_PROFILE_SCOPE("Renderer::renderFrame");
 
     const platform::PixelSize size = state.window->sizeInPixels();
-    if (size.width == 0 || size.height == 0) {
+    switch (state.swapchainState.decide(size)) {
+    case FrameDecision::Skip:
         return {};
-    }
-    if (state.recreateRequested || size != state.swapchainSize) {
-        if (core::Result<void> recreated = state.recreateSwapchain(size); !recreated) {
-            return recreated;
+    case FrameDecision::RecreateThenRender:
+        if (const core::Result<bool> recreated = state.recreateSwapchain(size); !recreated) {
+            return std::unexpected(recreated.error());
+        } else if (!*recreated) {
+            return {};
         }
+        break;
+    case FrameDecision::Render:
+        break;
     }
 
     const VkDevice device = state.device->device();
@@ -213,12 +229,12 @@ core::Result<void> Renderer::renderFrame() {
                                                     frame.imageAvailable, VK_NULL_HANDLE, &imageIndex);
     if (acquired == VK_ERROR_OUT_OF_DATE_KHR) {
         // Nothing was signaled or submitted: the frame is skipped and the swapchain recreated next time.
-        state.recreateRequested = true;
+        state.swapchainState.markOutOfDate();
         return {};
     }
     if (acquired == VK_SUBOPTIMAL_KHR) {
         // The image is acquired: it must still be rendered and presented.
-        state.recreateRequested = true;
+        state.swapchainState.markOutOfDate();
     } else if (acquired != VK_SUCCESS) {
         return vulkanError(*state.logger, "vkAcquireNextImageKHR", acquired);
     }
@@ -288,7 +304,7 @@ core::Result<void> Renderer::presentFrame() {
     };
     const VkResult result = vkQueuePresentKHR(state.device->presentQueue(), &present);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-        state.recreateRequested = true;
+        state.swapchainState.markOutOfDate();
         return {};
     }
     if (result != VK_SUCCESS) {

@@ -18,6 +18,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/Device.h` (`DeviceConfig`, `Device`), qui inclut Vulkan et vk-bootstrap ;
 - `Graphics/DeferredDeleter.h` (`DeferredDeleter`), sans Vulkan, testé sans GPU ;
 - `Graphics/Swapchain.h` (`SwapchainConfig`, `Swapchain`) ;
+- `Graphics/SwapchainState.h` (`FrameDecision`, `SwapchainState`), sans Vulkan, testé sans GPU ;
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`).
 
 ## Renderer
@@ -39,7 +40,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - Format sRGB : `B8G8R8A8_SRGB`, sinon `R8G8B8A8_SRGB`. Si le pilote ne propose aucun des deux, un avertissement est écrit : les couleurs seront trop sombres.
 - Vsync activé : mode FIFO. Désactivé (`RendererConfig::vsync`, option `--no-vsync` de la démo) : mailbox, sinon immédiat, sinon FIFO.
-- Créée à la première frame, puis recréée quand la taille de la fenêtre change ou quand l'acquisition ou la présentation renvoie `VK_ERROR_OUT_OF_DATE_KHR` ou `VK_SUBOPTIMAL_KHR`. La recréation attend que le GPU soit inactif : simple et toujours correct, pour un événement rare. Le format, l'extent et le nombre d'images sont écrits dans le log.
+- `SwapchainState` décide au début de chaque frame : sauter la frame (fenêtre sans surface), dessiner, ou recréer puis dessiner. La swapchain est créée à la première frame, puis recréée quand la taille de la fenêtre change ou quand l'acquisition ou la présentation renvoie `VK_ERROR_OUT_OF_DATE_KHR` ou `VK_SUBOPTIMAL_KHR`. Seule la taille au moment de la décision compte : plusieurs redimensionnements entre deux frames donnent une seule recréation.
+- Piège : la fenêtre peut être réduite avant que l'événement soit lu. Elle annonce encore son ancienne taille alors que la surface Vulkan n'en a plus (`currentExtent` nul). Avant de recréer, le renderer interroge donc la surface ; si elle est vide, la frame est sautée et la recréation retentée à la frame suivante. La recréation attend que le GPU soit inactif : simple et toujours correct, pour un événement rare. Le format, l'extent et le nombre d'images sont écrits dans le log.
 
 ## Périphérique
 
