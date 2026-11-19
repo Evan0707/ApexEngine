@@ -1,7 +1,6 @@
+#include "Bindings.h"
 #include "CommandLine.h"
-#include "DefaultBindings.h"
 #include "DemoApp.h"
-#include "DemoScene.h"
 
 #include "Core/ConsoleLogSink.h"
 #include "Core/FileLogSink.h"
@@ -17,10 +16,13 @@
 #include "Platform/Paths.h"
 #include "Platform/Window.h"
 #include "Resources/ResourceCache.h"
+#include "Serialization/EngineConfig.h"
+#include "Serialization/InputConfig.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -39,20 +41,57 @@ constexpr bool kEnableValidation = false;
 constexpr bool kEnableValidation = true;
 #endif
 
+// A configuration file of Config/. Absent: the defaults, with a warning. Invalid: nothing, with the error
+// logged; the demo then stops (decision 0017).
+template <typename Config, typename Load>
+[[nodiscard]] std::optional<Config> loadConfig(apex::core::Logger& logger, const std::filesystem::path& file,
+                                               std::string_view name, Load&& load, Config defaults) {
+    apex::core::Result<Config> config = load(file, name);
+    if (config) {
+        return std::move(*config);
+    }
+    if (config.error().code == apex::core::ErrorCode::NotFound) {
+        logger.warning("{}; using the default values", config.error().message);
+        return defaults;
+    }
+    logger.error("{}", config.error().message);
+    return std::nullopt;
+}
+
 // Every system is created here in the order of spec 5.1 and destroyed in reverse order when this returns.
 [[nodiscard]] int runDemo(apex::core::Logger& logger, apex::graphics::ValidationLog& validation,
                           const apex::debug::LogHistory& logHistory,
                           const apex::game::CommandLineOptions& options) {
     using namespace apex;
 
-    core::Result<platform::Window> window = platform::Window::create(platform::WindowConfig{}, logger);
+    core::Result<std::filesystem::path> executable = platform::executableDirectory();
+    if (!executable) {
+        logger.error("{}", executable.error().message);
+        return kExitFailure;
+    }
+
+    // Configuration first: the window needs its size (spec 5.2, decision 0017).
+    const std::filesystem::path configRoot =
+        options.configDirectory ? std::filesystem::path(*options.configDirectory) : *executable / "Config";
+    const std::optional<serialization::EngineConfig> engineConfig = loadConfig<serialization::EngineConfig>(
+        logger, configRoot / "engine.json", "Config/engine.json", serialization::loadEngineConfigFile, {});
+    const std::optional<serialization::InputConfig> inputConfig = loadConfig<serialization::InputConfig>(
+        logger, configRoot / "input.json", "Config/input.json", serialization::loadInputConfigFile,
+        serialization::defaultInputConfig());
+    if (!engineConfig || !inputConfig) {
+        return kExitFailure;
+    }
+
+    core::Result<platform::Window> window = platform::Window::create(
+        platform::WindowConfig{.width = engineConfig->windowWidth, .height = engineConfig->windowHeight},
+        logger);
     if (!window) {
         return kExitFailure;
     }
 
-    core::Result<input::ActionMap> actions = input::ActionMap::create(game::defaultBindings());
+    core::Result<input::ActionMap> actions = input::ActionMap::create(game::toInputBindings(*inputConfig));
     if (!actions) {
-        logger.error("{}", actions.error().message);
+        logger.error("Configuration 'Config/input.json': {}", actions.error().message);
         return kExitFailure;
     }
 
@@ -65,15 +104,8 @@ constexpr bool kEnableValidation = true;
     }
 
     // Spec 5.1: Resources after Graphics. Asset paths are relative to this folder (spec 3.3).
-    std::filesystem::path assetsRoot;
-    if (options.assetsDirectory) {
-        assetsRoot = *options.assetsDirectory;
-    } else if (core::Result<std::filesystem::path> executable = platform::executableDirectory()) {
-        assetsRoot = *executable / "Assets";
-    } else {
-        logger.error("{}", executable.error().message);
-        return kExitFailure;
-    }
+    const std::filesystem::path assetsRoot =
+        options.assetsDirectory ? std::filesystem::path(*options.assetsDirectory) : *executable / "Assets";
     if (std::error_code error; !std::filesystem::is_directory(assetsRoot, error)) {
         logger.warning("Asset folder not found: '{}'; models will show as fallback cubes",
                        assetsRoot.generic_string());
@@ -88,18 +120,15 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
-    // Loaded last (spec 5.1), destroyed first.
-    game::DemoScene scene = game::DemoScene::create(cache, options.extraModel);
-    logger.info("Demo scene: {} objects", scene.objectCount());
-
     const game::DemoSystems systems{.window = *window,
                                     .renderer = **renderer,
                                     .debugUi = **debugUi,
                                     .logHistory = logHistory,
                                     .logger = logger,
-                                    .cache = cache,
-                                    .scene = scene};
-    core::Result<game::DemoApp> app = game::DemoApp::create(systems, std::move(*actions), options);
+                                    .cache = cache};
+    // The scene is loaded last (spec 5.1), by the application that owns the registry.
+    core::Result<game::DemoApp> app =
+        game::DemoApp::create(systems, std::move(*actions), options, *engineConfig);
     if (!app) {
         logger.error("{}", app.error().message);
         return kExitFailure;

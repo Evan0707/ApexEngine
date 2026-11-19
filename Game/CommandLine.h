@@ -23,6 +23,11 @@ struct CommandLineOptions {
     // --model PATH: one more model, relative to the asset folder, placed in front of the camera. A path
     // that does not load shows the fallback cube (AC-11).
     std::optional<std::string> extraModel;
+    // --scene PATH: the scene to load, relative to the asset folder (decision 0017).
+    std::string scene = "Scenes/demo.json";
+    // --config DIR: the folder of engine.json and input.json, instead of the Config/ copied next to the
+    // executable.
+    std::optional<std::string> configDirectory;
 };
 
 // Arguments without the program name. Unknown or malformed options are an InvalidArgument error.

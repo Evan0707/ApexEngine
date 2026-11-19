@@ -1,9 +1,7 @@
 #pragma once
 
 #include "CommandLine.h"
-#include "DemoScene.h"
 #include "FreeCamera.h"
-#include "SceneExtraction.h"
 
 #include "Core/Error.h"
 #include "Core/FramePhases.h"
@@ -17,6 +15,10 @@
 #include "Input/ActionMap.h"
 #include "Input/ActionState.h"
 #include "Platform/Window.h"
+#include "Resources/ResourceCache.h"
+#include "Serialization/EngineConfig.h"
+
+#include <entt/entity/registry.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -34,17 +36,20 @@ struct DemoSystems {
     const debug::LogHistory& logHistory;
     core::Logger& logger;
     resources::ResourceCache& cache;
-    DemoScene& scene;
 };
 
-// Phase 3 demo: draws the demo scene seen by the free camera, and the debug panel (F1). Logs window
-// events and actions, toggles cursor capture with the ToggleCursor action; the mouse turns the camera
-// only while the cursor is captured.
+// Phase 5 demo: loads a scene file into its registry (spec 5.1: last), gives its entities "camera" and
+// "spinner" their behavior, and draws what the registry holds, seen by the free camera, with the debug
+// panel (F1). Logs window events and actions, toggles cursor capture with the ToggleCursor action; the
+// mouse turns the camera only while the cursor is captured.
 class DemoApp final : public core::FramePhases {
 public:
-    // options: frame limit and benchmark mode. The renderer's vsync setting is only logged.
+    // options: scene, frame limit and benchmark mode; the renderer's vsync setting is only logged.
+    // config: free camera settings. Fails when the scene file is invalid or has no camera; the error
+    // names the file, the entity and the field (spec 5.6).
     [[nodiscard]] static core::Result<DemoApp> create(const DemoSystems& systems, input::ActionMap actions,
-                                                      const CommandLineOptions& options);
+                                                      const CommandLineOptions& options,
+                                                      const serialization::EngineConfig& config);
 
     [[nodiscard]] bool processInput() override;
     void simulate(const core::FixedStep& step) override;
@@ -67,6 +72,7 @@ private:
     void handleFrameActions();
     void logMouseLook(const core::FixedStep& step);
     void stepCamera(const core::FixedStep& step);
+    [[nodiscard]] core::Result<void> loadScene(const CommandLineOptions& options);
     void measureFrame();
     void recordBenchmark(double frameSeconds);
     void logBenchmark() const;
@@ -78,7 +84,9 @@ private:
     const debug::LogHistory* m_logHistory;
     core::Logger* m_logger;
     resources::ResourceCache* m_cache;
-    DemoScene* m_scene;
+    // The world of the demo (spec 5.6): owned here, passed by reference (G-06).
+    entt::registry m_registry;
+    entt::entity m_cameraEntity = entt::null;
     input::ActionMap m_actions;
     input::ActionState m_frame;
     input::ActionState m_simulation;
@@ -98,8 +106,6 @@ private:
     std::vector<float> m_mouseTotals;
 
     FreeCameraSettings m_cameraSettings;
-    FreeCameraState m_previousCamera;
-    FreeCameraState m_camera;
     debug::DebugControls m_controls;
     graphics::RenderScene m_renderScene;
 

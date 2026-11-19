@@ -49,19 +49,27 @@ core::Result<CommandLineOptions> parseCommandLine(std::span<const std::string_vi
                     std::format("--benchmark needs a positive number of seconds, got '{}'", duration));
             }
             options.benchmarkSeconds = *seconds;
-        } else if (argument == "--assets" || argument == "--model") {
+        } else if (argument == "--assets" || argument == "--model" || argument == "--scene" ||
+                   argument == "--config") {
             if (index + 1 == arguments.size() || arguments[index + 1].empty()) {
                 return core::makeError(core::ErrorCode::InvalidArgument,
                                        std::format("{} needs a path", argument));
             }
-            std::optional<std::string>& target =
-                argument == "--assets" ? options.assetsDirectory : options.extraModel;
-            target = std::string(arguments[++index]);
+            const std::string path(arguments[++index]);
+            if (argument == "--assets") {
+                options.assetsDirectory = path;
+            } else if (argument == "--model") {
+                options.extraModel = path;
+            } else if (argument == "--scene") {
+                options.scene = path;
+            } else {
+                options.configDirectory = path;
+            }
         } else {
             return core::makeError(
                 core::ErrorCode::InvalidArgument,
                 std::format("Unknown option '{}'. Options: --frames N, --no-vsync, --benchmark S, "
-                            "--assets DIR, --model PATH",
+                            "--assets DIR, --model PATH, --scene PATH, --config DIR",
                             argument));
         }
     }

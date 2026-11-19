@@ -68,3 +68,15 @@ TEST_CASE("The assets and model options take a path", "[game]") {
     REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 1>{"--model"}).has_value());
     REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 2>{"--assets", ""}).has_value());
 }
+
+TEST_CASE("The scene and config options take a path; the scene defaults to the demo", "[game]") {
+    REQUIRE(parseCommandLine({})->scene == "Scenes/demo.json");
+    REQUIRE_FALSE(parseCommandLine({})->configDirectory.has_value());
+    constexpr std::array<std::string_view, 4> arguments{"--scene", "Scenes/test.json", "--config",
+                                                        "D:/Config"};
+    const auto options = parseCommandLine(arguments);
+    REQUIRE(options.has_value());
+    REQUIRE(options->scene == "Scenes/test.json");
+    REQUIRE(options->configDirectory == "D:/Config");
+    REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 1>{"--scene"}).has_value());
+}

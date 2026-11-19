@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 4 en cours (import glTF, textures, matériaux, cache, assets de secours).** `ApexDemo` dessine par Vulkan 1.3 une scène éclairée vue par une caméra libre : sol, cubes, sphères métalliques et non métalliques, et des modèles glTF texturés (cube de référence aux faces marquées, caisses, bouteille). Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 5 en cours (World, composants, extraction, scène JSON).** `ApexDemo` charge sa scène dans `Assets/Scenes/demo.json` et sa configuration dans `Config/`, puis dessine par Vulkan 1.3 ce que la scène contient, vu par une caméra libre : sol, cubes, sphères métalliques et non métalliques, modèles glTF texturés. Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -38,20 +38,30 @@ Remplacer `windows-debug` par `windows-release` pour la configuration Release, o
 
 ## La démonstration
 
-`ApexDemo` ouvre une fenêtre de 1920 × 1080 et écrit ses logs dans la console et dans `Logs/apex.log`, relatif au dossier de lancement. Il lit ses modèles dans le dossier `Assets` placé à côté de lui : le build l'y copie à chaque compilation.
+`ApexDemo` ouvre une fenêtre de 1920 × 1080 et écrit ses logs dans la console et dans `Logs/apex.log`, relatif au dossier de lancement. Il lit sa scène et ses modèles dans le dossier `Assets`, et sa configuration dans le dossier `Config`, tous deux placés à côté de lui : le build les y copie à chaque compilation.
+
+Pour modifier la scène sans recompiler (AC-04), lancer la démo depuis la racine du dépôt en lui désignant les dossiers sources, puis éditer `Assets/Scenes/demo.json` et relancer :
+
+```
+build\windows-debug\bin\ApexDemo.exe --assets Assets --config Config
+```
+
+Le format de la scène et de la configuration est décrit dans `Engine/Serialization/README.md`. Un champ inconnu ou invalide arrête la démo avec une erreur qui nomme le fichier, l'entité et le champ.
 
 | Option | Effet |
 |---|---|
 | `--frames N` | Quitte seul après N frames |
 | `--no-vsync` | Désactive la synchronisation verticale, pour les mesures |
 | `--assets DIR` | Dossier des assets ; par défaut, le dossier `Assets` copié à côté de l'exécutable par le build |
+| `--config DIR` | Dossier de `engine.json` (taille de la fenêtre, caméra libre) et `input.json` (touches) ; par défaut, le dossier `Config` copié à côté de l'exécutable. Un fichier absent donne les valeurs par défaut, avec un avertissement |
+| `--scene PATH` | Scène à charger, chemin relatif au dossier des assets ; `Scenes/demo.json` par défaut |
 | `--model PATH` | Ajoute un modèle, chemin relatif au dossier des assets, posé au sol devant la caméra. Un modèle introuvable ou invalide est remplacé par un cube en damier magenta, et l'erreur est logée avec le chemin (AC-11) |
 | `--benchmark S` | Mesure de performance (section 7.1) : la caméra suit un cercle autour de la scène ; après 2 s de mise en route, S secondes de frames sont mesurées, le résultat est logué avec la mémoire GPU de fin de mesure, puis l'application quitte. À lancer en Release avec `--no-vsync` (voir `Docs/benchmark.md`) |
 
 | Code de sortie | Signification |
 |---|---|
 | 0 | Fermeture normale |
-| 1 | Échec : fenêtre, GPU, option invalide ou erreur pendant le rendu (voir le log) |
+| 1 | Échec : fenêtre, GPU, option invalide, scène ou configuration invalide, ou erreur pendant le rendu (voir le log) |
 | 2 | Fermeture normale, mais les validation layers ont émis au moins un message |
 
 | Touche (AZERTY) | Effet |
@@ -76,7 +86,8 @@ La première configuration télécharge et compile les dépendances vcpkg ; les 
 Engine/      bibliothèque statique du moteur, un dossier par module
 Game/        exécutable de démonstration
 Tests/       tests automatisés (Catch2), sans fenêtre ni GPU
-Assets/      modèles et textures de la démonstration, licences dans Assets/LICENSES.md
+Assets/      scène, modèles et textures de la démonstration, licences dans Assets/LICENSES.md
+Config/      engine.json (fenêtre, caméra libre) et input.json (touches)
 Docs/        cahier des charges, architecture, décisions, suivi des heures
 Tools/       scripts Python (génération des assets), voir Tools/README.md
 cmake/       options de compilation communes

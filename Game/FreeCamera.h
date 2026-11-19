@@ -18,7 +18,7 @@ struct FreeCameraSettings {
 };
 
 // Radians. Yaw 0 looks towards -Z; a positive yaw turns left (counter-clockwise seen from above). A
-// positive pitch looks up. Yaw is not wrapped, so that interpolation never takes the long way round.
+// positive pitch looks up. Yaw is not wrapped.
 struct FreeCameraState {
     core::WorldPosition position{0.0f};
     float yaw = 0.0f;
@@ -47,10 +47,6 @@ inline constexpr float kMaxCameraPitch = glm::radians(89.0f);
 
 // Camera to world: yaw around world +Y, then pitch around the camera's right axis.
 [[nodiscard]] glm::quat freeCameraOrientation(const FreeCameraState& state) noexcept;
-
-// Between the last two simulation states, alpha in [0, 1] (spec 5.1).
-[[nodiscard]] FreeCameraState interpolate(const FreeCameraState& previous, const FreeCameraState& current,
-                                          float alpha) noexcept;
 
 [[nodiscard]] float clampVerticalFov(float degrees, const FreeCameraSettings& settings) noexcept;
 

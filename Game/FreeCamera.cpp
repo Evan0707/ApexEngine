@@ -28,15 +28,6 @@ glm::quat freeCameraOrientation(const FreeCameraState& state) noexcept {
     return glm::angleAxis(state.yaw, core::kWorldUp) * glm::angleAxis(state.pitch, core::kWorldRight);
 }
 
-FreeCameraState interpolate(const FreeCameraState& previous, const FreeCameraState& current,
-                            float alpha) noexcept {
-    return FreeCameraState{
-        .position = glm::mix(previous.position, current.position, alpha),
-        .yaw = glm::mix(previous.yaw, current.yaw, alpha),
-        .pitch = glm::mix(previous.pitch, current.pitch, alpha),
-    };
-}
-
 float clampVerticalFov(float degrees, const FreeCameraSettings& settings) noexcept {
     return std::clamp(degrees, settings.minVerticalFovDegrees, settings.maxVerticalFovDegrees);
 }

@@ -78,16 +78,6 @@ TEST_CASE("Pitch is clamped short of the vertical", "[game]") {
     REQUIRE(down.pitch == -kMaxCameraPitch);
 }
 
-TEST_CASE("Interpolation blends position and angles", "[game]") {
-    const FreeCameraState previous{.position = {0.0f, 0.0f, 0.0f}, .yaw = 0.0f, .pitch = 0.0f};
-    const FreeCameraState current{.position = {2.0f, 4.0f, -6.0f}, .yaw = 1.0f, .pitch = -0.5f};
-    const FreeCameraState middle = interpolate(previous, current, 0.5f);
-    requireNear(middle.position, {1.0f, 2.0f, -3.0f});
-    REQUIRE_THAT(middle.yaw, WithinAbs(0.5, kTolerance));
-    REQUIRE_THAT(middle.pitch, WithinAbs(-0.25, kTolerance));
-    REQUIRE(interpolate(previous, current, 0.0f).position == previous.position);
-}
-
 TEST_CASE("The field of view stays between 50 and 100 degrees", "[game]") {
     const FreeCameraSettings settings;
     REQUIRE(clampVerticalFov(30.0f, settings) == 50.0f);

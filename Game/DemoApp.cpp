@@ -1,7 +1,14 @@
 #include "DemoApp.h"
 
+#include "GameSystems.h"
+
 #include "Debug/InputCapture.h"
 #include "Debug/StatsPanel.h"
+#include "Resources/AssetPath.h"
+#include "Serialization/SceneLoader.h"
+#include "World/Components.h"
+#include "World/RenderExtraction.h"
+#include "World/SceneQueries.h"
 
 #include <array>
 #include <chrono>
@@ -80,15 +87,21 @@ findActions(const input::ActionMap& actions, const std::array<std::string_view, 
 } // namespace
 
 core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionMap actions,
-                                      const CommandLineOptions& options) {
+                                      const CommandLineOptions& options,
+                                      const serialization::EngineConfig& config) {
     DemoApp app(systems, std::move(actions));
+    app.m_cameraSettings.speed = config.freeCameraSpeed;
+    app.m_cameraSettings.sprintMultiplier = config.freeCameraSprintMultiplier;
+    app.m_cameraSettings.lookSensitivity = config.freeCameraLookSensitivity;
+    if (core::Result<void> loaded = app.loadScene(options); !loaded) {
+        return std::unexpected(loaded.error());
+    }
     app.m_maxFrames = options.maxFrames;
     app.m_benchmarkSeconds = options.benchmarkSeconds;
     app.m_benchmarkWarmupSeconds = kBenchmarkWarmupSeconds;
     app.m_vsync = options.vsync;
     if (options.benchmarkSeconds) {
-        app.m_camera = benchmarkCamera(0.0);
-        app.m_previousCamera = app.m_camera;
+        placeFreeCameraEntity(app.m_registry, app.m_cameraEntity, benchmarkCamera(0.0));
         app.m_logger->info("Benchmark: {} s measured after {} s of warm-up, camera on a fixed path",
                            *options.benchmarkSeconds, kBenchmarkWarmupSeconds);
     }
@@ -140,13 +153,42 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
 DemoApp::DemoApp(const DemoSystems& systems, input::ActionMap actions)
     : m_window(&systems.window), m_renderer(&systems.renderer), m_debugUi(&systems.debugUi),
       m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_cache(&systems.cache),
-      m_scene(&systems.scene), m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {
-    // In front of the reference cube, looking slightly down at the scene.
-    m_camera = FreeCameraState{.position = {0.0f, 2.5f, 7.0f}, .yaw = 0.0f, .pitch = glm::radians(-15.0f)};
-    m_previousCamera = m_camera;
-    m_controls.verticalFovDegrees = m_cameraSettings.defaultVerticalFovDegrees;
+      m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {}
+
+core::Result<void> DemoApp::loadScene(const CommandLineOptions& options) {
+    const core::Result<resources::AssetPath> scenePath = resources::AssetPath::parse(options.scene);
+    if (!scenePath) {
+        return core::makeError(scenePath.error().code,
+                               std::format("Cannot load the scene: {}", scenePath.error().message));
+    }
+    if (core::Result<void> loaded = serialization::loadSceneFile(m_cache->root() / scenePath->str(),
+                                                                 scenePath->str(), m_registry, *m_cache);
+        !loaded) {
+        return loaded;
+    }
+    if (options.extraModel) {
+        // On the floor in front of the demo's starting camera. Centered on y = 0.5: a model of 1 m centered
+        // on its origin, such as the fallback cube, rests on the floor.
+        const entt::entity extra = m_registry.create();
+        m_registry.emplace<world::SceneId>(extra, "extra_model");
+        m_registry.emplace<world::Transform>(extra, world::Transform{.position = {0.0f, 0.5f, 3.5f}});
+        m_registry.emplace<world::MeshRenderer>(extra, m_cache->loadModel(*options.extraModel));
+    }
+
+    // The demo's own components, by scene id (decision 0017).
+    const core::Result<entt::entity> camera = attachGameComponents(m_registry);
+    if (!camera) {
+        return core::makeError(camera.error().code,
+                               std::format("Scene '{}': {}", scenePath->str(), camera.error().message));
+    }
+    m_cameraEntity = *camera;
+    // The panel starts at the scene's field of view, kept inside the free camera's range (spec 5.3).
     m_controls.minVerticalFovDegrees = m_cameraSettings.minVerticalFovDegrees;
     m_controls.maxVerticalFovDegrees = m_cameraSettings.maxVerticalFovDegrees;
+    m_controls.verticalFovDegrees = clampVerticalFov(
+        glm::degrees(m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians), m_cameraSettings);
+    m_logger->info("Scene '{}' loaded: {} entities", scenePath->str(), world::sceneEntityCount(m_registry));
+    return {};
 }
 
 bool DemoApp::processInput() {
@@ -251,6 +293,8 @@ void DemoApp::logBenchmark() const {
 }
 
 void DemoApp::simulate(const core::FixedStep& step) {
+    // Before anything moves: the extraction interpolates from this state (spec 5.1).
+    world::rememberTransforms(m_registry);
     for (const input::ActionId id : m_gameplayButtons) {
         if (m_simulation.wasPressed(id)) {
             m_logger->info("[tick {}] Action {} pressed", step.tick, m_actions.name(id));
@@ -268,15 +312,15 @@ void DemoApp::simulate(const core::FixedStep& step) {
     }
     logMouseLook(step);
     stepCamera(step);
-    m_scene->simulate(step.deltaSeconds);
+    stepSpinners(m_registry, step.deltaSeconds);
 
     m_simulation.clearTransient();
 }
 
 void DemoApp::stepCamera(const core::FixedStep& step) {
     if (m_benchmarkSeconds) {
-        m_previousCamera = m_camera;
-        m_camera = benchmarkCamera(static_cast<double>(step.tick + 1) * step.deltaSeconds);
+        placeFreeCameraEntity(m_registry, m_cameraEntity,
+                              benchmarkCamera(static_cast<double>(step.tick + 1) * step.deltaSeconds));
         return;
     }
     // Released cursor: the mouse belongs to the interface, not to the camera.
@@ -289,8 +333,7 @@ void DemoApp::stepCamera(const core::FixedStep& step) {
         .lookX = looking ? m_simulation.axis(m_lookX) : 0.0f,
         .lookY = looking ? m_simulation.axis(m_lookY) : 0.0f,
     };
-    m_previousCamera = m_camera;
-    m_camera = stepFreeCamera(m_camera, input, step.deltaSeconds, m_cameraSettings);
+    stepFreeCameraEntity(m_registry, m_cameraEntity, input, step.deltaSeconds, m_cameraSettings);
 }
 
 void DemoApp::logMouseLook(const core::FixedStep& step) {
@@ -313,21 +356,17 @@ void DemoApp::logMouseLook(const core::FixedStep& step) {
 }
 
 void DemoApp::extract(double alpha) {
-    const FreeCameraState camera = interpolate(m_previousCamera, m_camera, static_cast<float>(alpha));
-    const CameraView view{
-        .position = camera.position,
-        .orientation = freeCameraOrientation(camera),
-        .verticalFovRadians = glm::radians(clampVerticalFov(m_controls.verticalFovDegrees, m_cameraSettings)),
-    };
-    m_renderScene.camera = makeRenderCamera(view);
-    m_scene->extract(view.position, static_cast<float>(alpha), m_renderScene);
+    // The panel's field of view is a view setting, not simulation state: applied here.
+    m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians =
+        glm::radians(clampVerticalFov(m_controls.verticalFovDegrees, m_cameraSettings));
+    world::extractRenderScene(m_registry, *m_cache, m_cameraEntity, static_cast<float>(alpha), m_renderScene);
 }
 
 void DemoApp::render() {
     m_debugUi->buildFrame(debug::DebugPanelData{.frameTimes = m_frameTimes,
                                                 .counters = m_renderer->lastFrameCounters(),
                                                 .memory = m_renderer->memoryStats(),
-                                                .entityCount = 0,
+                                                .entityCount = world::sceneEntityCount(m_registry),
                                                 .log = *m_logHistory},
                           m_controls);
     if (!m_failed) {
