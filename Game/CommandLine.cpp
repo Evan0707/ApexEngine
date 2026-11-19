@@ -36,10 +36,23 @@ core::Result<CommandLineOptions> parseCommandLine(std::span<const std::string_vi
                                        std::format("--frames needs a positive integer, got '{}'", count));
             }
             options.maxFrames = *frames;
+        } else if (argument == "--benchmark") {
+            if (index + 1 == arguments.size()) {
+                return core::makeError(core::ErrorCode::InvalidArgument,
+                                       "--benchmark needs a duration in seconds");
+            }
+            const std::string_view duration = arguments[++index];
+            const std::optional<std::uint64_t> seconds = parsePositive(duration);
+            if (!seconds) {
+                return core::makeError(
+                    core::ErrorCode::InvalidArgument,
+                    std::format("--benchmark needs a positive number of seconds, got '{}'", duration));
+            }
+            options.benchmarkSeconds = *seconds;
         } else {
             return core::makeError(
                 core::ErrorCode::InvalidArgument,
-                std::format("Unknown option '{}'. Options: --frames N, --no-vsync", argument));
+                std::format("Unknown option '{}'. Options: --frames N, --no-vsync, --benchmark S", argument));
         }
     }
     return options;

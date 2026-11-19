@@ -5,6 +5,7 @@
 
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -28,6 +29,30 @@ constexpr std::array<std::string_view, 2> kMouseAxes{"LookX", "LookY"};
 
 // One log line per second of simulation for the mouse, instead of one per step.
 constexpr std::uint64_t kMouseLogPeriodTicks = 60;
+
+// Benchmark (spec 7.1): frames of the first seconds (pipeline creation, first swapchain) are not
+// measured. The camera circles the scene, one turn in 20 s, always looking at its center.
+constexpr double kBenchmarkWarmupSeconds = 2.0;
+constexpr double kBenchmarkTurnSeconds = 20.0;
+constexpr float kBenchmarkRadius = 9.0f;
+constexpr float kBenchmarkHeight = 3.0f;
+
+#ifdef NDEBUG
+constexpr std::string_view kBuildName = "Release";
+#else
+constexpr std::string_view kBuildName = "Debug";
+#endif
+
+[[nodiscard]] FreeCameraState benchmarkCamera(double seconds) {
+    const auto angle = static_cast<float>(seconds / kBenchmarkTurnSeconds * glm::two_pi<double>());
+    // Yaw a looks towards (-sin a, 0, -cos a): from (sin a, 0, cos a) * radius, that is the center.
+    return FreeCameraState{
+        .position = {kBenchmarkRadius * std::sin(angle), kBenchmarkHeight,
+                     kBenchmarkRadius * std::cos(angle)},
+        .yaw = angle,
+        .pitch = glm::radians(-15.0f),
+    };
+}
 
 [[nodiscard]] core::Result<input::ActionId> findAction(const input::ActionMap& actions,
                                                        std::string_view name) {
@@ -55,9 +80,18 @@ findActions(const input::ActionMap& actions, const std::array<std::string_view, 
 } // namespace
 
 core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionMap actions,
-                                      std::optional<std::uint64_t> maxFrames) {
+                                      const CommandLineOptions& options) {
     DemoApp app(systems, std::move(actions));
-    app.m_maxFrames = maxFrames;
+    app.m_maxFrames = options.maxFrames;
+    app.m_benchmarkSeconds = options.benchmarkSeconds;
+    app.m_benchmarkWarmupSeconds = kBenchmarkWarmupSeconds;
+    app.m_vsync = options.vsync;
+    if (options.benchmarkSeconds) {
+        app.m_camera = benchmarkCamera(0.0);
+        app.m_previousCamera = app.m_camera;
+        app.m_logger->info("Benchmark: {} s measured after {} s of warm-up, camera on a fixed path",
+                           *options.benchmarkSeconds, kBenchmarkWarmupSeconds);
+    }
 
     const core::Result<input::ActionId> toggleCursor = findAction(app.m_actions, "ToggleCursor");
     if (!toggleCursor) {
@@ -179,8 +213,37 @@ void DemoApp::measureFrame() {
         const double frameSeconds = std::chrono::duration<double>(now - *m_frameStart).count();
         const double waitSeconds = m_renderer->lastFrameCounters().waitSeconds;
         m_frameTimes.addFrame({frameSeconds, frameSeconds - waitSeconds});
+        if (m_benchmarkSeconds) {
+            recordBenchmark(frameSeconds);
+        }
     }
     m_frameStart = now;
+}
+
+void DemoApp::recordBenchmark(double frameSeconds) {
+    if (m_benchmarkWarmupSeconds > 0.0) {
+        m_benchmarkWarmupSeconds -= frameSeconds;
+        return;
+    }
+    m_benchmark.addFrame(frameSeconds);
+    if (!m_quitRequested && m_benchmark.elapsedSeconds() >= static_cast<double>(*m_benchmarkSeconds)) {
+        logBenchmark();
+        m_quitRequested = true;
+    }
+}
+
+void DemoApp::logBenchmark() const {
+    const debug::BenchmarkSummary summary = m_benchmark.summary();
+    const graphics::FrameCounters counters = m_renderer->lastFrameCounters();
+    const platform::PixelSize size = m_window->sizeInPixels();
+    m_logger->info("Benchmark: {} frames in {:.1f} s, {:.1f} FPS average; frame time {:.2f} ms average, "
+                   "{:.2f} ms 99th percentile, {:.2f} ms max",
+                   summary.frameCount, summary.durationSeconds, summary.averageFramesPerSecond,
+                   summary.averageFrameMs, summary.percentile99FrameMs, summary.maxFrameMs);
+    m_logger->info("Benchmark settings: {} build, {}x{} pixels, vsync {}, {} objects drawn, {} triangles, "
+                   "graphics options: none",
+                   kBuildName, size.width, size.height, m_vsync ? "on" : "off", counters.drawCalls,
+                   counters.triangles);
 }
 
 void DemoApp::simulate(const core::FixedStep& step) {
@@ -207,6 +270,11 @@ void DemoApp::simulate(const core::FixedStep& step) {
 }
 
 void DemoApp::stepCamera(const core::FixedStep& step) {
+    if (m_benchmarkSeconds) {
+        m_previousCamera = m_camera;
+        m_camera = benchmarkCamera(static_cast<double>(step.tick + 1) * step.deltaSeconds);
+        return;
+    }
     // Released cursor: the mouse belongs to the interface, not to the camera.
     const bool looking = m_window->isCursorCaptured();
     const FreeCameraInput input{

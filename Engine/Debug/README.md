@@ -13,6 +13,7 @@
 | `Debug/LogHistorySink.h` | `LogHistorySink` : sink du logger qui alimente une `LogHistory` |
 | `Debug/DebugUi.h` | `DebugUi` : `create()`, `buildFrame(data, controls)`, `setPanelVisible()`, `panelVisible()`, `setMouseInput()`, `wantsKeyboard()`, `wantsMouse()` ; implémente `graphics::RenderOverlay` |
 | `Debug/StatsPanel.h` | `DebugPanelData` : ce que le panneau affiche, rempli par l'application ; `DebugControls` : les réglages que le panneau modifie, appliqués par l'application |
+| `Debug/BenchmarkRecorder.h` | `BenchmarkSummary`, `BenchmarkRecorder` : `addFrame()`, `elapsedSeconds()`, `summary()` |
 | `Debug/InputCapture.h` | `filterCapturedEvents()` : retire les événements utilisés par l'interface |
 | `Debug/ColorSpace.h` | `srgbToLinear()` |
 
@@ -25,6 +26,12 @@ En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et
 - Une frame sort de la fenêtre quand les frames plus récentes couvrent à elles seules toute la fenêtre. La frame la plus récente reste toujours, même si elle dure plus que la fenêtre (cas d'un blocage de plusieurs secondes).
 - Une durée négative ou non finie compte pour 0. Toutes les valeurs valent 0 avant la première frame.
 - Les durées viennent de l'application, qui mesure la frame. Rien ici ne lit l'horloge. Ce temps réel n'alimente que le panneau, jamais la simulation (G-05).
+
+## Mesure de performance
+
+- `BenchmarkRecorder` garde toutes les durées de frame d'une mesure (section 7.1) : nombre de frames, durée, FPS moyen (frames divisées par la durée), durée moyenne, 99e centile et maximum, en millisecondes.
+- 99e centile au rang le plus proche : la plus petite durée que 99 % des frames ne dépassent pas, calculée en entiers (`ceil(0,99 n)`) pour ne pas dépendre d'un arrondi.
+- Comme `FrameTimeStats`, il ne lit pas l'horloge : l'application lui donne les durées. Une durée négative ou non finie compte pour 0.
 
 ## Historique des logs
 

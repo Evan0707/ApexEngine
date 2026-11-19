@@ -46,3 +46,14 @@ TEST_CASE("An unknown option is rejected", "[game]") {
     REQUIRE_FALSE(options.has_value());
     REQUIRE(options.error().code == ErrorCode::InvalidArgument);
 }
+
+TEST_CASE("The benchmark option sets the measured duration", "[game]") {
+    constexpr std::array<std::string_view, 3> arguments{"--no-vsync", "--benchmark", "60"};
+    const auto options = parseCommandLine(arguments);
+    REQUIRE(options.has_value());
+    REQUIRE(options->benchmarkSeconds == 60u);
+    REQUIRE_FALSE(options->vsync);
+    REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 1>{"--benchmark"}).has_value());
+    REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 2>{"--benchmark", "0"}).has_value());
+    REQUIRE_FALSE(parseCommandLine(std::array<std::string_view, 2>{"--benchmark", "1.5"}).has_value());
+}

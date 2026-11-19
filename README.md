@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 2 en cours (Vulkan, swapchain, triangle, ImGui).** `ApexDemo` ouvre une fenêtre et y dessine par Vulkan 1.3 un triangle coloré sur fond bleu nuit, avec un panneau de debug Dear ImGui (F1). Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 3 en cours (caméra, meshes, profondeur, shader PBR, lumière).** `ApexDemo` dessine par Vulkan 1.3 une scène éclairée (sol, cubes, sphères métalliques et non métalliques) vue par une caméra libre, avec un panneau de debug Dear ImGui (F1). Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -44,6 +44,7 @@ Remplacer `windows-debug` par `windows-release` pour la configuration Release, o
 |---|---|
 | `--frames N` | Quitte seul après N frames |
 | `--no-vsync` | Désactive la synchronisation verticale, pour les mesures |
+| `--benchmark S` | Mesure de performance (section 7.1) : la caméra suit un cercle autour de la scène ; après 2 s de mise en route, S secondes de frames sont mesurées, le résultat est logué, puis l'application quitte. À lancer en Release avec `--no-vsync` (voir `Docs/benchmark.md`) |
 
 | Code de sortie | Signification |
 |---|---|
@@ -53,12 +54,14 @@ Remplacer `windows-debug` par `windows-release` pour la configuration Release, o
 
 | Touche (AZERTY) | Effet |
 |---|---|
-| Z / S, Q / D, A / E | Logue la valeur des axes `MoveForward`, `MoveRight`, `MoveUp` quand elle change |
-| Espace, Maj gauche, F3 | Logue l'appui et le relâchement de `Jump`, `Sprint`, `SwitchCamera` |
+| Z / S, Q / D | Avance ou recule dans la direction du regard, va à gauche ou à droite (5 m/s) ; logue la valeur des axes quand elle change |
+| E / A | Monte ou descend à la verticale |
+| Maj gauche | Court : vitesse multipliée par 4 |
 | Échap | Capture ou libère le curseur |
-| F1 | Affiche ou masque le panneau de debug |
+| Souris | Oriente la caméra quand le curseur est capturé ; logue une fois par seconde le déplacement cumulé |
+| F1 | Affiche ou masque le panneau de debug, où se règle le champ de vision (50° à 100°) |
+| Espace, F3 | Logue l'appui et le relâchement de `Jump`, `SwitchCamera` ; sans autre effet avant la phase 6 |
 | F2, F4 | Logue l'appui ; sans effet avant la phase 7 |
-| Souris | Logue une fois par seconde le déplacement cumulé, quand elle a bougé |
 | Croix, Alt + F4 | Ferme l'application, code de sortie 0 |
 
 Avec Visual Studio : ouvrir le dossier du dépôt, les presets sont détectés automatiquement.

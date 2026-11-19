@@ -79,7 +79,7 @@ constexpr bool kEnableValidation = true;
                                     .logHistory = logHistory,
                                     .logger = logger,
                                     .scene = *scene};
-    core::Result<game::DemoApp> app = game::DemoApp::create(systems, std::move(*actions), options.maxFrames);
+    core::Result<game::DemoApp> app = game::DemoApp::create(systems, std::move(*actions), options);
     if (!app) {
         logger.error("{}", app.error().message);
         return kExitFailure;

@@ -31,6 +31,8 @@ add_library(ApexEngine STATIC
     Core/Version.cpp
     Core/Version.h
     Core/WorldPosition.h
+    Debug/BenchmarkRecorder.cpp
+    Debug/BenchmarkRecorder.h
     Debug/ColorSpace.cpp
     Debug/ColorSpace.h
     Debug/DebugUi.cpp

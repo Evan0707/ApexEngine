@@ -14,6 +14,9 @@ struct CommandLineOptions {
     std::optional<std::uint64_t> maxFrames;
     // --no-vsync: for performance measurements (spec 7.1).
     bool vsync = true;
+    // --benchmark S: the camera follows a fixed path; after a warm-up, S seconds of frame times are
+    // measured and logged, then the demo quits (spec 7.1).
+    std::optional<std::uint64_t> benchmarkSeconds;
 };
 
 // Arguments without the program name. Unknown or malformed options are an InvalidArgument error.

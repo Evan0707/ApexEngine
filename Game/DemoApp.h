@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CommandLine.h"
 #include "DemoScene.h"
 #include "FreeCamera.h"
 #include "SceneExtraction.h"
@@ -7,6 +8,7 @@
 #include "Core/Error.h"
 #include "Core/FramePhases.h"
 #include "Core/Logger.h"
+#include "Debug/BenchmarkRecorder.h"
 #include "Debug/DebugUi.h"
 #include "Debug/FrameTimeStats.h"
 #include "Debug/LogHistory.h"
@@ -39,9 +41,9 @@ struct DemoSystems {
 // only while the cursor is captured.
 class DemoApp final : public core::FramePhases {
 public:
-    // maxFrames: quit after that many frames.
+    // options: frame limit and benchmark mode. The renderer's vsync setting is only logged.
     [[nodiscard]] static core::Result<DemoApp> create(const DemoSystems& systems, input::ActionMap actions,
-                                                      std::optional<std::uint64_t> maxFrames);
+                                                      const CommandLineOptions& options);
 
     [[nodiscard]] bool processInput() override;
     void simulate(const core::FixedStep& step) override;
@@ -65,6 +67,8 @@ private:
     void logMouseLook(const core::FixedStep& step);
     void stepCamera(const core::FixedStep& step);
     void measureFrame();
+    void recordBenchmark(double frameSeconds);
+    void logBenchmark() const;
     void stopOnRenderError(const core::Result<void>& result);
 
     platform::Window* m_window;
@@ -101,6 +105,10 @@ private:
     std::optional<std::chrono::steady_clock::time_point> m_frameStart;
 
     std::optional<std::uint64_t> m_maxFrames;
+    std::optional<std::uint64_t> m_benchmarkSeconds;
+    debug::BenchmarkRecorder m_benchmark;
+    double m_benchmarkWarmupSeconds = 0.0;
+    bool m_vsync = true;
     std::uint64_t m_frameCount = 0;
     bool m_quitRequested = false;
     bool m_failed = false;
