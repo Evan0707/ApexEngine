@@ -10,7 +10,10 @@
       "features": [
         "vulkan"
       ]
-    }
+    },
+    "vk-bootstrap",
+    "vulkan-headers",
+    "vulkan-loader"
   ],
   "features": {
     "profiling": {

@@ -1,4 +1,7 @@
 find_package(SDL3 CONFIG REQUIRED)
+find_package(VulkanHeaders CONFIG REQUIRED)
+find_package(VulkanLoader CONFIG REQUIRED)
+find_package(vk-bootstrap CONFIG REQUIRED)
 if(APEX_ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -29,6 +32,12 @@ add_library(ApexEngine STATIC
     Debug/LogHistory.h
     Debug/LogHistorySink.cpp
     Debug/LogHistorySink.h
+    Graphics/Device.cpp
+    Graphics/Device.h
+    Graphics/Renderer.cpp
+    Graphics/Renderer.h
+    Graphics/ValidationLog.cpp
+    Graphics/ValidationLog.h
     Input/ActionMap.cpp
     Input/ActionMap.h
     Input/ActionState.cpp
@@ -47,6 +56,8 @@ target_include_directories(ApexEngine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(ApexEngine PUBLIC Apex::Options)
 # SDL is included only by Platform/*.cpp (decision 0002).
 target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
+# Vulkan headers are included only by Graphics (decision 0006); no public header of Graphics needs them.
+target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-bootstrap::vk-bootstrap)
 if(APEX_ENABLE_PROFILING)
     # PUBLIC: the macros of Core/Profiling.h expand in every source that profiles (decision 0003).
     target_link_libraries(ApexEngine PUBLIC Tracy::TracyClient)

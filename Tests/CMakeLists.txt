@@ -11,6 +11,7 @@ add_executable(ApexTests
     Debug/FrameTimeStatsTests.cpp
     Debug/LogHistoryTests.cpp
     Game/DefaultBindingsTests.cpp
+    Graphics/ValidationLogTests.cpp
     Input/ActionMapTests.cpp
     Input/ActionStateTests.cpp
     Platform/KeyTests.cpp

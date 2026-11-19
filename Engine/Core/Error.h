@@ -11,6 +11,8 @@ enum class ErrorCode {
     NotFound,
     IoFailure,
     PlatformFailure,
+    // A GPU or graphics API call failed, or no GPU meets the requirements.
+    GpuFailure,
 };
 
 struct Error {
