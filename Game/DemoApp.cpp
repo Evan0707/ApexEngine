@@ -52,9 +52,9 @@ findActions(const input::ActionMap& actions, const std::array<std::string_view, 
 } // namespace
 
 core::Result<DemoApp> DemoApp::create(platform::Window& window, graphics::Renderer& renderer,
-                                      core::Logger& logger, input::ActionMap actions,
+                                      debug::DebugUi& debugUi, core::Logger& logger, input::ActionMap actions,
                                       std::optional<std::uint64_t> maxFrames) {
-    DemoApp app(window, renderer, logger, std::move(actions));
+    DemoApp app(window, renderer, debugUi, logger, std::move(actions));
     app.m_maxFrames = maxFrames;
 
     const core::Result<input::ActionId> toggleCursor = findAction(app.m_actions, "ToggleCursor");
@@ -89,10 +89,10 @@ core::Result<DemoApp> DemoApp::create(platform::Window& window, graphics::Render
     return app;
 }
 
-DemoApp::DemoApp(platform::Window& window, graphics::Renderer& renderer, core::Logger& logger,
-                 input::ActionMap actions)
-    : m_window(&window), m_renderer(&renderer), m_logger(&logger), m_actions(std::move(actions)),
-      m_frame(m_actions), m_simulation(m_actions) {}
+DemoApp::DemoApp(platform::Window& window, graphics::Renderer& renderer, debug::DebugUi& debugUi,
+                 core::Logger& logger, input::ActionMap actions)
+    : m_window(&window), m_renderer(&renderer), m_debugUi(&debugUi), m_logger(&logger),
+      m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {}
 
 bool DemoApp::processInput() {
     if (m_maxFrames && m_frameCount == *m_maxFrames) {
@@ -187,6 +187,7 @@ void DemoApp::logMouseLook(const core::FixedStep& step) {
 void DemoApp::extract(double /*alpha*/) {}
 
 void DemoApp::render() {
+    m_debugUi->buildFrame();
     if (!m_failed) {
         stopOnRenderError(m_renderer->renderFrame());
     }

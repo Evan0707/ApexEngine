@@ -14,7 +14,14 @@
     "vk-bootstrap",
     "vulkan-headers",
     "vulkan-loader",
-    "vulkan-memory-allocator"
+    "vulkan-memory-allocator",
+    {
+      "name": "imgui",
+      "features": [
+        "sdl3-binding",
+        "vulkan-binding"
+      ]
+    }
   ],
   "features": {
     "profiling": {

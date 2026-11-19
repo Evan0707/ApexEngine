@@ -3,6 +3,7 @@
 #include "Core/Error.h"
 #include "Core/FramePhases.h"
 #include "Core/Logger.h"
+#include "Debug/DebugUi.h"
 #include "Graphics/Renderer.h"
 #include "Input/ActionMap.h"
 #include "Input/ActionState.h"
@@ -19,9 +20,11 @@ namespace apex::game {
 // capture with the ToggleCursor action.
 class DemoApp final : public core::FramePhases {
 public:
-    // The window, the renderer and the logger must outlive the app. maxFrames: quit after that many frames.
+    // The window, the renderer, the debug interface and the logger must outlive the app.
+    // maxFrames: quit after that many frames.
     [[nodiscard]] static core::Result<DemoApp> create(platform::Window& window, graphics::Renderer& renderer,
-                                                      core::Logger& logger, input::ActionMap actions,
+                                                      debug::DebugUi& debugUi, core::Logger& logger,
+                                                      input::ActionMap actions,
                                                       std::optional<std::uint64_t> maxFrames);
 
     [[nodiscard]] bool processInput() override;
@@ -39,8 +42,8 @@ private:
         float lastValue = 0.0f;
     };
 
-    DemoApp(platform::Window& window, graphics::Renderer& renderer, core::Logger& logger,
-            input::ActionMap actions);
+    DemoApp(platform::Window& window, graphics::Renderer& renderer, debug::DebugUi& debugUi,
+            core::Logger& logger, input::ActionMap actions);
 
     void handleWindowEvents(std::span<const platform::Event> events);
     void handleFrameActions();
@@ -49,6 +52,7 @@ private:
 
     platform::Window* m_window;
     graphics::Renderer* m_renderer;
+    debug::DebugUi* m_debugUi;
     core::Logger* m_logger;
     input::ActionMap m_actions;
     input::ActionState m_frame;

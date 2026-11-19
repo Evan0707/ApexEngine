@@ -4,6 +4,7 @@
 #include "Core/Logger.h"
 #include "Graphics/FrameCounters.h"
 #include "Graphics/GpuMemoryStats.h"
+#include "Graphics/RenderOverlay.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
 
@@ -11,6 +12,8 @@
 #include <string>
 
 namespace apex::graphics {
+
+struct VulkanBackendInfo;
 
 struct RendererConfig {
     std::string applicationName = "Apex Engine";
@@ -49,6 +52,12 @@ public:
     [[nodiscard]] GpuMemoryStats memoryStats() const;
     // Counters of the last rendered frame. Unchanged by a skipped frame.
     [[nodiscard]] FrameCounters lastFrameCounters() const noexcept;
+
+    // Drawn at the end of the main pass of each frame. nullptr removes it. Must outlive its registration.
+    void setOverlay(RenderOverlay* overlay) noexcept;
+
+    // Graphics/VulkanBackendAccess.h, for the ImGui backend of Debug only (decision 0009).
+    friend VulkanBackendInfo vulkanBackendInfo(const Renderer& renderer);
 
 private:
     std::unique_ptr<State> m_state;

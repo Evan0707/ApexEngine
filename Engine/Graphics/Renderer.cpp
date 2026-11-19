@@ -8,9 +8,11 @@
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
 #include "Graphics/TrianglePipeline.h"
+#include "Graphics/VulkanBackendAccess.h"
 
 #include <vulkan/vulkan.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -93,6 +95,7 @@ struct Renderer::State {
     TrianglePipeline trianglePipeline;
     Swapchain swapchain;
     FrameCounters counters;
+    RenderOverlay* overlay = nullptr;
     bool vsync = true;
     SwapchainState swapchainState;
     std::uint32_t frameIndex = 0;
@@ -210,6 +213,11 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
     vkCmdDraw(commands, static_cast<std::uint32_t>(kTriangle.size()), 1, 0, 0);
     counters = FrameCounters{.drawCalls = 1, .triangles = kTriangle.size() / 3};
 
+    // Last in the pass: the interface is drawn over the scene (decision 0008).
+    if (overlay != nullptr) {
+        overlay->record(OverlayCommands{.commandBuffer = commands, .colorFormat = swapchain.format()});
+    }
+
     vkCmdEndRendering(commands);
 
     transitionImage(commands, image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -261,7 +269,13 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     }
     state->frames = std::move(*frames);
 
-    // The swapchain is created by the first renderFrame, once the window has a size.
+    // Created now when the window has a size: the debug interface needs its format at creation.
+    // Otherwise the first renderFrame creates it.
+    if (const platform::PixelSize size = window.sizeInPixels(); size.width > 0 && size.height > 0) {
+        if (const core::Result<bool> created = state->recreateSwapchain(size); !created) {
+            return std::unexpected(created.error());
+        }
+    }
     return std::make_unique<Renderer>(ConstructionKey{}, std::move(state));
 }
 
@@ -367,6 +381,25 @@ GpuMemoryStats Renderer::memoryStats() const {
 
 FrameCounters Renderer::lastFrameCounters() const noexcept {
     return m_state->counters;
+}
+
+void Renderer::setOverlay(RenderOverlay* overlay) noexcept {
+    m_state->overlay = overlay;
+}
+
+VulkanBackendInfo vulkanBackendInfo(const Renderer& renderer) {
+    const Renderer::State& state = *renderer.m_state;
+    const bool hasSwapchain = state.swapchain.handle() != VK_NULL_HANDLE;
+    return VulkanBackendInfo{
+        .apiVersion = VK_API_VERSION_1_3,
+        .instance = state.device->instance(),
+        .physicalDevice = state.device->physicalDevice(),
+        .device = state.device->device(),
+        .queueFamily = state.device->graphicsQueueFamily(),
+        .queue = state.device->graphicsQueue(),
+        .colorFormat = hasSwapchain ? state.swapchain.format() : VK_FORMAT_B8G8R8A8_SRGB,
+        .imageCount = std::max(hasSwapchain ? state.swapchain.imageCount() : 0u, kFramesInFlight),
+    };
 }
 
 core::Result<void> Renderer::presentFrame() {

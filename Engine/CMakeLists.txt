@@ -3,6 +3,7 @@ find_package(VulkanHeaders CONFIG REQUIRED)
 find_package(VulkanLoader CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 if(APEX_ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -27,8 +28,12 @@ add_library(ApexEngine STATIC
     Core/Profiling.h
     Core/Version.cpp
     Core/Version.h
+    Debug/DebugUi.cpp
+    Debug/DebugUi.h
     Debug/FrameTimeStats.cpp
     Debug/FrameTimeStats.h
+    Debug/ImGuiBackend.cpp
+    Debug/ImGuiBackend.h
     Debug/LogHistory.cpp
     Debug/LogHistory.h
     Debug/LogHistorySink.cpp
@@ -43,6 +48,7 @@ add_library(ApexEngine STATIC
     Graphics/GpuAllocator.cpp
     Graphics/GpuAllocator.h
     Graphics/GpuMemoryStats.h
+    Graphics/RenderOverlay.h
     Graphics/Renderer.cpp
     Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
@@ -57,6 +63,7 @@ add_library(ApexEngine STATIC
     Graphics/ValidationLog.cpp
     Graphics/ValidationLog.h
     Graphics/VmaImplementation.cpp
+    Graphics/VulkanBackendAccess.h
     Input/ActionMap.cpp
     Input/ActionMap.h
     Input/ActionState.cpp
@@ -83,6 +90,8 @@ target_link_libraries(ApexEngine PRIVATE SDL3::SDL3)
 # Vulkan headers are included only by Graphics (decision 0006); no public header of Graphics needs them.
 target_link_libraries(ApexEngine PRIVATE Vulkan::Headers Vulkan::Loader vk-bootstrap::vk-bootstrap
                                           GPUOpen::VulkanMemoryAllocator)
+# Dear ImGui is included only by Debug (decision 0008).
+target_link_libraries(ApexEngine PRIVATE imgui::imgui)
 if(APEX_ENABLE_PROFILING)
     # PUBLIC: the macros of Core/Profiling.h expand in every source that profiles (decision 0003).
     target_link_libraries(ApexEngine PUBLIC Tracy::TracyClient)

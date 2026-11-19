@@ -7,6 +7,7 @@
 #include "Core/Logger.h"
 #include "Core/MainLoop.h"
 #include "Core/Version.h"
+#include "Debug/DebugUi.h"
 #include "Graphics/Renderer.h"
 #include "Graphics/ValidationLog.h"
 #include "Input/ActionMap.h"
@@ -55,8 +56,14 @@ constexpr bool kEnableValidation = true;
         return kExitFailure;
     }
 
+    core::Result<std::unique_ptr<debug::DebugUi>> debugUi =
+        debug::DebugUi::create(*window, **renderer, logger);
+    if (!debugUi) {
+        return kExitFailure;
+    }
+
     core::Result<game::DemoApp> app =
-        game::DemoApp::create(*window, **renderer, logger, std::move(*actions), options.maxFrames);
+        game::DemoApp::create(*window, **renderer, **debugUi, logger, std::move(*actions), options.maxFrames);
     if (!app) {
         logger.error("{}", app.error().message);
         return kExitFailure;
