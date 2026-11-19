@@ -103,11 +103,15 @@ add_library(ApexEngine STATIC
     Platform/Key.h
     Platform/Window.cpp
     Platform/Window.h
+    Resources/AssetPath.cpp
+    Resources/AssetPath.h
+    Resources/Handles.h
     Resources/MaterialData.h
     Resources/MeshData.cpp
     Resources/MeshData.h
     Resources/Primitives.cpp
     Resources/Primitives.h
+    Resources/ResourcePool.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
 

@@ -31,8 +31,10 @@ add_executable(ApexTests
     Input/ActionMapTests.cpp
     Input/ActionStateTests.cpp
     Platform/KeyTests.cpp
+    Resources/AssetPathTests.cpp
     Resources/MeshDataTests.cpp
     Resources/PrimitivesTests.cpp
+    Resources/ResourcePoolTests.cpp
     # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
     "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"
     "${PROJECT_SOURCE_DIR}/Game/DefaultBindings.cpp"
