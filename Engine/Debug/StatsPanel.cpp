@@ -5,6 +5,7 @@
 
 #include <imgui.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,12 @@ void drawFrameSection(const FrameTimeStats& frameTimes) {
     ImGui::Text("CPU time per frame: %.2f ms average, %.2f ms max",
                 frameTimes.averageCpuSeconds() * kMillisecondsPerSecond,
                 frameTimes.maxCpuSeconds() * kMillisecondsPerSecond);
+    if (const std::optional<double> average = frameTimes.averageGpuSeconds()) {
+        ImGui::Text("GPU time per frame: %.2f ms average, %.2f ms max", *average * kMillisecondsPerSecond,
+                    frameTimes.maxGpuSeconds().value_or(0.0) * kMillisecondsPerSecond);
+    } else {
+        ImGui::TextUnformatted("GPU time per frame: n/a");
+    }
     ImGui::Text("Frame time: %.2f ms average, %.2f ms max",
                 frameTimes.averageFrameSeconds() * kMillisecondsPerSecond,
                 frameTimes.maxFrameSeconds() * kMillisecondsPerSecond);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
 namespace apex::graphics {
 
@@ -11,6 +12,10 @@ struct FrameCounters {
     // Time the CPU spent blocked on the GPU or the presentation engine (fence, acquire, present):
     // with vsync on, most of the frame. Subtracted from the frame time to get the CPU time.
     double waitSeconds = 0.0;
+    // From the first to the last command of a frame, measured by the GPU (decision 0023). It belongs to an
+    // earlier frame, the last one that used the same frame in flight. Nothing when the GPU writes no
+    // timestamp.
+    std::optional<double> gpuSeconds;
 };
 
 } // namespace apex::graphics

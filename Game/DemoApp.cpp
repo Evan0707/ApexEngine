@@ -276,8 +276,10 @@ void DemoApp::measureFrame() {
     const auto now = std::chrono::steady_clock::now();
     if (m_frameStart) {
         const double frameSeconds = std::chrono::duration<double>(now - *m_frameStart).count();
-        const double waitSeconds = m_renderer->lastFrameCounters().waitSeconds;
-        m_frameTimes.addFrame({frameSeconds, frameSeconds - waitSeconds});
+        const graphics::FrameCounters counters = m_renderer->lastFrameCounters();
+        m_frameTimes.addFrame({.frameSeconds = frameSeconds,
+                               .cpuSeconds = frameSeconds - counters.waitSeconds,
+                               .gpuSeconds = counters.gpuSeconds});
         if (m_benchmarkSeconds) {
             recordBenchmark(frameSeconds);
         }

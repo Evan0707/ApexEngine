@@ -10,6 +10,7 @@
 #include "Graphics/GpuAllocator.h"
 #include "Graphics/GpuMesh.h"
 #include "Graphics/GpuTexture.h"
+#include "Graphics/GpuTimer.h"
 #include "Graphics/MaterialSets.h"
 #include "Graphics/MaterialTable.h"
 #include "Graphics/Renderer.h"
@@ -63,6 +64,7 @@ struct Renderer::State {
     MaterialSets materialSets;
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
+    GpuTimer gpuTimer;
     UploadContext upload;
     ResourceMirror<resources::MeshHandle, resources::MeshData, GpuMesh> meshes;
     resources::MeshHandle fallbackMesh;

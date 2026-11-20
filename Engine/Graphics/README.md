@@ -11,7 +11,7 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | En-tête | Contenu |
 |---|---|
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
-| `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame |
+| `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame, temps d'attente du CPU, temps GPU |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
 | `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
@@ -40,7 +40,9 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
 - `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`) : reflet des matériaux du cache, sans Vulkan, testé sans GPU ;
 - `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
-- `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol.
+- `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol ;
+- `Graphics/GpuTimestamps.h` (`TimestampFormat`, `elapsedSeconds()`), sans Vulkan, testé sans GPU ;
+- `Graphics/GpuTimer.h` (`GpuTimer`) : les horodatages de chaque frame en vol.
 
 ## Renderer
 
@@ -60,6 +62,13 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Deux passes (note 0011) : la scène, qui efface la couleur et la profondeur ; puis l'interface, qui charge la couleur et n'a pas de profondeur. Une barrière sépare les deux écritures de la couleur. Le backend ImGui n'a donc pas à connaître le format de profondeur, et l'ordre est celui que demandera le tonemapping de la phase 7.
 - Profondeur : `D32_SFLOAT` (section 5.4), choisi en un seul endroit (`Renderer.cpp`) et passé aux pipelines (G-09). Test « inférieur », effacement à 1. Le tampon est recréé avec la swapchain, à sa taille ; son contenu n'est pas conservé après la passe. Un seul tampon sert aux deux frames en vol : la barrière du début de frame attend les écritures de profondeur de la frame précédente.
 - Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
+
+## Temps GPU (phase 7, note 0023)
+
+- Deux horodatages par frame en vol, dans un pool de requêtes : le premier au début des commandes de la frame, le second à la fin. Les deux requêtes sont remises à zéro par le command buffer lui-même, juste avant.
+- Lecture sans attente, juste après l'attente de la fence du créneau : le GPU a fini, les résultats sont là. `lastFrameCounters().gpuSeconds` donne donc le temps de la dernière frame passée par ce créneau, deux frames plus tôt. Une frame sautée après l'attente de sa fence ne relit pas la même valeur.
+- Le compteur du GPU n'a que `timestampValidBits` bits utiles (ceux de la famille de la file graphique) : la différence est calculée modulo cette taille, ce qui compte juste un compteur repassé par zéro. Les ticks sont convertis en secondes par `timestampPeriod`.
+- Une file sans horodatages (`timestampValidBits` nul) : pas de pool, pas de valeur. Le log dit au démarrage si les horodatages sont disponibles.
 
 ## Passe de scène (phase 3)
 

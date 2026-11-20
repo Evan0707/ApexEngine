@@ -161,11 +161,20 @@ core::Result<std::unique_ptr<Device>> Device::create(platform::Window& window, c
     device->m_graphicsQueueFamily = *graphicsFamily;
     device->m_presentQueue = *presentQueue;
 
+    std::uint32_t familyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device->physicalDevice(), &familyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> families(familyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device->physicalDevice(), &familyCount, families.data());
+    device->m_timestampFormat = TimestampFormat{
+        .validBits = *graphicsFamily < familyCount ? families[*graphicsFamily].timestampValidBits : 0,
+        .nanosecondsPerTick = device->m_device.physical_device.properties.limits.timestampPeriod};
+
     const VkPhysicalDeviceProperties& properties = device->m_device.physical_device.properties;
     logger.info("GPU: {} ({}), Vulkan {}.{}.{}", device->m_device.physical_device.name,
                 deviceTypeName(properties.deviceType), VK_API_VERSION_MAJOR(properties.apiVersion),
                 VK_API_VERSION_MINOR(properties.apiVersion), VK_API_VERSION_PATCH(properties.apiVersion));
     logger.info("Vulkan validation: {}", useValidation ? "enabled" : "disabled");
+    logger.info("GPU timestamps: {}", device->m_timestampFormat.supported() ? "available" : "unavailable");
     return device;
 }
 
@@ -216,6 +225,10 @@ VkQueue Device::presentQueue() const noexcept {
 
 bool Device::validationEnabled() const noexcept {
     return m_validationEnabled;
+}
+
+const TimestampFormat& Device::timestampFormat() const noexcept {
+    return m_timestampFormat;
 }
 
 bool Device::memoryBudgetEnabled() const noexcept {

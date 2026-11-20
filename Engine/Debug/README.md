@@ -2,13 +2,13 @@
 
 **Rôle :** outils de débogage : panneau ImGui affiché par F1, console des derniers avertissements et erreurs, statistiques de frame (cahier des charges, section 5.9).
 
-**État (phase 6) :** panneau de debug de la section 5.9 (Dear ImGui, note de décision 0008), affiché par F1 : FPS, temps CPU et temps de frame, entités, corps physiques, objets dessinés, triangles, mémoire GPU, réglage du champ de vision (note 0011), console des 100 derniers avertissements et erreurs. Les éléments P1 du panneau arrivent en phase 7.
+**État (phase 7) :** panneau de debug de la section 5.9 (Dear ImGui, note de décision 0008), affiché par F1 : FPS, temps CPU, temps GPU (note 0023) et temps de frame, entités, corps physiques, objets dessinés, triangles, mémoire GPU, réglage du champ de vision (note 0011), console des 100 derniers avertissements et erreurs.
 
 ## Interface publique
 
 | En-tête | Contenu |
 |---|---|
-| `Debug/FrameTimeStats.h` | `FrameSample`, `FrameTimeStats` : `addFrame()`, `framesPerSecond()`, `averageFrameSeconds()`, `maxFrameSeconds()`, `averageCpuSeconds()`, `maxCpuSeconds()`, `frameCount()` |
+| `Debug/FrameTimeStats.h` | `FrameSample`, `FrameTimeStats` : `addFrame()`, `framesPerSecond()`, `averageFrameSeconds()`, `maxFrameSeconds()`, `averageCpuSeconds()`, `maxCpuSeconds()`, `averageGpuSeconds()`, `maxGpuSeconds()`, `frameCount()` |
 | `Debug/LogHistory.h` | `LogEntry`, `LogHistory` : `add()`, `snapshot()`, `capacity()` |
 | `Debug/LogHistorySink.h` | `LogHistorySink` : sink du logger qui alimente une `LogHistory` |
 | `Debug/DebugUi.h` | `DebugUi` : `create()`, `buildFrame(data, controls)`, `setPanelVisible()`, `panelVisible()`, `setMouseInput()`, `wantsKeyboard()`, `wantsMouse()` ; implémente `graphics::RenderOverlay` |
@@ -24,6 +24,7 @@ En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et
 - `FrameTimeStats` garde, pour chaque frame, sa durée et son temps CPU, sur une fenêtre glissante d'une seconde de durée de frame par défaut : FPS, moyenne et maximum « sur une seconde » de la section 5.9.
 - Temps CPU d'une frame : sa durée moins le temps passé bloqué sur le GPU ou sur la présentation (`FrameCounters::waitSeconds`, mesuré par le renderer). Avec la vsync, la durée de frame vaut à peu près la période de l'écran ; le temps CPU montre le travail réel. Il est plafonné par la durée de frame.
 - Une frame sort de la fenêtre quand les frames plus récentes couvrent à elles seules toute la fenêtre. La frame la plus récente reste toujours, même si elle dure plus que la fenêtre (cas d'un blocage de plusieurs secondes).
+- Temps GPU (note 0023) : celui que le renderer a mesuré par horodatages (`FrameCounters::gpuSeconds`). Il appartient à une frame antérieure, la dernière qui a utilisé le même créneau de frame en vol ; sur une seconde, l'écart ne compte pas. Moyenne et maximum portent sur les frames de la fenêtre qui en ont un ; sans aucune, il n'y a pas de valeur et le panneau affiche « n/a ».
 - Une durée négative ou non finie compte pour 0. Toutes les valeurs valent 0 avant la première frame.
 - Les durées viennent de l'application, qui mesure la frame. Rien ici ne lit l'horloge. Ce temps réel n'alimente que le panneau, jamais la simulation (G-05).
 
@@ -52,7 +53,7 @@ En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et
 ## Panneau (F1)
 
 - Masqué au démarrage. L'action `ToggleDebug` (F1) l'affiche ou le masque ; son bouton de fermeture le masque aussi.
-- Contenu (section 5.9) : FPS ; temps CPU par frame et durée de frame, moyenne et maximum sur une seconde ; entités ; corps physiques et nombre de ceux qui ne dorment pas (ajout de la phase 6, hors de la liste de la section 5.9) ; objets dessinés et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
+- Contenu (section 5.9) : FPS ; temps CPU, temps GPU (P1) et durée de frame, moyenne et maximum sur une seconde ; entités ; corps physiques et nombre de ceux qui ne dorment pas (ajout de la phase 6, hors de la liste de la section 5.9) ; objets dessinés et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
 - Réglages (note 0011) : `buildFrame(data, controls)` reçoit une `DebugControls` que les widgets modifient : champ de vision vertical, de 50° à 100° (section 5.3). Le panneau ne connaît pas la caméra ; l'application lit la valeur et l'applique. Le même mécanisme servira à l'exposition et aux bascules de la phase 7.
 - La console suit les nouvelles lignes tant que la vue est en bas ; remonter permet de lire les plus anciennes.
 - Les couleurs ajoutées par le panneau sont données en sRGB et converties en linéaire, comme le thème.

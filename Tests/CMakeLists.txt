@@ -25,6 +25,7 @@ add_executable(ApexTests
     Graphics/DeferredDeleterTests.cpp
     Graphics/DrawListTests.cpp
     Graphics/FrameDataTests.cpp
+    Graphics/GpuTimestampsTests.cpp
     Graphics/MaterialTableTests.cpp
     Graphics/ProjectionTests.cpp
     Graphics/ResourceMirrorTests.cpp

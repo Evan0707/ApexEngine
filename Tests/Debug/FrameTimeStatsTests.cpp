@@ -95,3 +95,36 @@ TEST_CASE("The window length is configurable", "[debug]") {
     }
     REQUIRE(stats.frameCount() == 2);
 }
+
+TEST_CASE("The GPU time is unknown until a frame brings one", "[debug]") {
+    FrameTimeStats stats;
+    REQUIRE_FALSE(stats.averageGpuSeconds());
+    stats.addFrame({.frameSeconds = 0.25, .cpuSeconds = 0.125});
+    REQUIRE_FALSE(stats.averageGpuSeconds());
+    REQUIRE_FALSE(stats.maxGpuSeconds());
+}
+
+TEST_CASE("The GPU time is averaged over the frames that have one", "[debug]") {
+    FrameTimeStats stats;
+    stats.addFrame({.frameSeconds = 0.25, .cpuSeconds = 0.0, .gpuSeconds = 0.125});
+    stats.addFrame({.frameSeconds = 0.25, .cpuSeconds = 0.0});
+    stats.addFrame({.frameSeconds = 0.25, .cpuSeconds = 0.0, .gpuSeconds = 0.0625});
+
+    REQUIRE(stats.averageGpuSeconds() == Approx(0.09375));
+    REQUIRE(stats.maxGpuSeconds() == 0.125);
+}
+
+TEST_CASE("GPU times leave the window with their frame", "[debug]") {
+    FrameTimeStats stats;
+    stats.addFrame({.frameSeconds = 0.5, .cpuSeconds = 0.0, .gpuSeconds = 0.5});
+    for (int frame = 0; frame < 4; ++frame) {
+        stats.addFrame({.frameSeconds = 0.25, .cpuSeconds = 0.0, .gpuSeconds = 0.25});
+    }
+    REQUIRE(stats.averageGpuSeconds() == Approx(0.25));
+    REQUIRE(stats.maxGpuSeconds() == 0.25);
+
+    for (int frame = 0; frame < 4; ++frame) {
+        stats.addFrame({.frameSeconds = 0.25, .cpuSeconds = 0.0});
+    }
+    REQUIRE_FALSE(stats.averageGpuSeconds());
+}

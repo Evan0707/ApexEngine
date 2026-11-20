@@ -2,6 +2,7 @@
 
 #include "Core/Error.h"
 #include "Core/Logger.h"
+#include "Graphics/GpuTimestamps.h"
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
 
@@ -54,6 +55,8 @@ public:
     [[nodiscard]] bool validationEnabled() const noexcept;
     // VK_EXT_memory_budget: exact GPU memory budget in VMA's statistics.
     [[nodiscard]] bool memoryBudgetEnabled() const noexcept;
+    // How the graphics queue writes timestamps: unsupported when it writes none.
+    [[nodiscard]] const TimestampFormat& timestampFormat() const noexcept;
 
     // Waits for the GPU to finish all submitted work. Logged on failure, never fatal.
     void waitIdle() noexcept;
@@ -70,6 +73,7 @@ private:
     VkQueue m_presentQueue = VK_NULL_HANDLE;
     bool m_validationEnabled = false;
     bool m_memoryBudgetEnabled = false;
+    TimestampFormat m_timestampFormat;
 };
 
 } // namespace apex::graphics

@@ -95,6 +95,7 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
 }
 
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
+    gpuTimer.begin(commands, frameIndex);
     const VkImage image = swapchain.image(imageIndex);
     // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
     transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -127,6 +128,7 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                     {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE});
+    gpuTimer.end(commands, frameIndex);
 }
 
 void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
@@ -172,7 +174,8 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t im
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 0, 1,
                             &frameSet, 0, nullptr);
 
-    counters = FrameCounters{};
+    counters.drawCalls = 0;
+    counters.triangles = 0;
     const GpuMesh* boundMesh = nullptr;
     VkDescriptorSet boundMaterial = VK_NULL_HANDLE;
     for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {

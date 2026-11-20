@@ -155,6 +155,14 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     }
     state->frames = std::move(*frames);
 
+    core::Result<GpuTimer> gpuTimer =
+        GpuTimer::create(state->device->device(), state->device->timestampFormat(), kFramesInFlight);
+    if (!gpuTimer) {
+        logger.error("{}", gpuTimer.error().message);
+        return std::unexpected(gpuTimer.error());
+    }
+    state->gpuTimer = std::move(*gpuTimer);
+
     core::Result<UploadContext> upload = UploadContext::create(
         state->device->device(), state->device->graphicsQueueFamily(), state->device->graphicsQueue());
     if (!upload) {
@@ -208,6 +216,9 @@ core::Result<void> Renderer::renderFrame(const RenderScene& scene) {
     if (!state.slotWaited[state.frameIndex]) {
         state.deleter.advanceFrame();
         state.slotWaited[state.frameIndex] = true;
+        if (const std::optional<double> gpuSeconds = state.gpuTimer.read(state.frameIndex)) {
+            state.counters.gpuSeconds = gpuSeconds;
+        }
     }
 
     std::uint32_t imageIndex = 0;
