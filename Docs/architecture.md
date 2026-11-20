@@ -79,6 +79,7 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 | 0017 | 5 | Monde et scène : format de scène complété, champs inconnus refusés, matériau par entité, configuration dans `Config/`, composants du jeu attachés par identifiant |
 | 0018 | 6 | Ajout de Jolt Physics, un seul thread |
 | 0019 | 6 | Physique, personnage et caméra : objet `Runtime` pour l'état global de Jolt, personnage dans `Physics`, composants ajoutés à `World`, collider centré, configuration |
+| 0020 | 6 | Jolt compilé en flottants précis par un triplet vcpkg du dépôt : sa version Release par défaut est instable avec MSVC 19.52 |
 
 ## Revue des garde-fous (AC-17)
 
