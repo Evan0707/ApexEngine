@@ -12,6 +12,7 @@
 #include "World/SceneQueries.h"
 #include "World/ShadowFocus.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -112,6 +113,8 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
     app.m_controls.shadows = config.shadowsEnabled;
     app.m_controls.shadowConstantBias = config.shadowConstantBias;
     app.m_controls.shadowSlopeBias = config.shadowSlopeBias;
+    app.m_controls.exposureStops = config.exposureStops;
+    app.m_controls.toneMapping = config.toneMapping;
     if (core::Result<void> loaded = app.loadScene(options); !loaded) {
         return std::unexpected(loaded.error());
     }
@@ -454,6 +457,10 @@ void DemoApp::extract(double alpha) {
     m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians =
         glm::radians(clampVerticalFov(m_controls.verticalFovDegrees, m_cameraSettings));
     world::extractRenderScene(m_registry, *m_cache, m_cameraEntity, static_cast<float>(alpha), m_renderScene);
+    m_renderScene.toneMapping = graphics::RenderToneMapping{
+        .exposureStops =
+            std::clamp(m_controls.exposureStops, m_controls.minExposureStops, m_controls.maxExposureStops),
+        .enabled = m_controls.toneMapping};
     m_shadowSettings.enabled = m_controls.shadows;
     m_shadowSettings.constantBias = m_controls.shadowConstantBias;
     m_shadowSettings.slopeBias = m_controls.shadowSlopeBias;

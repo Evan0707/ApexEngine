@@ -66,6 +66,12 @@ void drawShadowSection(DebugControls& controls) {
     ImGui::EndDisabled();
 }
 
+void drawToneMappingSection(DebugControls& controls) {
+    ImGui::SliderFloat("Exposure", &controls.exposureStops, controls.minExposureStops,
+                       controls.maxExposureStops, "%+.1f stops", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::Checkbox("Tonemapping (ACES)", &controls.toneMapping);
+}
+
 void drawLogSection(const LogHistory& log) {
     const std::vector<LogEntry> entries = log.snapshot();
     ImGui::Text("Warnings and errors: %zu (last %zu kept)", entries.size(), log.capacity());
@@ -104,6 +110,8 @@ void drawStatsPanel(const DebugPanelData& data, DebugControls& controls, bool& o
         drawCameraSection(controls);
         ImGui::Separator();
         drawShadowSection(controls);
+        ImGui::Separator();
+        drawToneMappingSection(controls);
         ImGui::Separator();
         drawLogSection(data.log);
     }

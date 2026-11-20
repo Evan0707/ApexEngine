@@ -44,6 +44,9 @@ struct EngineConfig {
     float shadowAreaSize = 40.0f;
     float shadowConstantBias = 0.02f;
     float shadowSlopeBias = 2.0f;
+    // HDR output (spec 5.4, decision 0021): exposure in stops, from -4 to 4, and the ACES curve on or off.
+    float exposureStops = 0.0f;
+    bool toneMapping = true;
 
     [[nodiscard]] bool operator==(const EngineConfig&) const noexcept = default;
 };

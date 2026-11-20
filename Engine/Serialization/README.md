@@ -2,7 +2,7 @@
 
 **Rôle :** lecture et écriture des scènes et de la configuration en JSON (cahier des charges, sections 3.1, 5.2 et 5.6).
 
-**État (phase 7) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration, dont la gravité, le personnage, la caméra troisième personne et les ombres (notes de décision 0016, 0017, 0019 et 0021).
+**État (phase 7) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration, dont la gravité, le personnage, la caméra troisième personne, les ombres et l'exposition (notes de décision 0016, 0017, 0019 et 0021).
 
 ## Interface publique
 
@@ -107,6 +107,8 @@ Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal 
 | `shadows.area` | 40 | Côté de la zone ombrée autour du personnage, en mètres, strictement positif |
 | `shadows.constant_bias` | 0,02 | Biais de profondeur constant, en mètres, positif ou nul |
 | `shadows.slope_bias` | 2 | Biais de pente du rasterizer, positif ou nul |
+| `rendering.exposure_ev` | 0 | Exposition en stops, de −4 à 4 (section 5.4) ; l'image HDR est multipliée par 2^stops |
+| `rendering.tonemapping` | true | Courbe ACES au lancement ; sans elle, les valeurs au-dessus de 1 saturent |
 
 `input.json` : la table d'actions.
 

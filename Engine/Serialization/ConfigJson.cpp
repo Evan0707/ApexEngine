@@ -19,6 +19,8 @@ constexpr float kMaxWindowSize = 16384.0f;
 // Shadow map sizes: below, shadows are blocks; above, the memory of a 4K texture for one light.
 constexpr float kMinShadowMapSize = 256.0f;
 constexpr float kMaxShadowMapSize = 8192.0f;
+// The range of the panel's slider (decision 0021).
+constexpr float kMaxExposureStops = 4.0f;
 
 // Parses the text, checks that it is an object of the supported version.
 [[nodiscard]] core::Result<Json> parseConfigRoot(std::string_view text, const JsonContext& context) {
@@ -89,6 +91,17 @@ constexpr float kMaxShadowMapSize = 8192.0f;
                                      kMaxShadowMapSize));
     }
     return static_cast<std::uint32_t>(*number);
+}
+
+[[nodiscard]] core::Result<float> readExposure(const Json& value, const JsonContext& context,
+                                               std::string_view field) {
+    const core::Result<float> number = readNumber(value, context, field);
+    if (number && std::abs(*number) > kMaxExposureStops) {
+        return jsonError(
+            context, field,
+            std::format("expected stops between {} and {}", -kMaxExposureStops, kMaxExposureStops));
+    }
+    return number;
 }
 
 [[nodiscard]] core::Result<float> readNotNegative(const Json& value, const JsonContext& context,
@@ -189,10 +202,11 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
     if (!root) {
         return std::unexpected(root.error());
     }
-    if (core::Result<void> known = rejectUnknownFields(
-            *root,
-            {"version", "window", "free_camera", "physics", "character", "third_person_camera", "shadows"},
-            context, {});
+    if (core::Result<void> known =
+            rejectUnknownFields(*root,
+                                {"version", "window", "free_camera", "physics", "character",
+                                 "third_person_camera", "shadows", "rendering"},
+                                context, {});
         !known) {
         return std::unexpected(known.error());
     }
@@ -278,6 +292,23 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         if (read) {
             read = readOptional(*shadows, "slope_bias", context, "shadows", config.shadowSlopeBias,
                                 readNotNegative);
+        }
+        if (!read) {
+            return std::unexpected(read.error());
+        }
+    }
+    if (const auto rendering = root->find("rendering"); rendering != root->end()) {
+        core::Result<void> read = requireObject(*rendering, context, "rendering");
+        if (read) {
+            read = rejectUnknownFields(*rendering, {"exposure_ev", "tonemapping"}, context, "rendering");
+        }
+        if (read) {
+            read = readOptional(*rendering, "exposure_ev", context, "rendering", config.exposureStops,
+                                readExposure);
+        }
+        if (read) {
+            read =
+                readOptional(*rendering, "tonemapping", context, "rendering", config.toneMapping, readBool);
         }
         if (!read) {
             return std::unexpected(read.error());
