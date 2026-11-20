@@ -41,6 +41,7 @@ add_executable(ApexTests
     Physics/PhysicsWorldTests.cpp
     Physics/QueryTests.cpp
     Physics/RigidBodyTests.cpp
+    Physics/ShapeQueryTests.cpp
     Physics/StackingTests.cpp
     Platform/KeyTests.cpp
     Resources/AssetPathTests.cpp
@@ -57,6 +58,7 @@ add_executable(ApexTests
     Serialization/SceneJsonTests.cpp
     Serialization/SceneLoaderTests.cpp
     Serialization/SceneRoundTripTests.cpp
+    World/ColliderLinesTests.cpp
     World/PhysicsSyncTests.cpp
     World/RenderExtractionTests.cpp
     World/RotationTests.cpp

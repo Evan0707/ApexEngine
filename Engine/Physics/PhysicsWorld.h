@@ -56,6 +56,9 @@ public:
     // Newton seconds, at the center of mass.
     void applyImpulse(BodyHandle body, const glm::vec3& impulse);
     [[nodiscard]] bool isActive(BodyHandle body) const;
+    // The shape Jolt simulates for the body, scale included: what the collider display draws (decision 0023).
+    // Nothing for a stale handle.
+    [[nodiscard]] std::optional<Shape> shape(BodyHandle body) const;
 
     // The closest hit along `direction` (any length, not zero) within maxDistance meters; empty when nothing
     // is hit or when an argument is not usable. A ray that starts inside a body hits it at distance zero.
@@ -82,6 +85,8 @@ public:
     void setCharacterPosition(CharacterHandle character, const core::WorldPosition& position);
     // Empty for a stale handle.
     [[nodiscard]] std::optional<CharacterState> characterState(CharacterHandle character) const;
+    // The character's capsule, upright, standing on its position (decision 0023). Nothing for a stale handle.
+    [[nodiscard]] std::optional<Shape> characterShape(CharacterHandle character) const;
 
 private:
     std::unique_ptr<State> m_state;

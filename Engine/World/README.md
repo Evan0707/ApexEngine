@@ -14,6 +14,7 @@
 | `World/PhysicsSync.h` | `scaledShape()`, `createPhysicsObjects()`, `destroyPhysicsObjects()`, `stepPhysics()` |
 | `World/RenderExtraction.h` | `rememberTransforms()`, `interpolateTransform()`, `drawnTransform()`, `extractRenderScene()` |
 | `World/ShadowFocus.h` | `ShadowSettings`, `lightViewRotation()`, `frameShadow()`, `extractShadow()` |
+| `World/ColliderLines.h` | couleurs, `appendShapeLines()`, `extractColliderLines()` |
 
 ## Registre et composants
 
@@ -54,6 +55,13 @@
 - Calage sur les texels : en travers de la lumière, le centre est arrondi au multiple le plus proche d'un texel (`areaSize / mapSize`), en coordonnées monde. La grille des texels reste donc immobile quand le personnage avance, et les bords d'ombre ne scintillent pas.
 - La matrice rendue (`RenderShadow::lightView`) va de l'espace de rendu à la vue de la lumière : la position de la caméra est soustraite du centre avant tout produit de matrices (G-07). `Graphics` y ajoute sa projection orthographique.
 - Les biais (`constantBias` en mètres, `slopeBias`) sont recopiés tels quels pour la passe d'ombre.
+
+## Affichage des colliders (P1, décision 0023)
+
+- `extractColliderLines(registry, physics, camera, alpha, scene)`, appelé après `extractRenderScene()`, remplace `scene.lines` par le fil de fer de chaque corps (`PhysicsBody`) et de chaque personnage (`PhysicsCharacter`), en espace de rendu relatif à la caméra (G-07).
+- Les formes viennent de `Physics` (`shape()`, `characterShape()`) : ce que Jolt simule, échelle comprise. La pose est la transformation interpolée de l'entité, sans échelle (déjà dans la forme). La capsule du personnage est debout sur ses pieds.
+- Boîte : ses 12 arêtes. Sphère : trois cercles de 32 segments. Capsule : un cercle autour de chaque extrémité, quatre génératrices, deux arcs au-dessus et deux au-dessous.
+- Couleurs : statique en vert gris, dynamique éveillé en orange, dynamique endormi en bleu, personnage en jaune.
 
 ## Liaison avec la physique (section 4.3, G-05, décision 0019)
 

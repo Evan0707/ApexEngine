@@ -13,7 +13,7 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame, temps d'attente du CPU, temps GPU |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
-| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderToneMapping`, `RenderEnvironment`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
+| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderToneMapping`, `RenderEnvironment`, `RenderLine`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
 | `Graphics/Renderer.h` | `RendererConfig` (dont la résolution de la shadow map), `Renderer` : `create()`, `syncResources()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |

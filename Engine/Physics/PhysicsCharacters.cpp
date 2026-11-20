@@ -162,6 +162,19 @@ void PhysicsWorld::setCharacterPosition(CharacterHandle character, const core::W
     }
 }
 
+std::optional<Shape> PhysicsWorld::characterShape(CharacterHandle character) const {
+    const JPH::CharacterVirtual* found = m_state->findCharacter(character);
+    if (found == nullptr) {
+        return std::nullopt;
+    }
+    // createCharacter lifts a capsule so that it stands on the position.
+    const auto* lifted = static_cast<const JPH::RotatedTranslatedShape*>(found->GetShape());
+    const auto* capsule = static_cast<const JPH::CapsuleShape*>(lifted->GetInnerShape());
+    return Shape{.type = ShapeType::Capsule,
+                 .radius = capsule->GetRadius(),
+                 .halfHeight = capsule->GetHalfHeightOfCylinder()};
+}
+
 std::optional<CharacterState> PhysicsWorld::characterState(CharacterHandle character) const {
     const JPH::CharacterVirtual* found = m_state->findCharacter(character);
     if (found == nullptr) {

@@ -181,6 +181,8 @@ add_library(ApexEngine STATIC
     Serialization/SceneJson.h
     Serialization/SceneLoader.cpp
     Serialization/SceneLoader.h
+    World/ColliderLines.cpp
+    World/ColliderLines.h
     World/Components.h
     World/PhysicsSync.cpp
     World/PhysicsSync.h

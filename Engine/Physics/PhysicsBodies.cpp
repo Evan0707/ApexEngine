@@ -141,6 +141,32 @@ bool PhysicsWorld::contains(BodyHandle body) const {
     return isAlive(m_state->system, JPH::BodyID(body.value));
 }
 
+std::optional<Shape> PhysicsWorld::shape(BodyHandle body) const {
+    const JPH::BodyID id(body.value);
+    if (!isAlive(m_state->system, id)) {
+        return std::nullopt;
+    }
+    const JPH::RefConst<JPH::Shape> found = m_state->system.GetBodyInterface().GetShape(id);
+    switch (found->GetSubType()) {
+    case JPH::EShapeSubType::Box:
+        return Shape{.type = ShapeType::Box,
+                     .halfExtents =
+                         toGlm(static_cast<const JPH::BoxShape*>(found.GetPtr())->GetHalfExtent())};
+    case JPH::EShapeSubType::Sphere:
+        return Shape{.type = ShapeType::Sphere,
+                     .radius = static_cast<const JPH::SphereShape*>(found.GetPtr())->GetRadius()};
+    case JPH::EShapeSubType::Capsule: {
+        const auto* capsule = static_cast<const JPH::CapsuleShape*>(found.GetPtr());
+        return Shape{.type = ShapeType::Capsule,
+                     .radius = capsule->GetRadius(),
+                     .halfHeight = capsule->GetHalfHeightOfCylinder()};
+    }
+    default:
+        // createBody makes none other.
+        return std::nullopt;
+    }
+}
+
 std::optional<BodyTransform> PhysicsWorld::transform(BodyHandle body) const {
     const JPH::BodyID id(body.value);
     if (!isAlive(m_state->system, id)) {

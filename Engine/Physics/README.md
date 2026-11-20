@@ -11,7 +11,7 @@
 | `Physics/Runtime.h` | `Runtime` : crée et détruit l'état global de Jolt |
 | `Physics/PhysicsSettings.h` | `PhysicsSettings` : gravité, capacités |
 | `Physics/PhysicsTypes.h` | `BodyHandle`, `ShapeType`, `Shape`, `MotionType`, `BodyTransform`, `BodyDesc`, `QueryFilter`, `CastHit`, `CharacterHandle`, `CharacterDesc`, `GroundState`, `CharacterState` |
-| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()`, `raycast()`, `spherecast()`, `createCharacter()`, `destroyCharacter()`, `characterCount()`, `setCharacterVelocity()`, `setCharacterPosition()`, `characterState()` |
+| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()`, `shape()`, `raycast()`, `spherecast()`, `createCharacter()`, `destroyCharacter()`, `characterCount()`, `setCharacterVelocity()`, `setCharacterPosition()`, `characterState()`, `characterShape()` |
 
 Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
@@ -59,6 +59,7 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 - **Qui décide de la vitesse.** `Physics` n'ajoute ni gravité ni saut. À chaque pas, l'appelant donne la vitesse complète par `setCharacterVelocity`, calculée à partir de `characterState()` :
   - au sol : vitesse du sol + vitesse horizontale voulue + vitesse de saut + gravité × pas ;
   - sinon : vitesse horizontale voulue + vitesse verticale courante + gravité × pas.
+- `shape()` et `characterShape()` rendent la forme que Jolt simule (boîte, sphère ou capsule, échelle comprise ; la capsule du personnage, debout sur sa position) : c'est ce que dessine l'affichage des colliders (décision 0023), pour montrer la forme réelle et non celle que demandent les composants.
 - `characterState()` rend la position des pieds, la vitesse telle qu'elle a été donnée (les collisions ne la modifient pas : c'est la position qui dit ce qui a bougé), l'état au sol (`OnGround`, `OnSteepGround`, `InAir`), la normale et la vitesse du sol.
 - `step()` met à jour les personnages, puis les corps.
 - Un personnage n'est pas un corps : il n'est pas compté par `bodyCount()` et les requêtes ne le touchent pas. Les corps dynamiques ne le voient pas non plus ; c'est lui qui les détecte et les pousse.

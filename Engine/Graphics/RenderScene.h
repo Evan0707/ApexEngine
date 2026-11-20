@@ -58,6 +58,16 @@ struct RenderEnvironment {
     bool enabled = true;
 };
 
+// A segment drawn over the scene, after tonemapping, hidden by what is in front of it: the collider display
+// (decision 0023).
+struct RenderLine {
+    // Render space.
+    glm::vec3 start{0.0f};
+    glm::vec3 end{0.0f};
+    // Linear RGBA, written as is to the swapchain.
+    glm::vec4 color{1.0f};
+};
+
 // One mesh with one material: a model gives one object per part (resources::ResourceCache::parts).
 struct RenderObject {
     // Not ready, failed or stale: the fallback mesh is drawn (G-03).
@@ -78,6 +88,7 @@ struct RenderScene {
     RenderToneMapping toneMapping;
     RenderEnvironment environment;
     std::vector<RenderObject> objects;
+    std::vector<RenderLine> lines;
 };
 
 } // namespace apex::graphics
