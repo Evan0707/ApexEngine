@@ -24,6 +24,7 @@ add_executable(ApexTests
     Game/PlayerTests.cpp
     Graphics/DeferredDeleterTests.cpp
     Graphics/DrawListTests.cpp
+    Graphics/EnvironmentLightingTests.cpp
     Graphics/FrameDataTests.cpp
     Graphics/GpuTimestampsTests.cpp
     Graphics/MaterialTableTests.cpp

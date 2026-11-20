@@ -45,6 +45,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `exposureMultiplier()`, `shadowViewProjection()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
 - `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol ;
 - `Graphics/GpuTimestamps.h` (`TimestampFormat`, `elapsedSeconds()`), sans Vulkan, testé sans GPU ;
+- `Graphics/EnvironmentLighting.h` (`shBasis()`, `IrradianceSh`, `projectIrradiance()`, `irradianceAt()`, `computeBrdfTable()`) : la part de l'IBL calculée sur le CPU (décision 0022), sans Vulkan, testée sans GPU ;
 - `Graphics/GpuTimer.h` (`GpuTimer`) : les horodatages de chaque frame en vol.
 
 ## Renderer

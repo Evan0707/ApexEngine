@@ -64,6 +64,8 @@ add_library(ApexEngine STATIC
     Graphics/DrawList.h
     Graphics/Device.cpp
     Graphics/Device.h
+    Graphics/EnvironmentLighting.cpp
+    Graphics/EnvironmentLighting.h
     Graphics/FrameBuffers.cpp
     Graphics/FrameBuffers.h
     Graphics/FrameCounters.h
