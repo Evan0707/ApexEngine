@@ -2,9 +2,11 @@
 
 #include "Core/Profiling.h"
 #include "Graphics/RendererState.h"
+#include "Graphics/ShaderBinaries.h"
 #include "Graphics/VulkanBackendAccess.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -20,6 +22,9 @@ namespace {
 
 // 32-bit float depth (spec 5.4). Chosen here only, then passed to the pipelines (G-09).
 constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
+// 16-bit fixed point (decision 0021): a constant depth bias in steps of 1/65536 of the shadow depth range,
+// which converts to meters. Chosen here only (G-09).
+constexpr VkFormat kShadowMapFormat = VK_FORMAT_D16_UNORM;
 
 [[nodiscard]] std::string_view presentModeName(bool vsync) noexcept {
     return vsync ? "vsync on" : "vsync off";
@@ -64,7 +69,7 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     // Same size as the swapchain. The GPU is idle: the old one can go at once.
     depth = DepthTarget();
     core::Result<DepthTarget> depthTarget =
-        DepthTarget::create(*device, *allocator, swapchain.extent(), kDepthFormat);
+        DepthTarget::create(*device, *allocator, swapchain.extent(), kDepthFormat, "depth buffer", false);
     if (!depthTarget) {
         logger->error("{}", depthTarget.error().message);
         return std::unexpected(depthTarget.error());
@@ -90,15 +95,52 @@ core::Result<void> Renderer::State::ensurePipeline() {
     if (scenePipeline.handle() != VK_NULL_HANDLE && scenePipeline.target() == target) {
         return {};
     }
-    core::Result<ScenePipeline> created =
-        ScenePipeline::create(device->device(), target, frameBuffers.layout(), materialSets.layout());
+    const std::array setLayouts{frameBuffers.layout(), materialSets.layout()};
+    core::Result<GraphicsPipeline> created =
+        GraphicsPipeline::create(device->device(), target,
+                                 PipelineDesc{.name = "scene pipeline",
+                                              .vertexShader = sceneVertexShader(),
+                                              .fragmentShader = sceneFragmentShader(),
+                                              .setLayouts = setLayouts,
+                                              .meshAttributes = kMeshPosition | kMeshNormal | kMeshUv});
     if (!created) {
         logger->error("{}", created.error().message);
         return std::unexpected(created.error());
     }
     // A frame in flight may still use the old pipeline.
-    deleter.enqueue([old = std::move(scenePipeline)]() mutable { old = ScenePipeline(); });
+    deleter.enqueue([old = std::move(scenePipeline)]() mutable { old = GraphicsPipeline(); });
     scenePipeline = std::move(*created);
+    return {};
+}
+
+core::Result<void> Renderer::State::createShadowResources(std::uint32_t size) {
+    core::Result<ShadowMap> map = ShadowMap::create(*device, *allocator, size, kShadowMapFormat);
+    if (!map) {
+        logger->error("{}", map.error().message);
+        return std::unexpected(map.error());
+    }
+    shadowMap = std::move(*map);
+    frameBuffers.bindShadowMap(shadowMap.view(), shadowMap.sampler());
+
+    const std::array setLayouts{frameBuffers.layout()};
+    // No culling: a thin or open mesh still casts its shadow; the depth bias keeps lit faces out of it.
+    core::Result<GraphicsPipeline> pipeline =
+        GraphicsPipeline::create(device->device(),
+                                 RenderTargetDesc{.colorFormat = VK_FORMAT_UNDEFINED,
+                                                  .depthFormat = kShadowMapFormat,
+                                                  .samples = VK_SAMPLE_COUNT_1_BIT},
+                                 PipelineDesc{.name = "shadow pipeline",
+                                              .vertexShader = shadowVertexShader(),
+                                              .setLayouts = setLayouts,
+                                              .meshAttributes = kMeshPosition,
+                                              .cullMode = VK_CULL_MODE_NONE,
+                                              .dynamicDepthBias = true});
+    if (!pipeline) {
+        logger->error("{}", pipeline.error().message);
+        return std::unexpected(pipeline.error());
+    }
+    shadowPipeline = std::move(*pipeline);
+    logger->info("Shadow map: {}x{} pixels", size, size);
     return {};
 }
 
@@ -140,6 +182,9 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
         return std::unexpected(materialSets.error());
     }
     state->materialSets = std::move(*materialSets);
+    if (core::Result<void> shadows = state->createShadowResources(config.shadowMapSize); !shadows) {
+        return std::unexpected(shadows.error());
+    }
     const GpuMemoryStats memory = state->allocator->memoryStats();
     constexpr double kMebibyte = 1024.0 * 1024.0;
     logger.info("GPU memory: {:.0f} MiB used, {:.0f} MiB budget{}",

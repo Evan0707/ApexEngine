@@ -19,9 +19,9 @@ struct FrameBufferLimits {
     std::uint32_t maxMaterials = 0;
 };
 
-// Internal to Graphics. Descriptor set 0 of each frame in flight (spec 5.4, decision 0011): frame
-// uniforms, per-object storage buffer, material table. Host-visible buffers, mapped for the whole run
-// and rewritten each frame. The allocator must outlive it.
+// Internal to Graphics. Descriptor set 0 of each frame in flight (spec 5.4, decisions 0011 and 0021): frame
+// uniforms, per-object storage buffer, material table, shadow map. Host-visible buffers, mapped for the whole
+// run and rewritten each frame. The allocator must outlive it.
 class FrameBuffers {
 public:
     [[nodiscard]] static core::Result<FrameBuffers> create(VkDevice device, GpuAllocator& allocator,
@@ -37,6 +37,10 @@ public:
     [[nodiscard]] VkDescriptorSetLayout layout() const noexcept;
     [[nodiscard]] VkDescriptorSet descriptorSet(std::uint32_t frame) const noexcept;
     [[nodiscard]] const FrameBufferLimits& limits() const noexcept;
+
+    // Binding 3 of every frame's set, in SHADER_READ_ONLY_OPTIMAL. Once, before the first frame: the sets
+    // must not be in use.
+    void bindShadowMap(VkImageView view, VkSampler sampler);
 
     // The frame's fence must have been waited for. objects and materials must fit the limits.
     void write(std::uint32_t frame, const FrameUniforms& uniforms, std::span<const ObjectGpu> objects,

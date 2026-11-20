@@ -11,11 +11,12 @@
 #include "Graphics/GpuMesh.h"
 #include "Graphics/GpuTexture.h"
 #include "Graphics/GpuTimer.h"
+#include "Graphics/GraphicsPipeline.h"
 #include "Graphics/MaterialSets.h"
 #include "Graphics/MaterialTable.h"
 #include "Graphics/Renderer.h"
 #include "Graphics/ResourceMirror.h"
-#include "Graphics/ScenePipeline.h"
+#include "Graphics/ShadowMap.h"
 #include "Graphics/Swapchain.h"
 #include "Graphics/SwapchainState.h"
 #include "Graphics/UploadContext.h"
@@ -75,7 +76,11 @@ struct Renderer::State {
     std::uint64_t textureRevision = std::numeric_limits<std::uint64_t>::max();
     MaterialTable materials{kMaxMaterials};
     FrameBuffers frameBuffers;
-    ScenePipeline scenePipeline;
+    // Main pass: created with the swapchain, for its formats.
+    GraphicsPipeline scenePipeline;
+    // Shadow pass: created once, for the shadow map's format.
+    GraphicsPipeline shadowPipeline;
+    ShadowMap shadowMap;
     Swapchain swapchain;
     DepthTarget depth;
     FrameCounters counters;
@@ -94,6 +99,8 @@ struct Renderer::State {
     std::vector<const GpuMesh*> drawMeshes;
     std::vector<VkDescriptorSet> drawMaterialSets;
     std::vector<ObjectGpu> objectData;
+    // The scene's shadow settings of the frame being recorded.
+    RenderShadow frameShadow;
     bool warnedTooManyObjects = false;
 
     ~State() {
@@ -110,6 +117,7 @@ struct Renderer::State {
     // False when the surface has no area yet: the frame is skipped and the recreation tried again.
     [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
     [[nodiscard]] core::Result<void> ensurePipeline();
+    [[nodiscard]] core::Result<void> createShadowResources(std::uint32_t size);
     // Resolves the handles, sorts by material and fills the frame's buffers.
     void prepareFrame(const RenderScene& scene);
     // The view of a texture: white for "no texture", the checker when not ready or failed (G-03).
@@ -122,6 +130,7 @@ struct Renderer::State {
     resolveMesh(const RenderObject& object) const noexcept;
     // After prepareFrame: draws what it resolved.
     void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
+    void recordShadowPass(VkCommandBuffer commands);
     void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex);
     void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
 };

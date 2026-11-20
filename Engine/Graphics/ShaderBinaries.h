@@ -9,5 +9,6 @@ namespace apex::graphics {
 // the binary.
 [[nodiscard]] std::span<const std::uint32_t> sceneVertexShader() noexcept;
 [[nodiscard]] std::span<const std::uint32_t> sceneFragmentShader() noexcept;
+[[nodiscard]] std::span<const std::uint32_t> shadowVertexShader() noexcept;
 
 } // namespace apex::graphics

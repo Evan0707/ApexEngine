@@ -6,13 +6,19 @@
 namespace apex::graphics {
 
 core::Result<DepthTarget> DepthTarget::create(const Device& device, GpuAllocator& allocator,
-                                              VkExtent2D extent, VkFormat format) {
+                                              VkExtent2D extent, VkFormat format, std::string_view name,
+                                              bool sampled) {
     VkFormatProperties properties{};
     vkGetPhysicalDeviceFormatProperties(device.physicalDevice(), format, &properties);
-    if ((properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) == 0) {
-        return core::makeError(
-            core::ErrorCode::GpuFailure,
-            std::format("The GPU cannot use format {} as a depth buffer", static_cast<int>(format)));
+    VkFormatFeatureFlags needed = VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    if (sampled) {
+        needed |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    }
+    if ((properties.optimalTilingFeatures & needed) != needed) {
+        return core::makeError(core::ErrorCode::GpuFailure,
+                               std::format("The GPU cannot use format {} for the {}{}",
+                                           static_cast<int>(format), name,
+                                           sampled ? " (depth attachment, sampled)" : ""));
     }
 
     const VkImageCreateInfo imageInfo{
@@ -24,11 +30,12 @@ core::Result<DepthTarget> DepthTarget::create(const Device& device, GpuAllocator
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                 (sampled ? VkImageUsageFlags{VK_IMAGE_USAGE_SAMPLED_BIT} : VkImageUsageFlags{0}),
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    core::Result<GpuImage> image = allocator.createImage("Depth buffer", imageInfo, true);
+    core::Result<GpuImage> image = allocator.createImage(name, imageInfo, true);
     if (!image) {
         return std::unexpected(image.error());
     }
@@ -50,7 +57,7 @@ core::Result<DepthTarget> DepthTarget::create(const Device& device, GpuAllocator
         result != VK_SUCCESS) {
         return core::makeError(
             core::ErrorCode::GpuFailure,
-            std::format("Cannot create the depth buffer view: VkResult {}", static_cast<int>(result)));
+            std::format("Cannot create the {} view: VkResult {}", name, static_cast<int>(result)));
     }
     return target;
 }

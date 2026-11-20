@@ -2,7 +2,7 @@
 
 **Rôle :** couche d'intégration du moteur : entités, composants, transformations, et extraction vers le rendu (cahier des charges, sections 4.3 et 5.6). `Graphics` et `Physics` ne connaissent ni les entités ni EnTT.
 
-**État (phase 6) :** composants du moteur, conversion des angles des fichiers de scène, recherches dans le registre, extraction vers le rendu, liaison avec la physique (notes de décision 0015, 0017 et 0019).
+**État (phase 7) :** composants du moteur, conversion des angles des fichiers de scène, recherches dans le registre, extraction vers le rendu, cadrage des ombres, liaison avec la physique (notes de décision 0015, 0017, 0019 et 0021).
 
 ## Interface publique
 
@@ -12,7 +12,8 @@
 | `World/Rotation.h` | `rotationFromEulerDegrees()`, `eulerDegreesFromRotation()` |
 | `World/SceneQueries.h` | `findBySceneId()`, `sceneEntityCount()`, `sceneEnvironment()` |
 | `World/PhysicsSync.h` | `scaledShape()`, `createPhysicsObjects()`, `destroyPhysicsObjects()`, `stepPhysics()` |
-| `World/RenderExtraction.h` | `rememberTransforms()`, `interpolateTransform()`, `extractRenderScene()` |
+| `World/RenderExtraction.h` | `rememberTransforms()`, `interpolateTransform()`, `drawnTransform()`, `extractRenderScene()` |
+| `World/ShadowFocus.h` | `ShadowSettings`, `lightViewRotation()`, `frameShadow()`, `extractShadow()` |
 
 ## Registre et composants
 
@@ -44,6 +45,14 @@
 - Caméra : l'entité donnée par l'appelant, avec `Transform` et `Camera`. Sans elle, la vue part de l'origine du monde avec les réglages par défaut.
 - Lumière : la première `DirectionalLight` trouvée (une seule lumière directionnelle, section 5.5). Le composant donne le sens dans lequel la lumière voyage ; le renderer reçoit la direction opposée, vers la lumière. Sans lumière, seul le terme ambiant éclaire.
 - Interpolation (section 5.1) : `rememberTransforms(registry)`, appelé au début de chaque pas fixe, copie chaque `Transform` dans `PreviousTransform`. L'extraction interpole entre les deux avec `alpha` (positions et échelles linéairement, rotations par le plus court chemin), caméra comprise. Une entité sans `PreviousTransform` est dessinée à sa transformation courante.
+
+## Cadrage des ombres (section 5.4, G-07, décision 0021)
+
+- `extractShadow(registry, camera, focus, alpha, settings, scene)`, appelé après `extractRenderScene()`, remplit `scene.shadow` : une zone carrée vue de la lumière, de `areaSize` mètres de côté (40 par défaut) et `depthRange` mètres de profondeur (100), centrée sur la position interpolée de `focus` (le personnage). Sans `focus`, la zone est centrée sous la caméra. Sans lumière, ou avec `enabled` faux, les ombres sont coupées.
+- Vue de la lumière (`lightViewRotation()`) : lignes droite, haut et direction vers la lumière ; la vue regarde dans le sens de la lumière, vers −Z. Le haut est le +Y du monde, ou −Z pour une lumière verticale.
+- Calage sur les texels : en travers de la lumière, le centre est arrondi au multiple le plus proche d'un texel (`areaSize / mapSize`), en coordonnées monde. La grille des texels reste donc immobile quand le personnage avance, et les bords d'ombre ne scintillent pas.
+- La matrice rendue (`RenderShadow::lightView`) va de l'espace de rendu à la vue de la lumière : la position de la caméra est soustraite du centre avant tout produit de matrices (G-07). `Graphics` y ajoute sa projection orthographique.
+- Les biais (`constantBias` en mètres, `slopeBias`) sont recopiés tels quels pour la passe d'ombre.
 
 ## Liaison avec la physique (section 4.3, G-05, décision 0019)
 

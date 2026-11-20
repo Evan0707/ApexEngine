@@ -10,6 +10,7 @@
 #include "World/PhysicsSync.h"
 #include "World/RenderExtraction.h"
 #include "World/SceneQueries.h"
+#include "World/ShadowFocus.h"
 
 #include <array>
 #include <chrono>
@@ -443,6 +444,9 @@ void DemoApp::extract(double alpha) {
     m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians =
         glm::radians(clampVerticalFov(m_controls.verticalFovDegrees, m_cameraSettings));
     world::extractRenderScene(m_registry, *m_cache, m_cameraEntity, static_cast<float>(alpha), m_renderScene);
+    // Centered on the character, even in free camera (spec 5.4).
+    world::extractShadow(m_registry, m_cameraEntity, m_playerEntity, static_cast<float>(alpha),
+                         world::ShadowSettings{}, m_renderScene);
 }
 
 void DemoApp::render() {

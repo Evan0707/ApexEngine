@@ -14,4 +14,14 @@ glm::mat4 perspectiveProjection(float verticalFovRadians, float aspectRatio, flo
     return projection;
 }
 
+glm::mat4 orthographicProjection(float halfWidth, float halfHeight, float nearPlane,
+                                 float farPlane) noexcept {
+    APEX_ASSERT(halfWidth > 0.0f && halfHeight > 0.0f, "Invalid orthographic extent");
+    APEX_ASSERT(nearPlane >= 0.0f && farPlane > nearPlane, "Invalid clip planes");
+    glm::mat4 projection =
+        glm::orthoRH_ZO(-halfWidth, halfWidth, -halfHeight, halfHeight, nearPlane, farPlane);
+    projection[1][1] = -projection[1][1];
+    return projection;
+}
+
 } // namespace apex::graphics

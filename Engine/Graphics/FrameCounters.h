@@ -9,6 +9,8 @@ namespace apex::graphics {
 struct FrameCounters {
     std::uint32_t drawCalls = 0;
     std::uint64_t triangles = 0;
+    // Draws of the shadow pass (decision 0021), not counted above.
+    std::uint32_t shadowDrawCalls = 0;
     // Time the CPU spent blocked on the GPU or the presentation engine (fence, acquire, present):
     // with vsync on, most of the frame. Subtracted from the frame time to get the CPU time.
     double waitSeconds = 0.0;

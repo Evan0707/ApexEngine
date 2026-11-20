@@ -18,9 +18,11 @@ constexpr float kTolerance = 1e-5f;
 TEST_CASE("The per-frame structures match the GLSL layouts", "[graphics]") {
     // std140 uniform block of Frame.glsl.
     STATIC_REQUIRE(offsetof(FrameUniforms, viewProjection) == 0);
-    STATIC_REQUIRE(offsetof(FrameUniforms, directionToLight) == 64);
-    STATIC_REQUIRE(offsetof(FrameUniforms, lightRadiance) == 80);
-    STATIC_REQUIRE(offsetof(FrameUniforms, ambient) == 96);
+    STATIC_REQUIRE(offsetof(FrameUniforms, lightViewProjection) == 64);
+    STATIC_REQUIRE(offsetof(FrameUniforms, directionToLight) == 128);
+    STATIC_REQUIRE(offsetof(FrameUniforms, lightRadiance) == 144);
+    STATIC_REQUIRE(offsetof(FrameUniforms, ambient) == 160);
+    STATIC_REQUIRE(offsetof(FrameUniforms, shadow) == 176);
     // std430 arrays: the stride of a struct is its size rounded up to its alignment (16 bytes here).
     STATIC_REQUIRE(sizeof(ObjectGpu) == 144);
     STATIC_REQUIRE(offsetof(ObjectGpu, materialIndex) == 128);
@@ -54,7 +56,7 @@ TEST_CASE("Frame uniforms carry the projection, the light and the ambient term",
     scene.light =
         RenderLight{.directionToLight = {0.0f, 2.0f, 0.0f}, .color = {1.0f, 0.5f, 0.25f}, .intensity = 2.0f};
     scene.ambient = {0.1f, 0.2f, 0.3f};
-    const FrameUniforms uniforms = makeFrameUniforms(scene, 1.0f);
+    const FrameUniforms uniforms = makeFrameUniforms(scene, 1.0f, 2048);
 
     // Straight ahead of the camera: the center of the screen.
     const glm::vec4 clip = uniforms.viewProjection * glm::vec4(0.0f, 0.0f, -10.0f, 1.0f);
@@ -71,9 +73,20 @@ TEST_CASE("The view rotation applies before the projection", "[graphics]") {
     // Camera turned a quarter turn to the left: it looks towards -X.
     const glm::quat orientation = glm::angleAxis(glm::half_pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
     scene.camera.view = glm::mat4_cast(glm::inverse(orientation));
-    const FrameUniforms uniforms = makeFrameUniforms(scene, 1.0f);
+    const FrameUniforms uniforms = makeFrameUniforms(scene, 1.0f, 2048);
     const glm::vec4 clip = uniforms.viewProjection * glm::vec4(-10.0f, 0.0f, 0.0f, 1.0f);
     REQUIRE_THAT(clip.x / clip.w, WithinAbs(0.0, kTolerance));
     REQUIRE(clip.z / clip.w > 0.0f);
     REQUIRE(clip.z / clip.w < 1.0f);
+}
+
+TEST_CASE("Frame uniforms turn shadows on only when the scene asks for them", "[graphics]") {
+    RenderScene scene;
+    REQUIRE(makeFrameUniforms(scene, 1.0f, 2048).shadow.x == 0.0f);
+    scene.shadow.enabled = true;
+    const FrameUniforms uniforms = makeFrameUniforms(scene, 1.0f, 2048);
+    REQUIRE(uniforms.shadow.x == 1.0f);
+    REQUIRE(uniforms.shadow.y == 1.0f / 2048.0f);
+    REQUIRE(uniforms.shadow.z == kShadowFadeStart);
+    REQUIRE(uniforms.lightViewProjection == shadowViewProjection(scene.shadow));
 }

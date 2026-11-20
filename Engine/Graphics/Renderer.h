@@ -9,6 +9,7 @@
 #include "Graphics/ValidationLog.h"
 #include "Platform/Window.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -26,6 +27,8 @@ struct RendererConfig {
     bool enableValidation = false;
     // Off for performance measurements only (spec 5.4, 7.1).
     bool vsync = true;
+    // Pixels per side of the shadow map (spec 5.4, G-09). Fixed for the renderer's life.
+    std::uint32_t shadowMapSize = 2048;
 };
 
 // The only entry point of Graphics for the application. No Vulkan type in this header (G-01, G-10).

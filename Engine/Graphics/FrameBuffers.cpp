@@ -42,6 +42,8 @@ core::Result<FrameBuffers> FrameBuffers::create(VkDevice device, GpuAllocator& a
         VkDescriptorSetLayoutBinding{1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, kBothStages, nullptr},
         VkDescriptorSetLayoutBinding{2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
                                      nullptr},
+        VkDescriptorSetLayoutBinding{3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                                     VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
     };
     const VkDescriptorSetLayoutCreateInfo layoutInfo{
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -55,6 +57,7 @@ core::Result<FrameBuffers> FrameBuffers::create(VkDevice device, GpuAllocator& a
     const std::array poolSizes{
         VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, limits.framesInFlight},
         VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * limits.framesInFlight},
+        VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, limits.framesInFlight},
     };
     const VkDescriptorPoolCreateInfo poolInfo{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
                                               .maxSets = limits.framesInFlight,
@@ -163,6 +166,19 @@ VkDescriptorSetLayout FrameBuffers::layout() const noexcept {
 
 VkDescriptorSet FrameBuffers::descriptorSet(std::uint32_t frame) const noexcept {
     return m_frames[frame].set;
+}
+
+void FrameBuffers::bindShadowMap(VkImageView view, VkSampler sampler) {
+    const VkDescriptorImageInfo image{sampler, view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    for (const PerFrame& frame : m_frames) {
+        const VkWriteDescriptorSet write{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                         .dstSet = frame.set,
+                                         .dstBinding = 3,
+                                         .descriptorCount = 1,
+                                         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                         .pImageInfo = &image};
+        vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+    }
 }
 
 const FrameBufferLimits& FrameBuffers::limits() const noexcept {

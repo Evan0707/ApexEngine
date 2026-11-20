@@ -26,6 +26,20 @@ struct RenderLight {
     float intensity = 1.0f;
 };
 
+// The shadow area (spec 5.4, decision 0021), framed by the extraction: a square seen from the light.
+struct RenderShadow {
+    bool enabled = false;
+    // Render space to the light's view space, a rotation and a translation: the view looks along the light,
+    // towards -Z, from the middle of the area's near face.
+    glm::mat4 lightView{1.0f};
+    // Meters: half the side of the square, and its depth along the light.
+    float halfExtent = 20.0f;
+    float depthRange = 100.0f;
+    // Depth bias of the shadow pass: constant in meters, slope factor in units of the depth slope.
+    float constantBias = 0.02f;
+    float slopeBias = 2.0f;
+};
+
 // One mesh with one material: a model gives one object per part (resources::ResourceCache::parts).
 struct RenderObject {
     // Not ready, failed or stale: the fallback mesh is drawn (G-03).
@@ -42,6 +56,7 @@ struct RenderScene {
     RenderLight light;
     // Constant ambient term, linear RGB (spec 5.5).
     glm::vec3 ambient{0.03f};
+    RenderShadow shadow;
     std::vector<RenderObject> objects;
 };
 

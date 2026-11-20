@@ -1,112 +1,122 @@
-#include "Graphics/ScenePipeline.h"
+#include "Graphics/GraphicsPipeline.h"
 
-#include "Graphics/ShaderBinaries.h"
 #include "Resources/MeshData.h"
 
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <format>
-#include <span>
-#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace apex::graphics {
 
 namespace {
 
-[[nodiscard]] std::unexpected<core::Error> pipelineError(std::string_view what, VkResult result) {
-    return core::makeError(core::ErrorCode::GpuFailure, std::format("Cannot create the scene {}: VkResult {}",
-                                                                    what, static_cast<int>(result)));
+[[nodiscard]] std::unexpected<core::Error> pipelineError(std::string_view pipeline, std::string_view what,
+                                                         VkResult result) {
+    return core::makeError(
+        core::ErrorCode::GpuFailure,
+        std::format("Cannot create the {} {}: VkResult {}", pipeline, what, static_cast<int>(result)));
 }
 
 // Destroys the module at the end of pipeline creation: a pipeline does not need it afterwards.
 class ShaderModule {
 public:
-    ShaderModule(VkDevice device, VkShaderModule module) noexcept : m_device(device), m_module(module) {}
-    ~ShaderModule() { vkDestroyShaderModule(m_device, m_module, nullptr); }
+    ShaderModule() = default;
     ShaderModule(const ShaderModule&) = delete;
     ShaderModule& operator=(const ShaderModule&) = delete;
+    ~ShaderModule() {
+        if (m_module != VK_NULL_HANDLE) {
+            vkDestroyShaderModule(m_device, m_module, nullptr);
+        }
+    }
+
+    [[nodiscard]] VkResult create(VkDevice device, std::span<const std::uint32_t> code) {
+        m_device = device;
+        const VkShaderModuleCreateInfo info{.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+                                            .codeSize = code.size_bytes(),
+                                            .pCode = code.data()};
+        return vkCreateShaderModule(device, &info, nullptr, &m_module);
+    }
 
     [[nodiscard]] VkShaderModule handle() const noexcept { return m_module; }
 
 private:
-    VkDevice m_device;
-    VkShaderModule m_module;
+    VkDevice m_device = VK_NULL_HANDLE;
+    VkShaderModule m_module = VK_NULL_HANDLE;
 };
 
-[[nodiscard]] VkResult createModule(VkDevice device, std::span<const std::uint32_t> code,
-                                    VkShaderModule& module) {
-    const VkShaderModuleCreateInfo info{.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-                                        .codeSize = code.size_bytes(),
-                                        .pCode = code.data()};
-    return vkCreateShaderModule(device, &info, nullptr, &module);
-}
+struct AttributeLayout {
+    MeshAttribute bit;
+    std::uint32_t location;
+    VkFormat format;
+    std::uint32_t offset;
+};
+
+constexpr std::array kMeshAttributes{
+    AttributeLayout{kMeshPosition, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(resources::Vertex, position)},
+    AttributeLayout{kMeshNormal, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(resources::Vertex, normal)},
+    AttributeLayout{kMeshTangent, 2, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(resources::Vertex, tangent)},
+    AttributeLayout{kMeshUv, 3, VK_FORMAT_R32G32_SFLOAT, offsetof(resources::Vertex, uv)},
+};
 
 } // namespace
 
-core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderTargetDesc& target,
-                                                  VkDescriptorSetLayout frameLayout,
-                                                  VkDescriptorSetLayout materialLayout) {
-    ScenePipeline pipeline;
+core::Result<GraphicsPipeline> GraphicsPipeline::create(VkDevice device, const RenderTargetDesc& target,
+                                                        const PipelineDesc& desc) {
+    GraphicsPipeline pipeline;
     pipeline.m_device = device;
     pipeline.m_target = target;
 
-    VkShaderModule vertexHandle = VK_NULL_HANDLE;
-    if (const VkResult result = createModule(device, sceneVertexShader(), vertexHandle);
-        result != VK_SUCCESS) {
-        return pipelineError("vertex shader module", result);
+    ShaderModule vertexModule;
+    if (const VkResult result = vertexModule.create(device, desc.vertexShader); result != VK_SUCCESS) {
+        return pipelineError(desc.name, "vertex shader module", result);
     }
-    const ShaderModule vertexModule(device, vertexHandle);
-    VkShaderModule fragmentHandle = VK_NULL_HANDLE;
-    if (const VkResult result = createModule(device, sceneFragmentShader(), fragmentHandle);
-        result != VK_SUCCESS) {
-        return pipelineError("fragment shader module", result);
+    ShaderModule fragmentModule;
+    if (!desc.fragmentShader.empty()) {
+        if (const VkResult result = fragmentModule.create(device, desc.fragmentShader);
+            result != VK_SUCCESS) {
+            return pipelineError(desc.name, "fragment shader module", result);
+        }
     }
-    const ShaderModule fragmentModule(device, fragmentHandle);
 
-    const std::array setLayouts{frameLayout, materialLayout};
     // No push constant: per-object data comes from the per-frame buffer (G-02).
     const VkPipelineLayoutCreateInfo layoutInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
                                                 .setLayoutCount =
-                                                    static_cast<std::uint32_t>(setLayouts.size()),
-                                                .pSetLayouts = setLayouts.data()};
+                                                    static_cast<std::uint32_t>(desc.setLayouts.size()),
+                                                .pSetLayouts = desc.setLayouts.data()};
     if (const VkResult result = vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipeline.m_layout);
         result != VK_SUCCESS) {
-        return pipelineError("pipeline layout", result);
+        return pipelineError(desc.name, "pipeline layout", result);
     }
 
-    const std::array stages{
+    std::vector<VkPipelineShaderStageCreateInfo> stages{
         VkPipelineShaderStageCreateInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                                         .stage = VK_SHADER_STAGE_VERTEX_BIT,
                                         .module = vertexModule.handle(),
-                                        .pName = "main"},
-        VkPipelineShaderStageCreateInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                                        .module = fragmentModule.handle(),
-                                        .pName = "main"},
-    };
+                                        .pName = "main"}};
+    if (fragmentModule.handle() != VK_NULL_HANDLE) {
+        stages.push_back(
+            VkPipelineShaderStageCreateInfo{.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                            .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                                            .module = fragmentModule.handle(),
+                                            .pName = "main"});
+    }
 
     const VkVertexInputBindingDescription binding{
         .binding = 0, .stride = sizeof(resources::Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
-    // Only what the shaders read: the tangent waits for normal maps (P1).
-    const std::array attributes{
-        VkVertexInputAttributeDescription{.location = 0,
-                                          .binding = 0,
-                                          .format = VK_FORMAT_R32G32B32_SFLOAT,
-                                          .offset = offsetof(resources::Vertex, position)},
-        VkVertexInputAttributeDescription{.location = 1,
-                                          .binding = 0,
-                                          .format = VK_FORMAT_R32G32B32_SFLOAT,
-                                          .offset = offsetof(resources::Vertex, normal)},
-        VkVertexInputAttributeDescription{.location = 3,
-                                          .binding = 0,
-                                          .format = VK_FORMAT_R32G32_SFLOAT,
-                                          .offset = offsetof(resources::Vertex, uv)},
-    };
+    std::vector<VkVertexInputAttributeDescription> attributes;
+    for (const AttributeLayout& attribute : kMeshAttributes) {
+        if ((desc.meshAttributes & attribute.bit) != 0) {
+            attributes.push_back(VkVertexInputAttributeDescription{.location = attribute.location,
+                                                                   .binding = 0,
+                                                                   .format = attribute.format,
+                                                                   .offset = attribute.offset});
+        }
+    }
     const VkPipelineVertexInputStateCreateInfo vertexInput{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 1,
+        .vertexBindingDescriptionCount = attributes.empty() ? 0u : 1u,
         .pVertexBindingDescriptions = &binding,
         .vertexAttributeDescriptionCount = static_cast<std::uint32_t>(attributes.size()),
         .pVertexAttributeDescriptions = attributes.data(),
@@ -118,12 +128,13 @@ core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderT
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
         .scissorCount = 1};
-    // Front faces are counter-clockwise, as in glTF (spec 3.3); the projection keeps them so.
+    // Front faces are counter-clockwise, as in glTF (spec 3.3); the projections keep them so.
     const VkPipelineRasterizationStateCreateInfo rasterization{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
         .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .cullMode = desc.cullMode,
         .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .depthBiasEnable = desc.dynamicDepthBias ? VK_TRUE : VK_FALSE,
         .lineWidth = 1.0f};
     const VkPipelineMultisampleStateCreateInfo multisample{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -132,22 +143,26 @@ core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderT
     const VkPipelineDepthStencilStateCreateInfo depthStencil{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = hasDepth ? VK_TRUE : VK_FALSE,
-        .depthWriteEnable = hasDepth ? VK_TRUE : VK_FALSE,
-        .depthCompareOp = VK_COMPARE_OP_LESS};
+        .depthWriteEnable = hasDepth && desc.depthWrite ? VK_TRUE : VK_FALSE,
+        .depthCompareOp = desc.depthCompare};
     const VkPipelineColorBlendAttachmentState blendAttachment{
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
                           VK_COLOR_COMPONENT_A_BIT};
+    const bool hasColor = target.colorFormat != VK_FORMAT_UNDEFINED;
     const VkPipelineColorBlendStateCreateInfo blend{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-        .attachmentCount = 1,
+        .attachmentCount = hasColor ? 1u : 0u,
         .pAttachments = &blendAttachment};
-    const std::array dynamicStates{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    std::vector<VkDynamicState> dynamicStates{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    if (desc.dynamicDepthBias) {
+        dynamicStates.push_back(VK_DYNAMIC_STATE_DEPTH_BIAS);
+    }
     const VkPipelineDynamicStateCreateInfo dynamic{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
         .dynamicStateCount = static_cast<std::uint32_t>(dynamicStates.size()),
         .pDynamicStates = dynamicStates.data()};
     const VkPipelineRenderingCreateInfo rendering{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-                                                  .colorAttachmentCount = 1,
+                                                  .colorAttachmentCount = hasColor ? 1u : 0u,
                                                   .pColorAttachmentFormats = &target.colorFormat,
                                                   .depthAttachmentFormat = target.depthFormat};
 
@@ -169,21 +184,21 @@ core::Result<ScenePipeline> ScenePipeline::create(VkDevice device, const RenderT
     if (const VkResult result =
             vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline.m_pipeline);
         result != VK_SUCCESS) {
-        return pipelineError("graphics pipeline", result);
+        return pipelineError(desc.name, "graphics pipeline", result);
     }
     return pipeline;
 }
 
-ScenePipeline::~ScenePipeline() {
+GraphicsPipeline::~GraphicsPipeline() {
     destroy();
 }
 
-ScenePipeline::ScenePipeline(ScenePipeline&& other) noexcept
+GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
     : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)),
       m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)),
       m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)), m_target(other.m_target) {}
 
-ScenePipeline& ScenePipeline::operator=(ScenePipeline&& other) noexcept {
+GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline&& other) noexcept {
     if (this != &other) {
         destroy();
         m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
@@ -194,7 +209,7 @@ ScenePipeline& ScenePipeline::operator=(ScenePipeline&& other) noexcept {
     return *this;
 }
 
-void ScenePipeline::destroy() noexcept {
+void GraphicsPipeline::destroy() noexcept {
     if (m_device == VK_NULL_HANDLE) {
         return;
     }
@@ -204,15 +219,15 @@ void ScenePipeline::destroy() noexcept {
     m_layout = VK_NULL_HANDLE;
 }
 
-VkPipeline ScenePipeline::handle() const noexcept {
+VkPipeline GraphicsPipeline::handle() const noexcept {
     return m_pipeline;
 }
 
-VkPipelineLayout ScenePipeline::layout() const noexcept {
+VkPipelineLayout GraphicsPipeline::layout() const noexcept {
     return m_layout;
 }
 
-const RenderTargetDesc& ScenePipeline::target() const noexcept {
+const RenderTargetDesc& GraphicsPipeline::target() const noexcept {
     return m_target;
 }
 

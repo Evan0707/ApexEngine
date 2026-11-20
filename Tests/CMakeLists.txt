@@ -57,6 +57,7 @@ add_executable(ApexTests
     World/RenderExtractionTests.cpp
     World/RotationTests.cpp
     World/SceneQueriesTests.cpp
+    World/ShadowFocusTests.cpp
     # The demo's binding table is plain data: tested here so that a typo fails in CI, not at launch.
     "${PROJECT_SOURCE_DIR}/Game/Bindings.cpp"
     "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"

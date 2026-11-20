@@ -2,9 +2,12 @@
 
 layout(set = 0, binding = 0) uniform FrameUniforms {
     mat4 viewProjection;
+    mat4 lightViewProjection;
     vec4 directionToLight;
     vec4 lightRadiance;
     vec4 ambient;
+    // x: shadows on, y: shadow map texel, z: start of the fade at the border.
+    vec4 shadow;
 } frame;
 
 struct ObjectData {

@@ -16,6 +16,10 @@ void rememberTransforms(entt::registry& registry);
 [[nodiscard]] Transform interpolateTransform(const Transform& previous, const Transform& current,
                                              float alpha) noexcept;
 
+// The transform the entity is drawn at: interpolated with alpha when it has a PreviousTransform. The entity
+// must have a Transform.
+[[nodiscard]] Transform drawnTransform(const entt::registry& registry, entt::entity entity, float alpha);
+
 // The extraction (spec 4.3, G-01): fills the scene with copies of what the registry holds, one object
 // per part of each MeshRenderer's model. It is the only place where world positions become render space,
 // relative to the camera (G-07). Transforms are interpolated with alpha where a PreviousTransform exists.

@@ -5,15 +5,19 @@
 
 #include <vulkan/vulkan.h>
 
+#include <string_view>
+
 namespace apex::graphics {
 
-// Internal to Graphics. The depth buffer of the main pass, the size of the swapchain. The allocator must
-// outlive it.
+// Internal to Graphics. A depth image with its view: the depth buffer of the main pass, the size of the
+// swapchain, and the shadow map. The allocator must outlive it.
 class DepthTarget {
 public:
-    // Fails when the format cannot be a depth attachment on this GPU.
+    // Fails when the format cannot be a depth attachment on this GPU, or cannot be sampled when `sampled`.
+    // The name appears in the error messages and in VMA.
     [[nodiscard]] static core::Result<DepthTarget> create(const Device& device, GpuAllocator& allocator,
-                                                          VkExtent2D extent, VkFormat format);
+                                                          VkExtent2D extent, VkFormat format,
+                                                          std::string_view name, bool sampled);
 
     DepthTarget() = default;
     ~DepthTarget();

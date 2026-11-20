@@ -91,7 +91,9 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
     }
     const VkExtent2D extent = swapchain.extent();
     const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio), objectData, materials.gpuData());
+    frameShadow = scene.shadow;
+    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio, shadowMap.size()), objectData,
+                       materials.gpuData());
 }
 
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
@@ -112,6 +114,7 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
 
+    recordShadowPass(commands);
     recordScenePass(commands, imageIndex);
     // Second pass, without depth: the interface is drawn over the scene (decisions 0008 and 0011).
     if (overlay != nullptr) {
@@ -129,6 +132,72 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE});
     gpuTimer.end(commands, frameIndex);
+}
+
+void Renderer::State::recordShadowPass(VkCommandBuffer commands) {
+    constexpr VkPipelineStageFlags2 kDepthStages =
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    // One shadow map for both frames in flight: the previous frame's scene pass must be done reading it.
+    transitionImage(commands, {shadowMap.image(), VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                               VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE, kDepthStages,
+                               VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
+    const VkExtent2D extent{shadowMap.size(), shadowMap.size()};
+    // Cleared even when shadows are off: the scene shader's descriptor must hold a valid image.
+    const VkRenderingAttachmentInfo depthAttachment{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = shadowMap.view(),
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = {.depthStencil = {1.0f, 0}},
+    };
+    const VkRenderingInfo rendering{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = {{0, 0}, extent},
+        .layerCount = 1,
+        .pDepthAttachment = &depthAttachment,
+    };
+    vkCmdBeginRendering(commands, &rendering);
+    counters.shadowDrawCalls = 0;
+    if (frameShadow.enabled) {
+        const VkViewport viewport{.x = 0.0f,
+                                  .y = 0.0f,
+                                  .width = static_cast<float>(extent.width),
+                                  .height = static_cast<float>(extent.height),
+                                  .minDepth = 0.0f,
+                                  .maxDepth = 1.0f};
+        const VkRect2D scissor{{0, 0}, extent};
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipeline.handle());
+        vkCmdSetViewport(commands, 0, 1, &viewport);
+        vkCmdSetScissor(commands, 0, 1, &scissor);
+        // 16-bit depth over the area's depth range: one unit of constant bias is depthRange / 65536 meters.
+        constexpr float kDepthSteps = 65536.0f;
+        vkCmdSetDepthBias(commands, frameShadow.constantBias * kDepthSteps / frameShadow.depthRange, 0.0f,
+                          frameShadow.slopeBias);
+        const VkDescriptorSet frameSet = frameBuffers.descriptorSet(frameIndex);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipeline.layout(), 0, 1,
+                                &frameSet, 0, nullptr);
+        const GpuMesh* boundMesh = nullptr;
+        for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
+            const GpuMesh* mesh = drawMeshes[drawIndex];
+            if (mesh != boundMesh) {
+                const VkDeviceSize offset = 0;
+                vkCmdBindVertexBuffers(commands, 0, 1, &mesh->vertices.buffer, &offset);
+                vkCmdBindIndexBuffer(commands, mesh->indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+                boundMesh = mesh;
+            }
+            vkCmdDrawIndexed(commands, mesh->indexCount, 1, 0, 0, drawIndex);
+            ++counters.shadowDrawCalls;
+        }
+    }
+    vkCmdEndRendering(commands);
+    transitionImage(commands,
+                    {shadowMap.image(), VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                     VK_ACCESS_2_SHADER_SAMPLED_READ_BIT});
 }
 
 void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {

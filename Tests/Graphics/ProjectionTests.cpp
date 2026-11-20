@@ -70,3 +70,15 @@ TEST_CASE("A counter-clockwise face towards the camera stays front-facing for Vu
     area *= -0.5f;
     REQUIRE(area > 0.0f);
 }
+
+TEST_CASE("The orthographic projection maps its box onto the clip volume", "[graphics]") {
+    const glm::mat4 projection = apex::graphics::orthographicProjection(20.0f, 10.0f, 0.0f, 100.0f);
+    REQUIRE_THAT(toNdc(projection, {0.0f, 0.0f, 0.0f}).z, WithinAbs(0.0, kTolerance));
+    REQUIRE_THAT(toNdc(projection, {0.0f, 0.0f, -100.0f}).z, WithinAbs(1.0, kTolerance));
+    REQUIRE_THAT(toNdc(projection, {0.0f, 0.0f, -50.0f}).z, WithinAbs(0.5, kTolerance));
+    REQUIRE_THAT(toNdc(projection, {20.0f, 0.0f, -1.0f}).x, WithinAbs(1.0, kTolerance));
+    // Up in view space is up on screen, as with the perspective projection.
+    REQUIRE_THAT(toNdc(projection, {0.0f, 10.0f, -1.0f}).y, WithinAbs(-1.0, kTolerance));
+    // Parallel rays: the distance does not move a point across the screen.
+    REQUIRE_THAT(toNdc(projection, {10.0f, 0.0f, -90.0f}).x, WithinAbs(0.5, kTolerance));
+}

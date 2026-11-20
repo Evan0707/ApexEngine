@@ -29,6 +29,10 @@ void rememberTransforms(entt::registry& registry) {
     }
 }
 
+Transform drawnTransform(const entt::registry& registry, entt::entity entity, float alpha) {
+    return renderTransform(registry, entity, registry.get<Transform>(entity), alpha);
+}
+
 Transform interpolateTransform(const Transform& previous, const Transform& current, float alpha) noexcept {
     return Transform{
         .position = glm::mix(previous.position, current.position, alpha),
@@ -44,7 +48,7 @@ void extractRenderScene(const entt::registry& registry, const resources::Resourc
     Transform cameraTransform;
     Camera cameraSettings;
     if (registry.valid(camera) && registry.all_of<Transform, Camera>(camera)) {
-        cameraTransform = renderTransform(registry, camera, registry.get<Transform>(camera), alpha);
+        cameraTransform = drawnTransform(registry, camera, alpha);
         cameraSettings = registry.get<Camera>(camera);
     }
     scene.camera = graphics::RenderCamera{

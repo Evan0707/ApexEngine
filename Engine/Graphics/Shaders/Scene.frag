@@ -3,6 +3,7 @@
 #include "Frame.glsl"
 #include "Material.glsl"
 #include "Pbr.glsl"
+#include "Shadow.glsl"
 
 // Render space: the camera is at the origin (G-07).
 layout(location = 0) in vec3 inPosition;
@@ -16,7 +17,8 @@ void main() {
     MaterialData material = sampleMaterial(inMaterial, inUv);
     vec3 n = normalize(inNormal);
     vec3 v = normalize(-inPosition);
-    vec3 color = shadeDirectionalLight(material, n, v, frame.directionToLight.xyz, frame.lightRadiance.rgb) +
+    vec3 radiance = frame.lightRadiance.rgb * shadowVisibility(inPosition);
+    vec3 color = shadeDirectionalLight(material, n, v, frame.directionToLight.xyz, radiance) +
                  shadeAmbient(material, frame.ambient.rgb);
     // Linear color, encoded by the sRGB swapchain. No tonemapping before P1: bright values clip.
     outColor = vec4(color, 1.0);

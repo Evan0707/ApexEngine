@@ -78,6 +78,8 @@ add_library(ApexEngine STATIC
     Graphics/GpuTimer.h
     Graphics/GpuTimestamps.cpp
     Graphics/GpuTimestamps.h
+    Graphics/GraphicsPipeline.cpp
+    Graphics/GraphicsPipeline.h
     Graphics/GpuTexture.cpp
     Graphics/GpuTexture.h
     Graphics/MaterialSets.cpp
@@ -95,10 +97,10 @@ add_library(ApexEngine STATIC
     Graphics/RenderTargetDesc.h
     Graphics/Renderer.h
     Graphics/ResourceMirror.h
-    Graphics/ScenePipeline.cpp
-    Graphics/ScenePipeline.h
     Graphics/ShaderBinaries.cpp
     Graphics/ShaderBinaries.h
+    Graphics/ShadowMap.cpp
+    Graphics/ShadowMap.h
     Graphics/Swapchain.cpp
     Graphics/Swapchain.h
     Graphics/SwapchainState.cpp
@@ -171,18 +173,22 @@ add_library(ApexEngine STATIC
     World/Rotation.h
     World/SceneQueries.cpp
     World/SceneQueries.h
+    World/ShadowFocus.cpp
+    World/ShadowFocus.h
 )
 add_library(Apex::Engine ALIAS ApexEngine)
 
 apex_add_shaders(ApexEngine
     Graphics/Shaders/Scene.frag
     Graphics/Shaders/Scene.vert
+    Graphics/Shaders/Shadow.vert
 )
 # Included by the shaders above: tracked through glslc's depfiles, listed here for the IDE.
 target_sources(ApexEngine PRIVATE
     Graphics/Shaders/Frame.glsl
     Graphics/Shaders/Material.glsl
     Graphics/Shaders/Pbr.glsl
+    Graphics/Shaders/Shadow.glsl
 )
 
 # Include root: #include "Core/Version.h"

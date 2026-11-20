@@ -10,4 +10,9 @@ namespace apex::graphics {
 [[nodiscard]] glm::mat4 perspectiveProjection(float verticalFovRadians, float aspectRatio, float nearPlane,
                                               float farPlane) noexcept;
 
+// Same conventions, parallel rays: the box from -halfWidth to halfWidth, -halfHeight to halfHeight, and
+// nearPlane to farPlane in front of the view, fills the clip volume. The shadow map's projection.
+[[nodiscard]] glm::mat4 orthographicProjection(float halfWidth, float halfHeight, float nearPlane,
+                                               float farPlane) noexcept;
+
 } // namespace apex::graphics

@@ -13,10 +13,10 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame, temps d'attente du CPU, temps GPU |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
-| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
+| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
-| `Graphics/Renderer.h` | `RendererConfig`, `Renderer` : `create()`, `syncResources()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
+| `Graphics/Renderer.h` | `RendererConfig` (dont la résolution de la shadow map), `Renderer` : `create()`, `syncResources()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
 
 En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
@@ -27,19 +27,20 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/ShaderBinaries.h` : le SPIR-V des shaders, embarqué dans le binaire ;
 - `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
 - `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : formats de couleur et de profondeur et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
-- `Graphics/DepthTarget.h` (`DepthTarget`) : le tampon de profondeur de la passe principale ;
-- `Graphics/ScenePipeline.h` (`ScenePipeline`) : le pipeline de la passe principale ;
+- `Graphics/DepthTarget.h` (`DepthTarget`) : une image de profondeur et sa vue (tampon de profondeur de la passe principale, shadow map) ;
+- `Graphics/GraphicsPipeline.h` (`MeshAttribute`, `PipelineDesc`, `GraphicsPipeline`) : un pipeline et son layout, décrit par ce qui change d'une passe à l'autre ;
+- `Graphics/ShadowMap.h` (`ShadowMap`) : la shadow map et son sampler de comparaison ;
 - `Graphics/RendererState.h` : l'état privé du `Renderer` et ses limites (frames en vol, objets, matériaux).
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/ResourceMirror.h` (`ResourceMirror`), sans Vulkan, testé sans GPU ;
 - `Graphics/GpuTexture.h` (`GpuTexture`, `textureFormat()`, `createGpuTexture()`, `destroyGpuTexture()`) ;
 - `Graphics/MaterialSets.h` (`MaterialSets`) : jeux de descripteurs par matériau et sampler ;
-- `Graphics/Projection.h` (`perspectiveProjection()`), sans Vulkan, testé sans GPU ;
+- `Graphics/Projection.h` (`perspectiveProjection()`, `orthographicProjection()`), sans Vulkan, testé sans GPU ;
 - `Graphics/DrawList.h` (`DrawItem`, `sortDrawItems()`), sans Vulkan, testé sans GPU ;
 - `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
 - `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
 - `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`) : reflet des matériaux du cache, sans Vulkan, testé sans GPU ;
-- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
+- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `shadowViewProjection()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
 - `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol ;
 - `Graphics/GpuTimestamps.h` (`TimestampFormat`, `elapsedSeconds()`), sans Vulkan, testé sans GPU ;
 - `Graphics/GpuTimer.h` (`GpuTimer`) : les horodatages de chaque frame en vol.
@@ -74,9 +75,19 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - `renderFrame(scene)` résout les handles de chaque objet (voir « Ressources »). Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
 - Les objets sont triés par matériau puis par mesh, puis leurs données sont écrites dans le buffer de la frame dans cet ordre. Le dessin `i` utilise `firstInstance = i` : le vertex shader lit l'objet par `gl_InstanceIndex` (G-02). Les buffers de sommets et d'indices ne sont liés qu'au changement de mesh.
-- Pipeline (`ScenePipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale et UV lues dans le format de sommet unique (la tangente attend les normal maps, P1) ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
+- Pipeline de scène (`GraphicsPipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale et UV lues dans le format de sommet unique (la tangente attend les normal maps, P1). Un attribut que le shader ne lit pas n'est pas déclaré : les layers le signaleraient ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
+
+## Ombres (phase 7, décision 0021)
+
+- Passe d'ombre avant la passe principale : profondeur seule, dans une shadow map carrée dont la résolution vient de `RendererConfig::shadowMapSize` (2048 par défaut, section 5.4, G-09). Format `D16_UNORM`, choisi dans `Renderer.cpp` seulement : sur 16 bits fixes, une unité de biais constant vaut `depthRange / 65536` mètres, ce qui permet de régler ce biais en mètres. Sur 100 m, la précision est de 1,5 mm.
+- La zone est cadrée par `World` (`RenderShadow`) : une vue de la lumière relative à la caméra, une demi-largeur, une profondeur. `shadowViewProjection()` y ajoute la projection orthographique, mêmes conventions que la perspective (profondeur de 0 à 1, Y retourné).
+- Pipeline d'ombre : position seule, aucun fragment shader, pas d'élimination des faces (un mesh mince ou ouvert projette quand même son ombre), biais de profondeur dynamique : `vkCmdSetDepthBias` à chaque frame avec les biais de la scène.
+- Dessins : les mêmes objets, dans le même buffer par frame, que la passe principale (`gl_InstanceIndex`). Leur nombre est compté à part (`FrameCounters::shadowDrawCalls`).
+- La passe tourne même quand les ombres sont coupées : elle efface alors la carte sans rien dessiner, pour que le descripteur du shader de scène désigne toujours une image valide.
+- Une seule shadow map pour les deux frames en vol : la barrière du début de passe attend que la passe principale de la frame précédente ait fini de la lire ; celle de la fin la rend lisible au fragment shader.
+- Échantillonnage (`Shaders/Shadow.glsl`, jeu 0, binding 3) : sampler de comparaison « inférieur ou égal », filtré linéairement si le format le permet (chaque lecture compare alors 2 × 2 texels), bordure blanche : hors de la carte, tout est éclairé. PCF 3 × 3. Hors de la zone, ni ombre ni coupure : l'ombre s'estompe sur le dernier dixième de la demi-largeur (`kShadowFadeStart`). Seule la lumière directionnelle est atténuée ; le terme ambiant ne l'est pas.
 
 ## Scène et projection (phase 3)
 
@@ -101,9 +112,10 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 ## Données par frame (G-02)
 
 - Un jeu de descripteurs par frame en vol, le jeu 0 (section 5.4, note 0011) :
-  - binding 0, uniform buffer `FrameUniforms` : matrice vue-projection, direction vers la lumière, radiance de la lumière (couleur × intensité), terme ambiant ;
+  - binding 0, uniform buffer `FrameUniforms` : matrice vue-projection, matrice de la lumière (espace de rendu vers la shadow map), direction vers la lumière, radiance de la lumière (couleur × intensité), terme ambiant, réglages des ombres ;
   - binding 1, storage buffer d'`ObjectGpu` : matrice du modèle relative à la caméra, matrice des normales, index de matériau. Un élément par objet dessiné, dans l'ordre des appels de dessin ; le shader le lit par `gl_InstanceIndex` ;
-  - binding 2, storage buffer de `MaterialGpu` : la table des matériaux.
+  - binding 2, storage buffer de `MaterialGpu` : la table des matériaux ;
+  - binding 3, la shadow map et son sampler de comparaison (phase 7), écrit une fois à la création.
 - Aucune matrice d'objet en push constant.
 - Les buffers sont visibles par le CPU, mappés pendant toute l'exécution et réécrits à chaque frame après l'attente de sa fence. `flush()` les rend visibles au GPU quand la mémoire n'est pas cohérente.
 - Les structures C++ (`FrameData.h`, `MaterialTable.h`) et GLSL (`Shaders/Frame.glsl`, `Shaders/Material.glsl`) ont la même disposition : des `static_assert` et des tests vérifient tailles et décalages. Les shaders accèdent aux matériaux uniquement par `Material.glsl` (G-08).
