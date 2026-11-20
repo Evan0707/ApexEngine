@@ -328,10 +328,16 @@ void DemoApp::logBenchmark() const {
                    "{:.2f} ms 99th percentile, {:.2f} ms max",
                    summary.frameCount, summary.durationSeconds, summary.averageFramesPerSecond,
                    summary.averageFrameMs, summary.percentile99FrameMs, summary.maxFrameMs);
-    m_logger->info("Benchmark settings: {} build, {}x{} pixels, vsync {}, {} objects drawn, {} triangles, "
-                   "graphics options: none",
-                   kBuildName, size.width, size.height, m_vsync ? "on" : "off", counters.drawCalls,
-                   counters.triangles);
+    m_logger->info(
+        "Benchmark settings: {} build, {}x{} pixels, vsync {}, {} objects drawn ({} in the shadow pass), "
+        "{} triangles",
+        kBuildName, size.width, size.height, m_vsync ? "on" : "off", counters.drawCalls,
+        counters.shadowDrawCalls, counters.triangles);
+    m_logger->info("Benchmark graphics options: shadows {} ({}x{}), tonemapping {}, exposure {:+.1f} stops, "
+                   "image-based lighting {}, colliders {}, frustum culling, mipmaps",
+                   m_controls.shadows ? "on" : "off", m_shadowSettings.mapSize, m_shadowSettings.mapSize,
+                   m_controls.toneMapping ? "ACES" : "off", m_controls.exposureStops,
+                   m_controls.imageBasedLighting ? "on" : "off", m_controls.colliders ? "shown" : "hidden");
     // Compared with the "GPU upload" line: a drift during the run would show here (spec 7.2).
     constexpr double kMebibyte = 1024.0 * 1024.0;
     m_logger->info("Benchmark end: GPU memory {:.0f} MiB used",

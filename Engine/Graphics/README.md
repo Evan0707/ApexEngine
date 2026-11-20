@@ -2,7 +2,7 @@
 
 **Rôle :** renderer Vulkan 1.3, seul module qui émet des appels GPU (cahier des charges, sections 4.3 et 5.4, garde-fou G-01).
 
-**État (phase 3) :** périphérique, mémoire GPU (VMA), swapchain sRGB, deux frames en vol, shaders compilés pendant le build, tampon de profondeur, meshes et matériaux, données par frame, `RenderScene` dessinée en une passe principale, interface dans une seconde passe. Notes de décision 0006, 0009 et 0011.
+**État (phase 7) :** périphérique, mémoire GPU (VMA), swapchain sRGB, deux frames en vol, shaders compilés pendant le build, tampon de profondeur, meshes, textures avec mipmaps et matériaux avec normal map, données par frame, `RenderScene` dessinée en cinq passes (ombre, scène et ciel en HDR, tonemapping, lignes des colliders, interface), IBL, frustum culling, temps GPU. Notes de décision 0006, 0009, 0011, 0014, 0021, 0022 et 0023.
 
 ## Interface publique
 

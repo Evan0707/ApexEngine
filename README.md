@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 6 en cours (Jolt, corps rigides, personnage, caméra troisième personne).** `ApexDemo` charge sa scène dans `Assets/Scenes/demo.json` et sa configuration dans `Config/`, simule ses corps rigides avec Jolt Physics, puis dessine par Vulkan 1.3 ce que la scène contient : un terrain de test avec rampes, plateformes, mur et caisses à pousser. La vue démarre en caméra libre ; F3 donne les commandes à un personnage suivi par une caméra troisième personne. Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 7 en cours (ombres, HDR, IBL, puis outils de debug P1).** `ApexDemo` charge sa scène dans `Assets/Scenes/demo.json` et sa configuration dans `Config/`, simule ses corps rigides avec Jolt Physics, puis dessine par Vulkan 1.3 ce que la scène contient : un terrain de test avec rampes, plateformes, mur et caisses à pousser, sous un ciel qui l'éclaire, avec des ombres, en HDR. F2 montre les colliders, F4 coupe les ombres. La vue démarre en caméra libre ; F3 donne les commandes à un personnage suivi par une caméra troisième personne. Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -96,6 +96,17 @@ Au lancement, la caméra libre regarde le cube de référence ; le personnage (c
 | 10. Fermer | Croix ou Alt + F4 | Code de sortie 0 |
 
 La caméra troisième personne ne doit jamais passer sous le sol ni derrière un mur : en levant la souris au maximum ou en reculant contre le mur rouge, elle se rapproche du personnage au lieu de traverser.
+
+Étapes P1 (section 6.2, critères AC-P1-1 à AC-P1-6), panneau ouvert par F1 :
+
+| Étape | Où, comment | Ce qu'on doit voir |
+|---|---|---|
+| Ombres (F4) | Personnage près des cubes ; F4 deux fois | Le personnage et les objets projettent une ombre nette, collée à leur base ; aucune moire ni rayure sur le sol et les faces éclairées (acné), aucune ombre détachée (décollement). F4 les coupe et les remet. En caméra libre, à 20 m du personnage, les ombres s'estompent au bord de la zone au lieu de s'arrêter net |
+| Colliders (F2) | Toute la scène ; puis marcher dans la pile | Un fil de fer sur chaque forme physique : vert pour le statique, orange pour ce qui bouge, bleu pour ce qui dort, jaune pour la capsule du personnage. Les fils suivent les caisses qui tombent |
+| Temps GPU | Panneau, première section | Une durée en millisecondes, moyenne et maximum |
+| Culling | Panneau ; tourner la caméra vers le ciel ou vers l'horizon vide | « Objects drawn » diminue quand des objets sortent du champ |
+| Tonemapping et exposition | Sphères blanches (rangée de devant) ; curseur « Exposure » à +2, puis case « Tonemapping (ACES) » | Avec ACES, le haut des sphères garde un dégradé ; sans, il devient un disque blanc uni. L'exposition éclaircit ou assombrit toute l'image |
+| IBL et ciel | Rangées de sphères ; case « Image-based lighting and sky » | Ciel bleu, panneau rouge sur l'horizon vers −Z. Les sphères dorées reflètent le ciel et le sol : net à gauche (lisse), flou à droite (rugueuse). Sans la case, ciel uni bleu sombre et éclairage ambiant plat |
 
 Avec Visual Studio : ouvrir le dossier du dépôt, les presets sont détectés automatiquement.
 

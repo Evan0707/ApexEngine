@@ -2,7 +2,7 @@
 
 **Rôle :** simulation physique du moteur, par encapsulation de Jolt Physics (cahier des charges, sections 5.7 et 5.8). Le module ne connaît ni les entités ni EnTT : `World` lui pousse des données et recopie les résultats (section 4.3).
 
-**État (phase 6) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques, raycast et spherecast, personnage (notes de décision 0018, 0019 et 0020).
+**État (phase 7) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques, raycast et spherecast, personnage, lecture des formes simulées pour l'affichage des colliders (notes de décision 0018, 0019, 0020 et 0023).
 
 ## Interface publique
 

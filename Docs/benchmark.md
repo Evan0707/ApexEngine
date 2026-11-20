@@ -36,6 +36,7 @@ build\windows-release\bin\ApexDemo.exe --benchmark 60 --no-vsync
 | 19 novembre 2026 | 4 | 20 | 26 698 | textures (7, sans mipmaps) | 1 399 | 0,71 ms | 1,56 ms | 8,97 ms | atteints |
 | 19 novembre 2026 | 5 | 20 | 26 698 | textures (7, sans mipmaps) | 1 456 | 0,69 ms | 1,46 ms | 4,72 ms | atteints |
 | 20 novembre 2026 | 6 | 31 | 27 842 | textures (7, sans mipmaps) | 1 480 | 0,68 ms | 1,41 ms | 17,74 ms | atteints |
+| 20 novembre 2026 | 7 | 26 (31 dans la passe d'ombre) | 27 782 | textures avec mipmaps, anisotropie 8×, ombres 2048, HDR et ACES, IBL et ciel, normal maps, frustum culling | 525 | 1,91 ms | 3,15 ms | 56,03 ms | atteints |
 
 ### Phase 3 (19 novembre 2026)
 
@@ -68,4 +69,14 @@ Scène du parcours de validation : 32 entités, 27 corps physiques (12 boîtes s
 - Le maximum de 17,74 ms est un accroc isolé, comme en phase 3 : le 99e centile est de 1,41 ms. Cette mesure n'a pas respecté la règle « ne rien faire d'autre » : des modifications de fichiers ont eu lieu sur la machine pendant la minute mesurée. À refaire au calme si ce chiffre doit servir.
 - Mémoire GPU : 223 Mio après les envois et 223 Mio en fin de mesure. Aucune dérive sur 60 s.
 - Ce que la mesure ne dit pas : le coût de la physique quand des corps bougent (pile renversée, caisses poussées), et le parcours joué au clavier. La mesure de la phase 8 devra rejouer le parcours.
+
+### Phase 7 (20 novembre 2026)
+
+Même scène qu'en phase 6, avec le rendu P1 : passe d'ombre de 2048 × 2048, image HDR de 1920 × 1080 en flottants 16 bits, tonemapping ACES, éclairage par l'environnement et ciel, normal map de la caisse, mipmaps et anisotropie 8×, frustum culling. 31 475 frames en 60 s. Deux mesures de suite ; la seconde est retenue dans le tableau.
+
+- Le coût du rendu P1 se voit sur la carte graphique intégrée : de 1 480 à 525 FPS, de 0,68 à 1,91 ms par frame. Les objectifs restent atteints de très loin (60 FPS, 20 ms).
+- Première mesure : 528 FPS, 3,00 ms au 99e centile, mais un maximum de 1 302,78 ms. Une seule frame ; la mesure suivante, lancée aussitôt, donne 56,03 ms au maximum. L'origine n'est pas établie (le chargement de l'environnement était fini avant la mesure, d'après le log) ; le 99e centile n'en est pas affecté. À surveiller en phase 8 avec une capture Tracy si l'accroc revient.
+- Le culling réduit la passe principale à 26 objets sur 31 sur le chemin de la caméra ; la passe d'ombre en garde 31 (toute la scène tient dans la zone de 40 m).
+- Mémoire GPU : 250 Mio après les envois et 250 Mio en fin de mesure, contre 223 Mio en phase 6 (image HDR, shadow map, cubemap, mipmaps). Aucune dérive sur 60 s.
+- Le log du benchmark donne maintenant les options graphiques actives (ligne `Benchmark graphics options`).
 

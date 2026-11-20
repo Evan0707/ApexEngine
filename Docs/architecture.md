@@ -2,12 +2,12 @@
 
 Ce document décrit l'architecture réellement en place. Il est complété à la fin de chaque phase. La cible est décrite dans `cahier_des_charges.md`, section 4.
 
-## État actuel (phase 6)
+## État actuel (phase 7)
 
 | Cible CMake | Type | Contenu |
 |---|---|---|
 | `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Physics`, `World`, `Serialization`, `Debug`, et le SPIR-V des shaders |
-| `ApexDemo` | Exécutable | Charge `Assets/Scenes/demo.json` et `Config/`, simule les corps rigides et le personnage, dessine la scène éclairée vue par une caméra libre ou par une caméra troisième personne (F3), affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
+| `ApexDemo` | Exécutable | Charge `Assets/Scenes/demo.json` et `Config/`, simule les corps rigides et le personnage, dessine la scène éclairée (ombres, HDR et tonemapping, IBL et ciel, normal maps) vue par une caméra libre ou par une caméra troisième personne (F3), affiche les colliders (F2), affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
 | `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Physics`, `World`, `Serialization`, `Debug` et de la démo (dont le parcours de validation sur la vraie scène), sans fenêtre ni GPU |
 | `Apex::Options` | Cible d'interface | Options de compilation communes : avertissements en erreurs. Le standard C++23 est fixé pour tout le projet dans le `CMakeLists.txt` racine |
 
@@ -24,10 +24,10 @@ Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaq
 | Core | Erreurs, assertions, logger, pas fixe, boucle principale, macros de profilage, mathématiques, `WorldPosition` | Bibliothèque standard | GLM, inclus par `Core/Math.h` uniquement ; Tracy, dans `Core/Profiling.h` uniquement et seulement avec `windows-profile` | `Engine/Core/README.md` |
 | Platform | Touches physiques, événements, fenêtre, pont vers Vulkan et ImGui par handles opaques, dossier de l'exécutable | Core | SDL3, dans `Platform/*.cpp` uniquement | `Engine/Platform/README.md` |
 | Input | Table des actions, état des actions | Core, Platform | Aucune | `Engine/Input/README.md` |
-| Resources | Données CPU (meshes, matériaux, textures, modèles), import glTF, décodage PNG et JPG, chemins d'assets, handles avec état, cache, assets de secours, primitives | Core | cgltf dans `Resources/GltfImporter.cpp`, stb_image dans `Resources/ImageDecoder.cpp`, uniquement | `Engine/Resources/README.md` |
-| Graphics | Périphérique Vulkan 1.3, mémoire GPU, swapchain, frames en vol, destruction différée, profondeur, reflet GPU du cache (meshes, textures, jeux de matériau), données par frame, `RenderScene`, éclairage PBR | Core, Platform, Resources | Vulkan-Headers, Vulkan-Loader, vk-bootstrap, VMA, dans `Graphics` uniquement | `Engine/Graphics/README.md` |
+| Resources | Données CPU (meshes, matériaux, textures, modèles, environnements), import glTF, décodage PNG, JPG et Radiance HDR, chemins d'assets, handles avec état, cache, assets de secours, primitives | Core | cgltf dans `Resources/GltfImporter.cpp`, stb_image dans `Resources/ImageDecoder.cpp`, uniquement | `Engine/Resources/README.md` |
+| Graphics | Périphérique Vulkan 1.3, mémoire GPU, swapchain, frames en vol, destruction différée, profondeur, reflet GPU du cache (meshes avec mipmaps, textures, jeux de matériau, environnements), données par frame, `RenderScene`, éclairage PBR, ombres, HDR et tonemapping, IBL et ciel, frustum culling, lignes des colliders, temps GPU | Core, Platform, Resources | Vulkan-Headers, Vulkan-Loader, vk-bootstrap, VMA, dans `Graphics` uniquement | `Engine/Graphics/README.md` |
 | Physics | Monde physique à pas fixe : corps rigides (boîte, sphère, capsule), raycast et spherecast, personnage ; handles opaques | Core | Jolt Physics, dans `Physics` uniquement, par l'en-tête interne `Physics/JoltInclude.h` | `Engine/Physics/README.md` |
-| World | Composants du moteur, angles des fichiers de scène, recherches dans le registre, liaison avec la physique, extraction vers le rendu avec interpolation | Core, Resources, Graphics (types de données), Physics (interface) | EnTT, en-têtes seuls | `Engine/World/README.md` |
+| World | Composants du moteur, angles des fichiers de scène, recherches dans le registre, liaison avec la physique, extraction vers le rendu avec interpolation, cadrage des ombres, fil de fer des colliders | Core, Resources, Graphics (types de données), Physics (interface) | EnTT, en-têtes seuls | `Engine/World/README.md` |
 | Serialization | Lecture et écriture des scènes (format version 1), lecture de la configuration | Core, World, Resources | nlohmann/json, par l'en-tête interne `Serialization/Json.h` uniquement | `Engine/Serialization/README.md` |
 | Debug | Statistiques de frame, mesure de performance, historique des logs, interface Dear ImGui, panneau de la section 5.9 | Core, Platform, Graphics | Dear ImGui dans `Debug` ; SDL et Vulkan dans `Debug/ImGuiBackend.cpp` uniquement | `Engine/Debug/README.md` |
 
@@ -38,7 +38,7 @@ Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaq
 - `Platform` crée la surface Vulkan sans inclure Vulkan : `Window::createVulkanSurface()` reçoit l'instance et renvoie la surface sous forme de handles opaques.
 - `Graphics` n'expose aucun type Vulkan, sauf dans `Graphics/VulkanBackendAccess.h`, réservé au backend ImGui de `Debug`.
 - L'interface de debug est dessinée par l'intermédiaire de `graphics::RenderOverlay`, dans une seconde passe, après la scène (décision 0011).
-- `Graphics` ne reçoit du jeu qu'une `RenderScene` (G-01) : caméra, lumière, terme ambiant et objets (handles de mesh et de matériau de `Resources`, matrice relative à la caméra), copiés à chaque frame.
+- `Graphics` ne reçoit du jeu qu'une `RenderScene` (G-01) : caméra, lumière, terme ambiant, zone d'ombre (vue de la lumière relative à la caméra), réglages du tonemapping, environnement (handle de `Resources`), objets (handles de mesh et de matériau, matrice relative à la caméra) et segments des colliders, copiés à chaque frame.
 - Un seul système de handles, celui de `Resources` (décision 0014). `Graphics` lit le cache une fois par frame (`Renderer::syncResources`) et en garde un reflet GPU désigné par ces handles ; il ne garde aucun pointeur vers les données du cache.
 - Le panneau de debug ne connaît pas la caméra : il modifie une `DebugControls` que l'application applique (décision 0011).
 - EnTT sans surcouche (décision 0015) : l'application possède un `entt::registry` ; `World`, `Serialization` et `Game` le reçoivent par référence. `Graphics` ne le voit jamais, `Debug` reçoit un nombre d'entités.
@@ -46,7 +46,7 @@ Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaq
 - L'état global de Jolt est créé et détruit par un objet `physics::Runtime` que `main` possède (décision 0019).
 - `Serialization` ne connaît ni `Game` ni `Input` (décision 0017) : il rend des structures de données (`SceneDescription`, `EngineConfig`, `InputConfig`). `Game` attache ses composants par identifiant d'entité et convertit la configuration des entrées.
 
-## Déroulement d'une frame (phase 6)
+## Déroulement d'une frame (phase 7)
 
 `Game/main.cpp` lit d'abord la configuration (`Config/engine.json` et `Config/input.json` à côté de l'exécutable, ou `--config`), puis crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre (à la taille configurée), table d'actions, renderer, cache de ressources (dossier `Assets` à côté de l'exécutable, ou `--assets`), état global de Jolt et monde physique (gravité de la configuration), interface de debug, application. L'application charge la scène en dernier (`Scenes/demo.json`, ou `--scene`) dans son registre, attache ses composants aux entités `camera`, `spinner` et `player`, puis fait créer par `World` les corps et le personnage dans `Physics`. Une scène ou une configuration invalide arrête la démo avec le code de sortie 1. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
 
@@ -57,8 +57,8 @@ Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaq
    3. la caméra troisième personne, qui suit la position du personnage à la fin du pas et balaie une sphère pour ne rien laisser entre lui et elle.
 
    En caméra libre, le personnage ne reçoit pas d'entrées mais reste simulé.
-3. **Extraction.** `world::extractRenderScene` interpole les transformations entre les deux derniers pas (`alpha`, section 5.1), caméra comprise, et convertit les positions monde en matrices relatives à la caméra (G-07). Chaque entité avec un `MeshRenderer` donne un `RenderObject` par partie de son modèle ; un modèle pas prêt donne les parties du modèle de secours. Le champ de vision réglé dans le panneau est écrit dans le composant `Camera` juste avant.
-4. **Rendu.** `DebugUi::buildFrame` construit l'interface. `Renderer::syncResources(cache)` envoie au GPU ce qui est devenu prêt et libère ce qui a été déchargé. `Renderer::renderFrame(scene)` attend la fence du créneau de frame, acquiert une image, résout les handles (assets de secours si besoin, G-03), trie les objets par matériau, écrit les données de la frame (caméra, lumière, objets, matériaux), enregistre la passe de scène (couleur et profondeur, un jeu de descripteurs par matériau) puis la passe de l'interface, et soumet. Fenêtre réduite : rien n'est rendu.
+3. **Extraction.** `world::extractRenderScene` interpole les transformations entre les deux derniers pas (`alpha`, section 5.1), caméra comprise, et convertit les positions monde en matrices relatives à la caméra (G-07). Chaque entité avec un `MeshRenderer` donne un `RenderObject` par partie de son modèle ; un modèle pas prêt donne les parties du modèle de secours. Le champ de vision réglé dans le panneau est écrit dans le composant `Camera` juste avant. Viennent ensuite le cadrage des ombres sur le personnage (`world::extractShadow`, décision 0021), les réglages du panneau (exposition, tonemapping, IBL) et, si F2 les affiche, les segments des colliders (`world::extractColliderLines`, décision 0023).
+4. **Rendu.** `DebugUi::buildFrame` construit l'interface. `Renderer::syncResources(cache)` envoie au GPU ce qui est devenu prêt et libère ce qui a été déchargé. `Renderer::renderFrame(scene)` attend la fence du créneau de frame (et lit le temps GPU de la frame qui l'a utilisé), acquiert une image, résout les handles (assets de secours si besoin, G-03), élimine ce qui sort du champ de la caméra et du volume de la lumière, trie les objets par matériau, écrit les données de la frame (caméra, lumière, ombre, environnement, objets, matériaux, lignes), puis enregistre les passes : ombre, scène et ciel dans l'image HDR, tonemapping vers la swapchain, lignes des colliders, interface ; et soumet. Fenêtre réduite : rien n'est rendu.
 5. **Présentation.** `Renderer::presentFrame` présente l'image. Avec la vsync, l'attente se fait ici ou dans l'acquisition suivante.
 
 Logs : console, `Logs/apex.log` relatif au dossier de lancement, et console du panneau de debug pour les avertissements et les erreurs.
@@ -98,16 +98,16 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 
 | ID | Phase 0 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 | Phase 7 | Phase 8 |
 |---|---|---|---|---|---|---|---|---|---|
-| G-01 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | | |
-| G-02 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | | |
-| G-03 | sans objet | sans objet | sans objet | sans objet | conforme | conforme | conforme | | |
-| G-04 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | | |
-| G-05 | sans objet | conforme | conforme | conforme | conforme | conforme | conforme | | |
-| G-06 | conforme | conforme | conforme | conforme | conforme | conforme | conforme | | |
-| G-07 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | | |
-| G-08 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | | |
-| G-09 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | | |
-| G-10 | conforme | conforme | conforme | conforme | conforme | conforme | conforme | | |
+| G-01 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | conforme | |
+| G-02 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | conforme | |
+| G-03 | sans objet | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | |
+| G-04 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | |
+| G-05 | sans objet | conforme | conforme | conforme | conforme | conforme | conforme | conforme | |
+| G-06 | conforme | conforme | conforme | conforme | conforme | conforme | conforme | conforme | |
+| G-07 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | |
+| G-08 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | |
+| G-09 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | conforme | |
+| G-10 | conforme | conforme | conforme | conforme | conforme | conforme | conforme | conforme | |
 
 Détail de la phase 1 :
 
@@ -174,3 +174,30 @@ Détail de la phase 6 :
 - **G-07 :** les positions échangées avec `Physics` sont des `WorldPosition` (`BodyTransform`, `CharacterDesc`, `CastHit`). La seule conversion vers l'espace de rendu reste dans `World/RenderExtraction.cpp`.
 - **G-08, G-09 :** inchangés.
 - **G-10 :** confinement vérifié par recherche : Jolt dans `Engine/Physics` seulement, et dans aucun de ses quatre en-têtes publics ; EnTT absent de `Physics` ; `Game` n'inclut ni Jolt, ni SDL, ni Vulkan. Les dépendances entre modules relevées dans les `#include` sont exactement celles de la section 4.2 (`Physics` ne dépend que de `Core` ; `World` dépend de `Physics`). Conventions : repère et unités de Jolt identiques à ceux du moteur, aucune conversion ; angles en degrés dans les fichiers, en radians en interne.
+
+Détail de la phase 7 :
+
+- **G-01 :** `Graphics` ne reçoit toujours qu'une `RenderScene` copiée, complétée par la zone d'ombre, le tonemapping, l'environnement (un handle) et les segments des colliders. `Graphics` n'inclut ni `World` ni `Physics` (recherche faite) ; `World` lit les formes dans `Physics` et ne passe à `Graphics` que des segments.
+- **G-02 :** aucun push constant (recherche faite). Exposition, matrice de la lumière, réglages des ombres et coefficients de l'irradiance sont dans `FrameUniforms` ; la passe d'ombre lit les objets par `gl_InstanceIndex` dans le même buffer que la passe principale ; le préfiltrage lit ses paramètres dans un uniform buffer et sa face par l'index d'instance ; les sommets des lignes sont dans un buffer par frame.
+- **G-03 :** l'environnement est une ressource du cache avec handle à état ; absent, invalide ou périmé, la scène est éclairée par le terme ambiant, sans ciel (testé). Une normal map pas prête donne la normale plate du cache. Le renderer retrouve l'environnement par handle à chaque frame.
+- **G-04 :** `EnvironmentData` (image équirectangulaire en flottants) est indépendante du format Radiance ; la sphère englobante est calculée sur `MeshData`. stb_image reste dans `Resources/ImageDecoder.cpp`.
+- **G-05 :** rien de nouveau dans la simulation. Le cadrage des ombres et les segments des colliders sont faits à l'extraction, avec `alpha`. Le temps GPU, mesuré par horodatages, ne va qu'au panneau.
+- **G-06 :** aucune variable `static` modifiable dans `Engine/` ni `Game/` (recherche faite). Shadow map, cibles, pipelines, environnements et table BRDF appartiennent à l'état du renderer.
+- **G-07 :** la vue de la lumière est calculée par `World/ShadowFocus.cpp` en coordonnées monde (calage sur les texels), puis rendue relative à la caméra, la soustraction avant tout produit de matrices ; les segments des colliders sont placés relativement à la caméra par `World/ColliderLines.cpp`. `Graphics` n'ajoute que la projection orthographique.
+- **G-08 :** la normal map et son facteur sont des données du matériau, lues par `Shaders/Material.glsl` (`sampleNormal()`) ; un seul pipeline de scène. L'éclairage par l'environnement est un fichier d'inclusion commun (`Shaders/Environment.glsl`).
+- **G-09 :** formats choisis en un seul endroit et passés aux cibles et aux pipelines : profondeur, shadow map (`D16_UNORM`) et image HDR (`R16G16B16A16_SFLOAT`) dans `Renderer.cpp`, environnement dans `GpuEnvironment.h`, table BRDF dans `GpuEnvironment.cpp`. La résolution de la shadow map vient de la configuration et de `RendererConfig` ; la taille de la cubemap spéculaire est passée au préfiltrage par ses paramètres.
+- **G-10 :** confinement vérifié par recherche : Vulkan, vk-bootstrap et VMA dans `Graphics` et `Debug/ImGuiBackend.cpp` ; Jolt dans `Physics` seulement (les formes sortent en `physics::Shape`) ; stb_image et cgltf dans `Resources` ; nlohmann/json dans `Serialization` ; aucune API Windows. GLM toujours par `Core/Math.h`, qui inclut en plus `glm/packing.hpp` et `glm/gtc/packing.hpp` (extensions stables, décision 0010). Conventions : directions de l'environnement en repère monde (`environmentUv()`), faces de la cubemap dans l'ordre de Vulkan, profondeur de 0 à 1 et Y retourné dans les deux projections, normal maps dans la convention de glTF.
+
+## Critères P1 (fin de la phase 7)
+
+Les six critères se valident par inspection ou à la main (section 8.2) : l'agent a livré et contrôlé par captures d'écran, la validation revient au développeur.
+
+| Critère | Livré | Contrôle fait par l'agent | Reste à faire |
+|---|---|---|---|
+| AC-P1-1 Ombres, F4 | Oui | Ombres du personnage et des objets sur le sol, sans acné ni décollement visibles aux biais par défaut ; acné franche avec des biais nuls | Inspection dans le parcours, bord de la zone d'ombre en caméra libre |
+| AC-P1-2 Colliders | Oui | Les formes viennent de `Physics` (testé) ; à l'écran, les fils suivent les objets, le personnage et la pile qui tombe | Inspection |
+| AC-P1-3 Temps GPU | Oui | Affiché dans le panneau (1,9 ms environ en Debug, fenêtre de 960 × 600) | Aucun |
+| AC-P1-4 Culling | Oui | 31 objets dessinés au lancement avant le culling ; 21 après un pas de côté, avec le culling | Tourner la caméra, lire le panneau |
+| AC-P1-5 Tonemapping, exposition | Oui | Courbe ACES, exposition de −4 à +4 stops dans le panneau | Inspection des sphères blanches en plein soleil, exposition poussée, avec et sans ACES |
+| AC-P1-6 Skybox, reflets | Oui | Ciel visible ; les sphères dorées reflètent le ciel, le sol et les panneaux colorés | Inspection de près, de la sphère lisse à la sphère rugueuse |
+
