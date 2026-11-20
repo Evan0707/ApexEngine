@@ -51,4 +51,23 @@ struct BodyDesc {
     float restitution = 0.0f;
 };
 
+// Which bodies a query can hit (spec 5.7). A character is not a body: queries never hit it.
+struct QueryFilter {
+    bool staticBodies = true;
+    bool dynamicBodies = true;
+};
+
+// The first thing a ray or a swept sphere touches.
+struct CastHit {
+    BodyHandle body;
+    // Where the query stopped: the point hit for a ray, the center of the sphere for a swept sphere.
+    core::WorldPosition position{0.0f};
+    // The point touched on the body.
+    core::WorldPosition contact{0.0f};
+    // Unit vector pointing out of the body, toward where the query came from.
+    glm::vec3 normal{0.0f};
+    // Meters travelled from the origin. Zero when a swept sphere starts inside a body.
+    float distance = 0.0f;
+};
+
 } // namespace apex::physics

@@ -56,6 +56,16 @@ public:
     void applyImpulse(BodyHandle body, const glm::vec3& impulse);
     [[nodiscard]] bool isActive(BodyHandle body) const;
 
+    // The closest hit along `direction` (any length, not zero) within maxDistance meters; empty when nothing
+    // is hit or when an argument is not usable. A ray that starts inside a body hits it at distance zero.
+    [[nodiscard]] std::optional<CastHit> raycast(const core::WorldPosition& origin,
+                                                 const glm::vec3& direction, float maxDistance,
+                                                 const QueryFilter& filter = {}) const;
+    // The same with a sphere of `radius` meters whose center starts at `origin`.
+    [[nodiscard]] std::optional<CastHit> spherecast(const core::WorldPosition& origin, float radius,
+                                                    const glm::vec3& direction, float maxDistance,
+                                                    const QueryFilter& filter = {}) const;
+
 private:
     std::unique_ptr<State> m_state;
 };

@@ -2,7 +2,7 @@
 
 **Rôle :** simulation physique du moteur, par encapsulation de Jolt Physics (cahier des charges, sections 5.7 et 5.8). Le module ne connaît ni les entités ni EnTT : `World` lui pousse des données et recopie les résultats (section 4.3).
 
-**État (phase 6, tâche 2) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques (notes de décision 0018, 0019 et 0020). Les requêtes et le personnage arrivent dans les tâches suivantes.
+**État (phase 6, tâche 3) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques, raycast et spherecast (notes de décision 0018, 0019 et 0020). Le personnage arrive dans la tâche suivante.
 
 ## Interface publique
 
@@ -10,8 +10,8 @@
 |---|---|
 | `Physics/Runtime.h` | `Runtime` : crée et détruit l'état global de Jolt |
 | `Physics/PhysicsSettings.h` | `PhysicsSettings` : gravité, capacités |
-| `Physics/PhysicsTypes.h` | `BodyHandle`, `ShapeType`, `Shape`, `MotionType`, `BodyTransform`, `BodyDesc` |
-| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()` |
+| `Physics/PhysicsTypes.h` | `BodyHandle`, `ShapeType`, `Shape`, `MotionType`, `BodyTransform`, `BodyDesc`, `QueryFilter`, `CastHit` |
+| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()`, `raycast()`, `spherecast()` |
 
 Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
@@ -42,6 +42,14 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 - Les corps dynamiques sont balayés (`LinearCast`) : un corps petit ou rapide ne traverse pas une géométrie mince (AC-08). Un corps gros et rapide peut s'enfoncer pendant un pas avant d'être repoussé.
 - Jolt laisse les corps au repos se recouvrir de 2 cm au plus (sa tolérance de pénétration, gardée par défaut pour la stabilité des piles) : une caisse posée repose jusqu'à 2 cm sous sa hauteur théorique.
 - Frottement 0,5 et restitution 0 par défaut, réglables par corps dans `BodyDesc`.
+
+## Requêtes
+
+- `raycast(origine, direction, distance maximale, filtre)` rend le premier corps touché ; `spherecast` fait de même avec une sphère dont le centre part de l'origine (section 5.7).
+- La direction n'a pas besoin d'être unitaire ; la distance maximale est en mètres. Une direction nulle, une distance ou un rayon négatifs ou nuls, une valeur non finie : pas de résultat.
+- `CastHit` donne le corps, l'endroit où la requête s'arrête (le point touché pour un rayon, le centre de la sphère pour un balayage), le point de contact sur le corps, la normale unitaire qui sort du corps, et la distance parcourue.
+- Une requête qui démarre à l'intérieur d'un corps le touche à la distance zéro.
+- `QueryFilter` choisit les couches : corps statiques, corps dynamiques, ou les deux (par défaut). Un personnage n'est pas un corps : aucune requête ne le touche.
 
 ## Couches de collision
 
