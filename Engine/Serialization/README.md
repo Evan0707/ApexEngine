@@ -2,7 +2,7 @@
 
 **Rôle :** lecture et écriture des scènes et de la configuration en JSON (cahier des charges, sections 3.1, 5.2 et 5.6).
 
-**État (phase 5) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration (notes de décision 0016 et 0017).
+**État (phase 6) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration, dont la gravité, le personnage et la caméra troisième personne (notes de décision 0016, 0017 et 0019).
 
 ## Interface publique
 

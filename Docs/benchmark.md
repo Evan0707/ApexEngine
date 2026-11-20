@@ -24,7 +24,7 @@ build\windows-release\bin\ApexDemo.exe --benchmark 60 --no-vsync
 
 - Configuration Release, fenêtre de 1920 × 1080 pixels, synchronisation verticale désactivée (mode de présentation mailbox, sinon immédiat).
 - Les 2 premières secondes (création du pipeline, première swapchain) ne sont pas mesurées. Viennent ensuite 60 s de frames.
-- La caméra suit un chemin fixe, identique à chaque mesure : un cercle de 9 m de rayon à 3 m de hauteur, un tour en 20 s, regard vers le centre de la scène. Le parcours de validation de la section 6.2 n'est jouable qu'à partir de la phase 6 ; d'ici là, ce chemin le remplace.
+- La caméra suit un chemin fixe, identique à chaque mesure : un cercle de 9 m de rayon à 3 m de hauteur, un tour en 20 s, regard vers le centre de la scène. Le parcours de validation de la section 6.2 est jouable depuis la phase 6, mais la démo ne sait pas encore le rejouer seule : ce chemin le remplace jusqu'à la phase 8 (AC-16). Pendant la mesure, la physique tourne et le personnage reste immobile.
 - Ne rien faire d'autre pendant la mesure. Le résultat est écrit dans `Logs/apex.log` (lignes `Benchmark`), avec la résolution, la vsync, le nombre d'objets dessinés et de triangles.
 - FPS moyen : nombre de frames divisé par la durée mesurée. 99e centile : la plus petite durée que 99 % des frames ne dépassent pas.
 
@@ -35,6 +35,7 @@ build\windows-release\bin\ApexDemo.exe --benchmark 60 --no-vsync
 | 19 novembre 2026 | 3 | 19 | 22 188 | aucune | 1 602 | 0,62 ms | 1,53 ms | 18,12 ms | atteints |
 | 19 novembre 2026 | 4 | 20 | 26 698 | textures (7, sans mipmaps) | 1 399 | 0,71 ms | 1,56 ms | 8,97 ms | atteints |
 | 19 novembre 2026 | 5 | 20 | 26 698 | textures (7, sans mipmaps) | 1 456 | 0,69 ms | 1,46 ms | 4,72 ms | atteints |
+| 20 novembre 2026 | 6 | 31 | 27 842 | textures (7, sans mipmaps) | 1 480 | 0,68 ms | 1,41 ms | 17,74 ms | atteints |
 
 ### Phase 3 (19 novembre 2026)
 
@@ -58,4 +59,13 @@ Même contenu qu'en phase 4, mais la scène vient de `Assets/Scenes/demo.json` :
 
 - Le passage par le registre et par l'extraction ne coûte rien de mesurable : 1 456 FPS contre 1 399 en phase 4, un écart de 4 % qui tient dans la variation d'une mesure à l'autre sur cette machine.
 - Mémoire GPU : 223 Mio après les envois et 223 Mio en fin de mesure. Aucune dérive sur 60 s.
+
+### Phase 6 (20 novembre 2026)
+
+Scène du parcours de validation : 32 entités, 27 corps physiques (12 boîtes statiques, 10 sphères, 5 caisses dynamiques) et le personnage, simulés par Jolt à 60 pas par seconde sur un seul thread. 88 784 frames en 60 s.
+
+- La physique ne coûte rien de mesurable ici : 1 480 FPS contre 1 456 en phase 5. Les caisses dorment pendant la mesure et le personnage est immobile ; un pas de physique ne fait alors presque rien.
+- Le maximum de 17,74 ms est un accroc isolé, comme en phase 3 : le 99e centile est de 1,41 ms. Cette mesure n'a pas respecté la règle « ne rien faire d'autre » : des modifications de fichiers ont eu lieu sur la machine pendant la minute mesurée. À refaire au calme si ce chiffre doit servir.
+- Mémoire GPU : 223 Mio après les envois et 223 Mio en fin de mesure. Aucune dérive sur 60 s.
+- Ce que la mesure ne dit pas : le coût de la physique quand des corps bougent (pile renversée, caisses poussées), et le parcours joué au clavier. La mesure de la phase 8 devra rejouer le parcours.
 

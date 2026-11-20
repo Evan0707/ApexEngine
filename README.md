@@ -2,7 +2,7 @@
 
 Prototype de moteur 3D en C++23 : Vulkan, Windows x64. Première fondation d'un futur moteur orienté monde ouvert.
 
-**État : phase 5 en cours (World, composants, extraction, scène JSON).** `ApexDemo` charge sa scène dans `Assets/Scenes/demo.json` et sa configuration dans `Config/`, puis dessine par Vulkan 1.3 ce que la scène contient, vu par une caméra libre : sol, cubes, sphères métalliques et non métalliques, modèles glTF texturés. Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
+**État : phase 6 en cours (Jolt, corps rigides, personnage, caméra troisième personne).** `ApexDemo` charge sa scène dans `Assets/Scenes/demo.json` et sa configuration dans `Config/`, simule ses corps rigides avec Jolt Physics, puis dessine par Vulkan 1.3 ce que la scène contient : un terrain de test avec rampes, plateformes, mur et caisses à pousser. La vue démarre en caméra libre ; F3 donne les commandes à un personnage suivi par une caméra troisième personne. Un panneau de debug Dear ImGui s'affiche par F1. Il fait tourner la boucle à pas fixe, logue les actions et se ferme proprement.
 
 ## Prérequis
 
@@ -53,9 +53,9 @@ Le format de la scène et de la configuration est décrit dans `Engine/Serializa
 | `--frames N` | Quitte seul après N frames |
 | `--no-vsync` | Désactive la synchronisation verticale, pour les mesures |
 | `--assets DIR` | Dossier des assets ; par défaut, le dossier `Assets` copié à côté de l'exécutable par le build |
-| `--config DIR` | Dossier de `engine.json` (taille de la fenêtre, caméra libre) et `input.json` (touches) ; par défaut, le dossier `Config` copié à côté de l'exécutable. Un fichier absent donne les valeurs par défaut, avec un avertissement |
+| `--config DIR` | Dossier de `engine.json` (taille de la fenêtre, caméra libre, gravité, personnage, caméra troisième personne) et `input.json` (touches) ; par défaut, le dossier `Config` copié à côté de l'exécutable. Un fichier absent donne les valeurs par défaut, avec un avertissement |
 | `--scene PATH` | Scène à charger, chemin relatif au dossier des assets ; `Scenes/demo.json` par défaut |
-| `--model PATH` | Ajoute un modèle, chemin relatif au dossier des assets, posé au sol devant la caméra. Un modèle introuvable ou invalide est remplacé par un cube en damier magenta, et l'erreur est logée avec le chemin (AC-11) |
+| `--model PATH` | Ajoute un modèle, chemin relatif au dossier des assets, posé au sol à droite du personnage, sans collider. Un modèle introuvable ou invalide est remplacé par un cube en damier magenta, et l'erreur est logée avec le chemin (AC-11) |
 | `--benchmark S` | Mesure de performance (section 7.1) : la caméra suit un cercle autour de la scène ; après 2 s de mise en route, S secondes de frames sont mesurées, le résultat est logué avec la mémoire GPU de fin de mesure, puis l'application quitte. À lancer en Release avec `--no-vsync` (voir `Docs/benchmark.md`) |
 
 | Code de sortie | Signification |
@@ -66,19 +66,39 @@ Le format de la scène et de la configuration est décrit dans `Engine/Serializa
 
 | Touche (AZERTY) | Effet |
 |---|---|
-| Z / S, Q / D | Avance ou recule dans la direction du regard, va à gauche ou à droite (5 m/s) ; logue la valeur des axes quand elle change |
-| E / A | Monte ou descend à la verticale |
-| Maj gauche | Court : vitesse multipliée par 4 |
+| F3 | Bascule entre la caméra libre (au lancement) et le personnage suivi par la caméra troisième personne |
+| Z / S, Q / D | Caméra libre : avance, recule, va à gauche ou à droite dans la direction du regard (5 m/s). Personnage : marche à 4 m/s dans la direction de la caméra, et se tourne vers où il va |
+| E / A | Caméra libre : monte ou descend à la verticale |
+| Maj gauche | Caméra libre : vitesse multipliée par 4. Personnage : court à 7 m/s |
+| Espace | Personnage : saute de 1,2 m, depuis le sol seulement |
 | Échap | Capture ou libère le curseur |
-| Souris | Oriente la caméra quand le curseur est capturé ; logue une fois par seconde le déplacement cumulé |
+| Souris | Quand le curseur est capturé : oriente la caméra libre, ou fait tourner la caméra troisième personne autour du personnage |
 | F1 | Affiche ou masque le panneau de debug, où se règle le champ de vision (50° à 100°) |
-| Espace, F3 | Logue l'appui et le relâchement de `Jump`, `SwitchCamera` ; sans autre effet avant la phase 6 |
 | F2, F4 | Logue l'appui ; sans effet avant la phase 7 |
 | Croix, Alt + F4 | Ferme l'application, code de sortie 0 |
 
+### Parcours de validation (cahier des charges, section 6.2)
+
+Au lancement, la caméra libre regarde le cube de référence ; le personnage (capsule orange, visière sombre sur le visage) est juste devant elle. Appuyer sur Échap pour capturer la souris.
+
+| Étape | Où | Ce qu'on doit voir |
+|---|---|---|
+| 1. Lancer | | La scène se charge seule ; la pile de trois caisses, à droite, ne bouge pas |
+| 2. Caméra libre | Z, Q, S, D, E, A, souris | Déplacement sur trois axes |
+| 3. F3 | | La caméra passe derrière le personnage, à 4 m ; la souris la fait tourner autour de lui |
+| 4. Marcher, courir, monter une rampe | À gauche du départ : rampe beige de 15°, plateforme grise de 1,5 m, rampe de 35°, plateforme de 3 m | Le personnage accélère et freine progressivement, se tourne vers où il va, et monte les deux rampes |
+| 5. Sauter sur la plateforme de 1 m | Plateforme jaune, derrière le point de départ, à gauche | Elle arrête le personnage qui marche ; Espace en avançant le pose dessus |
+| 6. Courir contre le mur de 10 cm | Mur rouge, à droite | Le personnage s'arrête contre le mur, sans le traverser ni trembler |
+| 7. Pousser une caisse, faire tomber la pile | Caisses à droite ; pile de trois devant à droite | Une caisse seule glisse devant le personnage ; la pile tombe quand on marche dedans |
+| 8. F1 | | Le panneau donne les FPS, les entités (32), les corps physiques (27) et ceux qui ne dorment pas |
+| 9. Redimensionner, réduire, restaurer | | Aucun accroc, aucune erreur dans le panneau |
+| 10. Fermer | Croix ou Alt + F4 | Code de sortie 0 |
+
+La caméra troisième personne ne doit jamais passer sous le sol ni derrière un mur : en levant la souris au maximum ou en reculant contre le mur rouge, elle se rapproche du personnage au lieu de traverser.
+
 Avec Visual Studio : ouvrir le dossier du dépôt, les presets sont détectés automatiquement.
 
-La première configuration télécharge et compile les dépendances vcpkg ; les suivantes sont rapides.
+La première configuration télécharge et compile les dépendances vcpkg (une dizaine de minutes, dont Jolt Physics) ; les suivantes sont rapides. Les presets désignent le triplet vcpkg du dépôt, `cmake/triplets/x64-windows.cmake` : Jolt y est compilé en flottants précis, parce que sa version Release par défaut est instable avec MSVC 19.52 (décision 0020).
 
 ## Organisation
 
@@ -87,10 +107,10 @@ Engine/      bibliothèque statique du moteur, un dossier par module
 Game/        exécutable de démonstration
 Tests/       tests automatisés (Catch2), sans fenêtre ni GPU
 Assets/      scène, modèles et textures de la démonstration, licences dans Assets/LICENSES.md
-Config/      engine.json (fenêtre, caméra libre) et input.json (touches)
+Config/      engine.json (fenêtre, caméras, gravité, personnage) et input.json (touches)
 Docs/        cahier des charges, architecture, décisions, suivi des heures
 Tools/       scripts Python (génération des assets), voir Tools/README.md
-cmake/       options de compilation communes
+cmake/       options de compilation communes, triplet vcpkg du dépôt (décision 0020)
 ```
 
 ## Documentation

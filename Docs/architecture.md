@@ -2,16 +2,16 @@
 
 Ce document décrit l'architecture réellement en place. Il est complété à la fin de chaque phase. La cible est décrite dans `cahier_des_charges.md`, section 4.
 
-## État actuel (phase 5)
+## État actuel (phase 6)
 
 | Cible CMake | Type | Contenu |
 |---|---|---|
-| `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `World`, `Serialization`, `Debug`, et le SPIR-V des shaders |
-| `ApexDemo` | Exécutable | Charge `Assets/Scenes/demo.json` et `Config/`, dessine la scène éclairée (sol, cubes, sphères, modèles glTF texturés) vue par une caméra libre, affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
-| `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `World`, `Serialization`, `Debug` et de la démo, sans fenêtre ni GPU |
+| `ApexEngine` | Bibliothèque statique | Modules `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Physics`, `World`, `Serialization`, `Debug`, et le SPIR-V des shaders |
+| `ApexDemo` | Exécutable | Charge `Assets/Scenes/demo.json` et `Config/`, simule les corps rigides et le personnage, dessine la scène éclairée vue par une caméra libre ou par une caméra troisième personne (F3), affiche le panneau de debug (F1), fait tourner la boucle à pas fixe, logue les événements et les actions, mesure les performances (`--benchmark`) |
+| `ApexTests` | Exécutable de tests | Tests de `Core`, `Platform`, `Input`, `Resources`, `Graphics`, `Physics`, `World`, `Serialization`, `Debug` et de la démo (dont le parcours de validation sur la vraie scène), sans fenêtre ni GPU |
 | `Apex::Options` | Cible d'interface | Options de compilation communes : avertissements en erreurs. Le standard C++23 est fixé pour tout le projet dans le `CMakeLists.txt` racine |
 
-Presets : `windows-debug`, `windows-release`, et `windows-profile` (Release instrumenté par Tracy, décision 0003). Les trois sont compilés et testés par la CI, qui installe aussi le SDK Vulkan pour `glslc`.
+Presets : `windows-debug`, `windows-release`, et `windows-profile` (Release instrumenté par Tracy, décision 0003). Les trois sont compilés et testés par la CI, qui installe aussi le SDK Vulkan pour `glslc`. Ils désignent le triplet vcpkg du dépôt, `cmake/triplets/x64-windows.cmake` : celui de vcpkg, plus une option qui fait compiler Jolt en flottants précis (décision 0020).
 
 Les shaders GLSL sont compilés en SPIR-V par `glslc` pendant le build (`cmake/ApexShaders.cmake`) et embarqués dans la bibliothèque (décision 0006).
 
@@ -26,11 +26,12 @@ Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaq
 | Input | Table des actions, état des actions | Core, Platform | Aucune | `Engine/Input/README.md` |
 | Resources | Données CPU (meshes, matériaux, textures, modèles), import glTF, décodage PNG et JPG, chemins d'assets, handles avec état, cache, assets de secours, primitives | Core | cgltf dans `Resources/GltfImporter.cpp`, stb_image dans `Resources/ImageDecoder.cpp`, uniquement | `Engine/Resources/README.md` |
 | Graphics | Périphérique Vulkan 1.3, mémoire GPU, swapchain, frames en vol, destruction différée, profondeur, reflet GPU du cache (meshes, textures, jeux de matériau), données par frame, `RenderScene`, éclairage PBR | Core, Platform, Resources | Vulkan-Headers, Vulkan-Loader, vk-bootstrap, VMA, dans `Graphics` uniquement | `Engine/Graphics/README.md` |
-| World | Composants du moteur, angles des fichiers de scène, recherches dans le registre, extraction vers le rendu avec interpolation | Core, Resources, Graphics (types de données) | EnTT, en-têtes seuls | `Engine/World/README.md` |
+| Physics | Monde physique à pas fixe : corps rigides (boîte, sphère, capsule), raycast et spherecast, personnage ; handles opaques | Core | Jolt Physics, dans `Physics` uniquement, par l'en-tête interne `Physics/JoltInclude.h` | `Engine/Physics/README.md` |
+| World | Composants du moteur, angles des fichiers de scène, recherches dans le registre, liaison avec la physique, extraction vers le rendu avec interpolation | Core, Resources, Graphics (types de données), Physics (interface) | EnTT, en-têtes seuls | `Engine/World/README.md` |
 | Serialization | Lecture et écriture des scènes (format version 1), lecture de la configuration | Core, World, Resources | nlohmann/json, par l'en-tête interne `Serialization/Json.h` uniquement | `Engine/Serialization/README.md` |
 | Debug | Statistiques de frame, mesure de performance, historique des logs, interface Dear ImGui, panneau de la section 5.9 | Core, Platform, Graphics | Dear ImGui dans `Debug` ; SDL et Vulkan dans `Debug/ImGuiBackend.cpp` uniquement | `Engine/Debug/README.md` |
 
-`Game` contient la démonstration : les options de ligne de commande (`CommandLine`), la conversion de la configuration des entrées en table d'actions (`Bindings`), la logique de la caméra libre (`FreeCamera`), ses composants (`GameComponents` : contrôleur de caméra, rotation) et leurs systèmes (`GameSystems`), et l'implémentation des phases de la frame (`DemoApp`), qui possède le registre EnTT. Il n'inclut ni SDL, ni Vulkan, ni ImGui, ni nlohmann/json.
+`Game` contient la démonstration : les options de ligne de commande (`CommandLine`), la conversion de la configuration des entrées en table d'actions (`Bindings`), trois logiques écrites en fonctions pures (caméra libre dans `FreeCamera`, déplacement du personnage dans `PlayerMotion`, caméra troisième personne dans `OrbitCamera`), leurs composants (`GameComponents`) et leurs systèmes (`GameSystems`), et l'implémentation des phases de la frame (`DemoApp`), qui possède le registre EnTT. Il n'inclut ni SDL, ni Vulkan, ni ImGui, ni nlohmann/json, ni Jolt.
 
 ## Frontières entre modules (décision 0009)
 
@@ -41,14 +42,21 @@ Les dossiers `Assets/` et `Config/` sont copiés à côté de `ApexDemo` à chaq
 - Un seul système de handles, celui de `Resources` (décision 0014). `Graphics` lit le cache une fois par frame (`Renderer::syncResources`) et en garde un reflet GPU désigné par ces handles ; il ne garde aucun pointeur vers les données du cache.
 - Le panneau de debug ne connaît pas la caméra : il modifie une `DebugControls` que l'application applique (décision 0011).
 - EnTT sans surcouche (décision 0015) : l'application possède un `entt::registry` ; `World`, `Serialization` et `Game` le reçoivent par référence. `Graphics` ne le voit jamais, `Debug` reçoit un nombre d'entités.
+- `Physics` ne connaît ni les entités ni EnTT, et aucun type Jolt n'en sort (décisions 0018 et 0019) : il reçoit des descriptions et rend des handles. `World` crée les corps à partir des composants, pousse les vitesses voulues et recopie les transformations. `Game` n'appelle `Physics` que pour le spherecast de la caméra.
+- L'état global de Jolt est créé et détruit par un objet `physics::Runtime` que `main` possède (décision 0019).
 - `Serialization` ne connaît ni `Game` ni `Input` (décision 0017) : il rend des structures de données (`SceneDescription`, `EngineConfig`, `InputConfig`). `Game` attache ses composants par identifiant d'entité et convertit la configuration des entrées.
 
-## Déroulement d'une frame (phase 5)
+## Déroulement d'une frame (phase 6)
 
-`Game/main.cpp` lit d'abord la configuration (`Config/engine.json` et `Config/input.json` à côté de l'exécutable, ou `--config`), puis crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre (à la taille configurée), table d'actions, renderer, cache de ressources (dossier `Assets` à côté de l'exécutable, ou `--assets`), interface de debug, application. L'application charge la scène en dernier (`Scenes/demo.json`, ou `--scene`) dans son registre, puis attache ses composants aux entités `camera` et `spinner`. Une scène ou une configuration invalide arrête la démo avec le code de sortie 1. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
+`Game/main.cpp` lit d'abord la configuration (`Config/engine.json` et `Config/input.json` à côté de l'exécutable, ou `--config`), puis crée les systèmes dans l'ordre de la section 5.1 : historique des logs, logger, journal de validation, fenêtre (à la taille configurée), table d'actions, renderer, cache de ressources (dossier `Assets` à côté de l'exécutable, ou `--assets`), état global de Jolt et monde physique (gravité de la configuration), interface de debug, application. L'application charge la scène en dernier (`Scenes/demo.json`, ou `--scene`) dans son registre, attache ses composants aux entités `camera`, `spinner` et `player`, puis fait créer par `World` les corps et le personnage dans `Physics`. Une scène ou une configuration invalide arrête la démo avec le code de sortie 1. Il lance ensuite `core::MainLoop::run`. L'arrêt se fait dans l'ordre inverse, par la destruction des objets ; les messages de validation de la fermeture sont donc comptés.
 
 1. **Entrées.** `DemoApp::processInput` mesure la durée de la frame précédente pour le panneau, puis vide la file d'événements de la fenêtre. Les événements bruts passent aussi à ImGui. Ceux qu'ImGui utilise sont retirés avant que l'état `frame` applique le reste. Les actions qui ne relèvent pas de la simulation (capture du curseur, panneau de debug) sont traitées ici. L'état `frame` est ensuite fusionné dans l'état `simulation`. Une demande de fermeture arrête la boucle.
-2. **Simulation.** De zéro à quatre pas de 1/60 s. Chaque pas commence par `world::rememberTransforms`, qui garde la transformation de chaque entité pour l'interpolation, puis lit uniquement l'état `simulation` et vide ses fronts. Les systèmes de `Game` font avancer la caméra libre (axes, course, souris si le curseur est capturé) et le cube tournant en écrivant leurs `Transform`.
+2. **Simulation.** De zéro à quatre pas de 1/60 s. Chaque pas commence par `world::rememberTransforms`, qui garde la transformation de chaque entité pour l'interpolation, puis lit uniquement l'état `simulation` et vide ses fronts. Viennent ensuite, dans cet ordre (décision 0019) :
+   1. les systèmes de `Game` : bascule de caméra (F3), caméra libre, personnage (qui écrit la vitesse voulue dans `CharacterMotion`), cube tournant ;
+   2. `world::stepPhysics` : pousse les vitesses voulues, avance `Physics` d'un pas, recopie les transformations des corps dynamiques et du personnage ;
+   3. la caméra troisième personne, qui suit la position du personnage à la fin du pas et balaie une sphère pour ne rien laisser entre lui et elle.
+
+   En caméra libre, le personnage ne reçoit pas d'entrées mais reste simulé.
 3. **Extraction.** `world::extractRenderScene` interpole les transformations entre les deux derniers pas (`alpha`, section 5.1), caméra comprise, et convertit les positions monde en matrices relatives à la caméra (G-07). Chaque entité avec un `MeshRenderer` donne un `RenderObject` par partie de son modèle ; un modèle pas prêt donne les parties du modèle de secours. Le champ de vision réglé dans le panneau est écrit dans le composant `Camera` juste avant.
 4. **Rendu.** `DebugUi::buildFrame` construit l'interface. `Renderer::syncResources(cache)` envoie au GPU ce qui est devenu prêt et libère ce qui a été déchargé. `Renderer::renderFrame(scene)` attend la fence du créneau de frame, acquiert une image, résout les handles (assets de secours si besoin, G-03), trie les objets par matériau, écrit les données de la frame (caméra, lumière, objets, matériaux), enregistre la passe de scène (couleur et profondeur, un jeu de descripteurs par matériau) puis la passe de l'interface, et soumet. Fenêtre réduite : rien n'est rendu.
 5. **Présentation.** `Renderer::presentFrame` présente l'image. Avec la vsync, l'attente se fait ici ou dans l'acquisition suivante.
@@ -87,16 +95,16 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 
 | ID | Phase 0 | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 | Phase 7 | Phase 8 |
 |---|---|---|---|---|---|---|---|---|---|
-| G-01 | sans objet | sans objet | conforme | conforme | conforme | conforme | | | |
-| G-02 | sans objet | sans objet | conforme | conforme | conforme | conforme | | | |
-| G-03 | sans objet | sans objet | sans objet | sans objet | conforme | conforme | | | |
-| G-04 | sans objet | sans objet | sans objet | conforme | conforme | conforme | | | |
-| G-05 | sans objet | conforme | conforme | conforme | conforme | conforme | | | |
-| G-06 | conforme | conforme | conforme | conforme | conforme | conforme | | | |
-| G-07 | sans objet | sans objet | sans objet | conforme | conforme | conforme | | | |
-| G-08 | sans objet | sans objet | sans objet | conforme | conforme | conforme | | | |
-| G-09 | sans objet | sans objet | conforme | conforme | conforme | conforme | | | |
-| G-10 | conforme | conforme | conforme | conforme | conforme | conforme | | | |
+| G-01 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | | |
+| G-02 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | | |
+| G-03 | sans objet | sans objet | sans objet | sans objet | conforme | conforme | conforme | | |
+| G-04 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | | |
+| G-05 | sans objet | conforme | conforme | conforme | conforme | conforme | conforme | | |
+| G-06 | conforme | conforme | conforme | conforme | conforme | conforme | conforme | | |
+| G-07 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | | |
+| G-08 | sans objet | sans objet | sans objet | conforme | conforme | conforme | conforme | | |
+| G-09 | sans objet | sans objet | conforme | conforme | conforme | conforme | conforme | | |
+| G-10 | conforme | conforme | conforme | conforme | conforme | conforme | conforme | | |
 
 Détail de la phase 1 :
 
@@ -151,3 +159,15 @@ Détail de la phase 5 :
 - **G-08 :** le matériau donné par une entité dans la scène est un jeu de données de plus dans le cache, pas un shader.
 - **G-09 :** inchangé.
 - **G-10 :** confinement vérifié par recherche : EnTT dans `World`, `Serialization` et `Game` ; nlohmann/json inclus par `Serialization/Json.h` seulement ; cgltf et stb_image dans `Resources` ; SDL dans `Platform` et `Debug/ImGuiBackend.cpp` ; aucune API Windows. Les dépendances entre modules relevées dans les `#include` sont exactement celles de la section 4.2. Conventions : degrés dans les fichiers et radians en interne, ordre des rotations testé, chemins d'assets normalisés.
+
+Détail de la phase 6 :
+
+- **G-01 :** inchangé. `Graphics` n'inclut ni `Physics` ni `World` (recherche faite) ; les corps simulés lui arrivent comme le reste, par la `RenderScene`.
+- **G-02 :** inchangé (recherche de push constants faite).
+- **G-03 :** inchangé pour les ressources. Les corps et le personnage de `Physics` sont eux aussi désignés par des handles : un handle périmé est accepté par toutes les fonctions et ne fait rien (testé).
+- **G-04 :** inchangé.
+- **G-05 :** `PhysicsWorld::step` reçoit la durée du pas fixe et rien d'autre ; le déplacement du personnage (`stepPlayer`) et la caméra troisième personne (`aimOrbitCamera`, `orbitCameraDistance`) sont des fonctions du pas fixe, lissage compris. Aucun de ces fichiers ne lit une horloge (recherche faite). Les corps sont interpolés à l'extraction comme les autres entités (testé).
+- **G-06 :** aucune variable `static` modifiable dans `Engine/` ni `Game/` (recherche faite). L'état global est celui de Jolt (allocateur, fabrique de types) : il est créé et détruit par `physics::Runtime`, possédé par `main` et exigé par `PhysicsWorld::create` (décision 0019). Écart restant, consigné dans la note : les fonctions de trace et d'assertion de Jolt gardent leur valeur par défaut.
+- **G-07 :** les positions échangées avec `Physics` sont des `WorldPosition` (`BodyTransform`, `CharacterDesc`, `CastHit`). La seule conversion vers l'espace de rendu reste dans `World/RenderExtraction.cpp`.
+- **G-08, G-09 :** inchangés.
+- **G-10 :** confinement vérifié par recherche : Jolt dans `Engine/Physics` seulement, et dans aucun de ses quatre en-têtes publics ; EnTT absent de `Physics` ; `Game` n'inclut ni Jolt, ni SDL, ni Vulkan. Les dépendances entre modules relevées dans les `#include` sont exactement celles de la section 4.2 (`Physics` ne dépend que de `Core` ; `World` dépend de `Physics`). Conventions : repère et unités de Jolt identiques à ceux du moteur, aucune conversion ; angles en degrés dans les fichiers, en radians en interne.
