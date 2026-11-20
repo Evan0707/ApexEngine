@@ -24,7 +24,7 @@
 
 ## Erreurs et assertions
 
-- Codes d'erreur : `InvalidArgument`, `NotFound`, `IoFailure`, `PlatformFailure` (système ou SDL), `GpuFailure` (appel Vulkan en échec ou aucun GPU qui convient, ajouté en phase 2).
+- Codes d'erreur : `InvalidArgument`, `NotFound`, `IoFailure`, `PlatformFailure` (système ou SDL), `GpuFailure` (appel Vulkan en échec ou aucun GPU qui convient, ajouté en phase 2), `PhysicsFailure` (demande refusée par la bibliothèque physique, ajouté en phase 6).
 - Un échec récupérable (fichier absent, donnée invalide, refus du système) renvoie un `Result<T>`, c'est-à-dire un `std::expected<T, Error>`. L'appelant décide quoi en faire.
 - Une erreur de programmation passe par `APEX_ASSERT`. En Debug, l'assertion écrit la condition, le message et l'emplacement sur la sortie d'erreur, puis interrompt le programme. En Release, elle disparaît et sa condition n'est pas évaluée : la condition ne doit donc avoir aucun effet de bord.
 

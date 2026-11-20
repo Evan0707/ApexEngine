@@ -13,6 +13,8 @@ enum class ErrorCode {
     PlatformFailure,
     // A GPU or graphics API call failed, or no GPU meets the requirements.
     GpuFailure,
+    // The physics library refused a request or does not match the engine's build.
+    PhysicsFailure,
 };
 
 struct Error {

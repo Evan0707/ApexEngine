@@ -8,6 +8,7 @@
     "cgltf",
     "entt",
     "glm",
+    "joltphysics",
     "nlohmann-json",
     {
       "name": "sdl3",

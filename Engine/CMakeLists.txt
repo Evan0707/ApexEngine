@@ -9,6 +9,7 @@ find_package(VulkanLoader CONFIG REQUIRED)
 find_package(vk-bootstrap CONFIG REQUIRED)
 find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(Jolt CONFIG REQUIRED)
 if(APEX_ENABLE_PROFILING)
     find_package(Tracy CONFIG REQUIRED)
 endif()
@@ -108,6 +109,13 @@ add_library(ApexEngine STATIC
     Input/ActionMap.h
     Input/ActionState.cpp
     Input/ActionState.h
+    Physics/JoltInclude.h
+    Physics/PhysicsSettings.h
+    Physics/PhysicsWorld.cpp
+    Physics/PhysicsWorld.h
+    Physics/PhysicsWorldState.h
+    Physics/Runtime.cpp
+    Physics/Runtime.h
     Platform/Event.h
     Platform/Key.cpp
     Platform/Key.h
@@ -186,6 +194,9 @@ target_include_directories(ApexEngine SYSTEM PRIVATE "${Stb_INCLUDE_DIR}")
 target_include_directories(ApexEngine SYSTEM PRIVATE "${APEX_CGLTF_INCLUDE_DIR}")
 # nlohmann/json is included only by Serialization/Json.h, an internal header (decision 0016).
 target_link_libraries(ApexEngine PRIVATE nlohmann_json::nlohmann_json)
+# Jolt is included only by Physics, through its internal header Physics/JoltInclude.h (decision 0018). Its
+# compile definitions must come from this target: Jolt checks at run time that both sides agree.
+target_link_libraries(ApexEngine PRIVATE Jolt::Jolt)
 # Dear ImGui is included only by Debug (decision 0008).
 target_link_libraries(ApexEngine PRIVATE imgui::imgui)
 if(APEX_ENABLE_PROFILING)
