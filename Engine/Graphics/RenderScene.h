@@ -40,6 +40,14 @@ struct RenderShadow {
     float slopeBias = 2.0f;
 };
 
+// How the HDR image of the scene becomes the displayed one (spec 5.4, decision 0021).
+struct RenderToneMapping {
+    // Stops: the HDR image is multiplied by 2^exposureStops.
+    float exposureStops = 0.0f;
+    // Off: values above 1 clip, which isolates the curve when comparing (AC-P1-5).
+    bool enabled = true;
+};
+
 // One mesh with one material: a model gives one object per part (resources::ResourceCache::parts).
 struct RenderObject {
     // Not ready, failed or stale: the fallback mesh is drawn (G-03).
@@ -57,6 +65,7 @@ struct RenderScene {
     // Constant ambient term, linear RGB (spec 5.5).
     glm::vec3 ambient{0.03f};
     RenderShadow shadow;
+    RenderToneMapping toneMapping;
     std::vector<RenderObject> objects;
 };
 

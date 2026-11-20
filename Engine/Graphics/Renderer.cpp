@@ -25,6 +25,8 @@ constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
 // 16-bit fixed point (decision 0021): a constant depth bias in steps of 1/65536 of the shadow depth range,
 // which converts to meters. Chosen here only (G-09).
 constexpr VkFormat kShadowMapFormat = VK_FORMAT_D16_UNORM;
+// The scene's linear HDR image (spec 5.4): 16-bit floats. Chosen here only (G-09).
+constexpr VkFormat kSceneColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
 [[nodiscard]] std::string_view presentModeName(bool vsync) noexcept {
     return vsync ? "vsync on" : "vsync off";
@@ -75,8 +77,18 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
         return std::unexpected(depthTarget.error());
     }
     depth = std::move(*depthTarget);
+    sceneColor = ColorTarget();
+    core::Result<ColorTarget> colorTarget =
+        ColorTarget::create(*device, *allocator, swapchain.extent(), kSceneColorFormat, "HDR scene image");
+    if (!colorTarget) {
+        logger->error("{}", colorTarget.error().message);
+        return std::unexpected(colorTarget.error());
+    }
+    sceneColor = std::move(*colorTarget);
+    // The GPU is idle: no frame in flight reads the set.
+    sceneColorInput.bind(sceneColor.view());
     swapchainState.recreated(size);
-    if (core::Result<void> pipeline = ensurePipeline(); !pipeline) {
+    if (core::Result<void> pipeline = ensurePipelines(); !pipeline) {
         return std::unexpected(pipeline.error());
     }
 
@@ -89,9 +101,29 @@ core::Result<bool> Renderer::State::recreateSwapchain(platform::PixelSize size) 
     return true;
 }
 
-core::Result<void> Renderer::State::ensurePipeline() {
+core::Result<void> Renderer::State::ensurePipelines() {
+    const RenderTargetDesc tonemapTarget{.colorFormat = swapchain.format(),
+                                         .depthFormat = VK_FORMAT_UNDEFINED,
+                                         .samples = VK_SAMPLE_COUNT_1_BIT};
+    if (tonemapPipeline.handle() == VK_NULL_HANDLE || !(tonemapPipeline.target() == tonemapTarget)) {
+        const std::array tonemapLayouts{frameBuffers.layout(), sceneColorInput.layout()};
+        core::Result<GraphicsPipeline> tonemap =
+            GraphicsPipeline::create(device->device(), tonemapTarget,
+                                     PipelineDesc{.name = "tonemapping pipeline",
+                                                  .vertexShader = fullscreenVertexShader(),
+                                                  .fragmentShader = tonemapFragmentShader(),
+                                                  .setLayouts = tonemapLayouts,
+                                                  .cullMode = VK_CULL_MODE_NONE});
+        if (!tonemap) {
+            logger->error("{}", tonemap.error().message);
+            return std::unexpected(tonemap.error());
+        }
+        deleter.enqueue([old = std::move(tonemapPipeline)]() mutable { old = GraphicsPipeline(); });
+        tonemapPipeline = std::move(*tonemap);
+    }
+
     const RenderTargetDesc target{
-        .colorFormat = swapchain.format(), .depthFormat = depth.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
+        .colorFormat = sceneColor.format(), .depthFormat = depth.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
     if (scenePipeline.handle() != VK_NULL_HANDLE && scenePipeline.target() == target) {
         return {};
     }
@@ -185,6 +217,12 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     if (core::Result<void> shadows = state->createShadowResources(config.shadowMapSize); !shadows) {
         return std::unexpected(shadows.error());
     }
+    core::Result<ImageInputSet> sceneColorInput = ImageInputSet::create(state->device->device());
+    if (!sceneColorInput) {
+        logger.error("{}", sceneColorInput.error().message);
+        return std::unexpected(sceneColorInput.error());
+    }
+    state->sceneColorInput = std::move(*sceneColorInput);
     const GpuMemoryStats memory = state->allocator->memoryStats();
     constexpr double kMebibyte = 1024.0 * 1024.0;
     logger.info("GPU memory: {:.0f} MiB used, {:.0f} MiB budget{}",

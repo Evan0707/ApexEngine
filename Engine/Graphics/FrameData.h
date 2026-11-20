@@ -25,12 +25,15 @@ struct FrameUniforms {
     // x: 1 when shadows are on. y: one texel of the shadow map, in texture coordinates. z: where the fading
     // towards the border starts, as a fraction of the half side.
     glm::vec4 shadow;
+    // x: exposure multiplier. y: 1 for the ACES curve, 0 to clip at 1.
+    glm::vec4 toneMapping;
 };
-static_assert(sizeof(FrameUniforms) == 192);
+static_assert(sizeof(FrameUniforms) == 208);
 static_assert(offsetof(FrameUniforms, lightViewProjection) == 64);
 static_assert(offsetof(FrameUniforms, directionToLight) == 128);
 static_assert(offsetof(FrameUniforms, ambient) == 160);
 static_assert(offsetof(FrameUniforms, shadow) == 176);
+static_assert(offsetof(FrameUniforms, toneMapping) == 192);
 
 // One element of the per-object storage buffer, std430, read with gl_InstanceIndex (G-02).
 struct ObjectGpu {
@@ -51,6 +54,9 @@ inline constexpr float kShadowFadeStart = 0.9f;
 // aspectRatio: width over height of the render target. shadowMapSize: pixels per side.
 [[nodiscard]] FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio,
                                               std::uint32_t shadowMapSize) noexcept;
+
+// 2^stops.
+[[nodiscard]] float exposureMultiplier(float stops) noexcept;
 
 // The light's view and projection of the shadow area: render space to the shadow map's clip space.
 [[nodiscard]] glm::mat4 shadowViewProjection(const RenderShadow& shadow) noexcept;

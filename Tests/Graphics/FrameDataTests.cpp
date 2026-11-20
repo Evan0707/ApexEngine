@@ -23,6 +23,7 @@ TEST_CASE("The per-frame structures match the GLSL layouts", "[graphics]") {
     STATIC_REQUIRE(offsetof(FrameUniforms, lightRadiance) == 144);
     STATIC_REQUIRE(offsetof(FrameUniforms, ambient) == 160);
     STATIC_REQUIRE(offsetof(FrameUniforms, shadow) == 176);
+    STATIC_REQUIRE(offsetof(FrameUniforms, toneMapping) == 192);
     // std430 arrays: the stride of a struct is its size rounded up to its alignment (16 bytes here).
     STATIC_REQUIRE(sizeof(ObjectGpu) == 144);
     STATIC_REQUIRE(offsetof(ObjectGpu, materialIndex) == 128);
@@ -89,4 +90,18 @@ TEST_CASE("Frame uniforms turn shadows on only when the scene asks for them", "[
     REQUIRE(uniforms.shadow.y == 1.0f / 2048.0f);
     REQUIRE(uniforms.shadow.z == kShadowFadeStart);
     REQUIRE(uniforms.lightViewProjection == shadowViewProjection(scene.shadow));
+}
+
+TEST_CASE("Exposure stops double or halve the light", "[graphics]") {
+    REQUIRE(exposureMultiplier(0.0f) == 1.0f);
+    REQUIRE(exposureMultiplier(1.0f) == 2.0f);
+    REQUIRE(exposureMultiplier(-2.0f) == 0.25f);
+    REQUIRE(exposureMultiplier(4.0f) == 16.0f);
+}
+
+TEST_CASE("Frame uniforms carry the exposure and the tonemapping switch", "[graphics]") {
+    RenderScene scene;
+    REQUIRE(makeFrameUniforms(scene, 1.0f, 2048).toneMapping == glm::vec4(1.0f, 1.0f, 0.0f, 0.0f));
+    scene.toneMapping = RenderToneMapping{.exposureStops = -1.0f, .enabled = false};
+    REQUIRE(makeFrameUniforms(scene, 1.0f, 2048).toneMapping == glm::vec4(0.5f, 0.0f, 0.0f, 0.0f));
 }

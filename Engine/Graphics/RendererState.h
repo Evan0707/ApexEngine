@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/ColorTarget.h"
 #include "Graphics/DeferredDeleter.h"
 #include "Graphics/DepthTarget.h"
 #include "Graphics/Device.h"
@@ -12,6 +13,7 @@
 #include "Graphics/GpuTexture.h"
 #include "Graphics/GpuTimer.h"
 #include "Graphics/GraphicsPipeline.h"
+#include "Graphics/ImageInputSet.h"
 #include "Graphics/MaterialSets.h"
 #include "Graphics/MaterialTable.h"
 #include "Graphics/Renderer.h"
@@ -76,13 +78,18 @@ struct Renderer::State {
     std::uint64_t textureRevision = std::numeric_limits<std::uint64_t>::max();
     MaterialTable materials{kMaxMaterials};
     FrameBuffers frameBuffers;
-    // Main pass: created with the swapchain, for its formats.
+    // Main pass, into the HDR image.
     GraphicsPipeline scenePipeline;
+    // HDR image to swapchain: created with the swapchain, for its format.
+    GraphicsPipeline tonemapPipeline;
+    ImageInputSet sceneColorInput;
     // Shadow pass: created once, for the shadow map's format.
     GraphicsPipeline shadowPipeline;
     ShadowMap shadowMap;
     Swapchain swapchain;
     DepthTarget depth;
+    // The scene in linear HDR (decision 0021), the size of the swapchain.
+    ColorTarget sceneColor;
     FrameCounters counters;
     RenderOverlay* overlay = nullptr;
     bool vsync = true;
@@ -116,7 +123,7 @@ struct Renderer::State {
 
     // False when the surface has no area yet: the frame is skipped and the recreation tried again.
     [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
-    [[nodiscard]] core::Result<void> ensurePipeline();
+    [[nodiscard]] core::Result<void> ensurePipelines();
     [[nodiscard]] core::Result<void> createShadowResources(std::uint32_t size);
     // Resolves the handles, sorts by material and fills the frame's buffers.
     void prepareFrame(const RenderScene& scene);
@@ -131,7 +138,8 @@ struct Renderer::State {
     // After prepareFrame: draws what it resolved.
     void recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex);
     void recordShadowPass(VkCommandBuffer commands);
-    void recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex);
+    void recordScenePass(VkCommandBuffer commands);
+    void recordTonemapPass(VkCommandBuffer commands, std::uint32_t imageIndex);
     void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
 };
 

@@ -2,7 +2,13 @@
 
 #include "Graphics/Projection.h"
 
+#include <cmath>
+
 namespace apex::graphics {
+
+float exposureMultiplier(float stops) noexcept {
+    return std::exp2(stops);
+}
 
 glm::mat4 shadowViewProjection(const RenderShadow& shadow) noexcept {
     return orthographicProjection(shadow.halfExtent, shadow.halfExtent, 0.0f, shadow.depthRange) *
@@ -24,6 +30,8 @@ FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio,
         .shadow = glm::vec4(shadows ? 1.0f : 0.0f,
                             shadowMapSize > 0 ? 1.0f / static_cast<float>(shadowMapSize) : 0.0f,
                             kShadowFadeStart, 0.0f),
+        .toneMapping = glm::vec4(exposureMultiplier(scene.toneMapping.exposureStops),
+                                 scene.toneMapping.enabled ? 1.0f : 0.0f, 0.0f, 0.0f),
     };
 }
 

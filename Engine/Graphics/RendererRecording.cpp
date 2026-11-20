@@ -2,6 +2,7 @@
 #include "Graphics/RendererState.h"
 #include "Graphics/VulkanBackendAccess.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -10,7 +11,7 @@ namespace apex::graphics {
 
 namespace {
 
-// Linear color, written to an sRGB swapchain: a dark blue, easy to tell from a black window.
+// Linear HDR color, before exposure and tonemapping: a dark blue, easy to tell from a black window.
 constexpr VkClearColorValue kClearColor{{0.02f, 0.04f, 0.10f, 1.0f}};
 
 struct ImageBarrier {
@@ -99,12 +100,15 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
     gpuTimer.begin(commands, frameIndex);
     const VkImage image = swapchain.image(imageIndex);
-    // UNDEFINED: the previous content is cleared anyway. Waits for the acquire semaphore (same stage).
-    transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE,
-                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                               VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
+    recordShadowPass(commands);
+
+    // One HDR image for both frames in flight: the previous frame's tonemapping must be done reading it.
+    // UNDEFINED: the previous content is cleared anyway.
+    transitionImage(commands,
+                    {sceneColor.image(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                     VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
     // One depth buffer for both frames in flight: the previous frame's depth writes must be done.
     constexpr VkPipelineStageFlags2 kDepthStages =
         VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
@@ -114,9 +118,21 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT});
 
-    recordShadowPass(commands);
-    recordScenePass(commands, imageIndex);
-    // Second pass, without depth: the interface is drawn over the scene (decisions 0008 and 0011).
+    recordScenePass(commands);
+
+    transitionImage(commands,
+                    {sceneColor.image(), VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT});
+    // UNDEFINED: the tonemapping pass writes every pixel. Waits for the acquire semaphore (same stage).
+    transitionImage(commands, {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                               VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE,
+                               VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                               VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
+    recordTonemapPass(commands, imageIndex);
+    // Last pass, without depth: the interface is drawn over the tonemapped image (decisions 0008 and 0021).
     if (overlay != nullptr) {
         transitionImage(
             commands,
@@ -200,10 +216,10 @@ void Renderer::State::recordShadowPass(VkCommandBuffer commands) {
                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT});
 }
 
-void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
+void Renderer::State::recordScenePass(VkCommandBuffer commands) {
     const VkRenderingAttachmentInfo colorAttachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = swapchain.imageView(imageIndex),
+        .imageView = sceneColor.view(),
         .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -271,6 +287,41 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands, std::uint32_t im
         counters.triangles += mesh->indexCount / 3;
     }
 
+    vkCmdEndRendering(commands);
+}
+
+void Renderer::State::recordTonemapPass(VkCommandBuffer commands, std::uint32_t imageIndex) {
+    const VkRenderingAttachmentInfo colorAttachment{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = swapchain.imageView(imageIndex),
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    };
+    const VkExtent2D extent = swapchain.extent();
+    const VkRenderingInfo rendering{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = {{0, 0}, extent},
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachment,
+    };
+    vkCmdBeginRendering(commands, &rendering);
+    const VkViewport viewport{.x = 0.0f,
+                              .y = 0.0f,
+                              .width = static_cast<float>(extent.width),
+                              .height = static_cast<float>(extent.height),
+                              .minDepth = 0.0f,
+                              .maxDepth = 1.0f};
+    const VkRect2D scissor{{0, 0}, extent};
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipeline.handle());
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    const std::array sets{frameBuffers.descriptorSet(frameIndex), sceneColorInput.set()};
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, tonemapPipeline.layout(), 0,
+                            static_cast<std::uint32_t>(sets.size()), sets.data(), 0, nullptr);
+    // A full-screen triangle made by the vertex shader.
+    vkCmdDraw(commands, 3, 1, 0, 0);
     vkCmdEndRendering(commands);
 }
 

@@ -54,6 +54,8 @@ add_library(ApexEngine STATIC
     Debug/LogHistorySink.h
     Debug/StatsPanel.cpp
     Debug/StatsPanel.h
+    Graphics/ColorTarget.cpp
+    Graphics/ColorTarget.h
     Graphics/DeferredDeleter.cpp
     Graphics/DeferredDeleter.h
     Graphics/DepthTarget.cpp
@@ -82,6 +84,8 @@ add_library(ApexEngine STATIC
     Graphics/GraphicsPipeline.h
     Graphics/GpuTexture.cpp
     Graphics/GpuTexture.h
+    Graphics/ImageInputSet.cpp
+    Graphics/ImageInputSet.h
     Graphics/MaterialSets.cpp
     Graphics/MaterialSets.h
     Graphics/MaterialTable.cpp
@@ -179,9 +183,11 @@ add_library(ApexEngine STATIC
 add_library(Apex::Engine ALIAS ApexEngine)
 
 apex_add_shaders(ApexEngine
+    Graphics/Shaders/Fullscreen.vert
     Graphics/Shaders/Scene.frag
     Graphics/Shaders/Scene.vert
     Graphics/Shaders/Shadow.vert
+    Graphics/Shaders/Tonemap.frag
 )
 # Included by the shaders above: tracked through glslc's depfiles, listed here for the IDE.
 target_sources(ApexEngine PRIVATE

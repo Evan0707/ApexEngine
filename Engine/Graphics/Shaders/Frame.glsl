@@ -8,6 +8,8 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
     vec4 ambient;
     // x: shadows on, y: shadow map texel, z: start of the fade at the border.
     vec4 shadow;
+    // x: exposure multiplier, y: ACES curve on.
+    vec4 toneMapping;
 } frame;
 
 struct ObjectData {

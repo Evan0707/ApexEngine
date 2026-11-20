@@ -20,6 +20,6 @@ void main() {
     vec3 radiance = frame.lightRadiance.rgb * shadowVisibility(inPosition);
     vec3 color = shadeDirectionalLight(material, n, v, frame.directionToLight.xyz, radiance) +
                  shadeAmbient(material, frame.ambient.rgb);
-    // Linear color, encoded by the sRGB swapchain. No tonemapping before P1: bright values clip.
+    // Linear HDR color: the tonemapping pass maps it to the swapchain (decision 0021).
     outColor = vec4(color, 1.0);
 }

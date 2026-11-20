@@ -13,7 +13,7 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame, temps d'attente du CPU, temps GPU |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
-| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
+| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderToneMapping`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
 | `Graphics/Renderer.h` | `RendererConfig` (dont la résolution de la shadow map), `Renderer` : `create()`, `syncResources()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
@@ -30,6 +30,8 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/DepthTarget.h` (`DepthTarget`) : une image de profondeur et sa vue (tampon de profondeur de la passe principale, shadow map) ;
 - `Graphics/GraphicsPipeline.h` (`MeshAttribute`, `PipelineDesc`, `GraphicsPipeline`) : un pipeline et son layout, décrit par ce qui change d'une passe à l'autre ;
 - `Graphics/ShadowMap.h` (`ShadowMap`) : la shadow map et son sampler de comparaison ;
+- `Graphics/ColorTarget.h` (`ColorTarget`) : une image de couleur dessinée puis lue par une autre passe (l'image HDR de la scène) ;
+- `Graphics/ImageInputSet.h` (`ImageInputSet`) : un jeu de descripteurs d'une seule image lue, celui de la passe de tonemapping ;
 - `Graphics/RendererState.h` : l'état privé du `Renderer` et ses limites (frames en vol, objets, matériaux).
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/ResourceMirror.h` (`ResourceMirror`), sans Vulkan, testé sans GPU ;
@@ -40,7 +42,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
 - `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
 - `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`) : reflet des matériaux du cache, sans Vulkan, testé sans GPU ;
-- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `shadowViewProjection()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
+- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `exposureMultiplier()`, `shadowViewProjection()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
 - `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol ;
 - `Graphics/GpuTimestamps.h` (`TimestampFormat`, `elapsedSeconds()`), sans Vulkan, testé sans GPU ;
 - `Graphics/GpuTimer.h` (`GpuTimer`) : les horodatages de chaque frame en vol.
@@ -60,7 +62,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Deux frames en vol (section 5.4) : chacune a son pool et son command buffer, sa fence et son sémaphore « image disponible ».
 - Le sémaphore « rendu terminé », attendu par la présentation, existe une fois par **image** de la swapchain, et non par frame en vol. Avec un sémaphore par frame, il pourrait être signalé de nouveau alors que la présentation précédente l'attend encore.
 - Le rendu se fait par dynamic rendering, sans render pass. Les transitions d'image utilisent synchronization2.
-- Deux passes (note 0011) : la scène, qui efface la couleur et la profondeur ; puis l'interface, qui charge la couleur et n'a pas de profondeur. Une barrière sépare les deux écritures de la couleur. Le backend ImGui n'a donc pas à connaître le format de profondeur, et l'ordre est celui que demandera le tonemapping de la phase 7.
+- Quatre passes (notes 0011 et 0021) : l'ombre, dans la shadow map ; la scène, dans l'image HDR, qui efface la couleur et la profondeur ; le tonemapping, de l'image HDR vers l'image de la swapchain ; l'interface, qui charge la couleur et n'a pas de profondeur. Des barrières séparent chaque écriture de la lecture suivante. Le backend ImGui n'a pas à connaître le format de profondeur ni l'image HDR.
 - Profondeur : `D32_SFLOAT` (section 5.4), choisi en un seul endroit (`Renderer.cpp`) et passé aux pipelines (G-09). Test « inférieur », effacement à 1. Le tampon est recréé avec la swapchain, à sa taille ; son contenu n'est pas conservé après la passe. Un seul tampon sert aux deux frames en vol : la barrière du début de frame attend les écritures de profondeur de la frame précédente.
 - Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
 
@@ -78,6 +80,14 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Pipeline de scène (`GraphicsPipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale et UV lues dans le format de sommet unique (la tangente attend les normal maps, P1). Un attribut que le shader ne lit pas n'est pas déclaré : les layers le signaleraient ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
+
+## HDR et tonemapping (phase 7, décision 0021)
+
+- La scène est dessinée dans une image `R16G16B16A16_SFLOAT` (section 5.4), à la taille de la swapchain et recréée avec elle. Format choisi dans `Renderer.cpp` seulement, passé au pipeline de scène (G-09).
+- Passe de tonemapping : un triangle qui couvre l'écran, fait par le vertex shader sans buffer de sommets (`Shaders/Fullscreen.vert`). `Shaders/Tonemap.frag` lit l'image HDR texel par texel (`texelFetch` aux coordonnées du pixel), la multiplie par l'exposition, puis applique l'approximation ACES de Narkowicz ; l'écriture dans la swapchain sRGB fait l'encodage.
+- `RenderScene::toneMapping` : exposition en stops (multiplicateur `2^stops`, `exposureMultiplier()`) et courbe active ou non. Sans la courbe, l'exposition reste appliquée et les valeurs au-dessus de 1 saturent : la comparaison isole la courbe (AC-P1-5).
+- Le pipeline de tonemapping lit le jeu 0 de la frame (exposition dans `FrameUniforms`) et un jeu 1 d'une seule image (`ImageInputSet`), réécrit à chaque recréation de la swapchain : le GPU est alors inactif. Il est recréé si le format de la swapchain change.
+- Une seule image HDR pour les deux frames en vol : la barrière du début de frame attend que le tonemapping de la frame précédente ait fini de la lire.
 
 ## Ombres (phase 7, décision 0021)
 
@@ -161,7 +171,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 - Modèle metallic-roughness de glTF 2.0, simplifié (section 5.5), dans `Pbr.glsl` : diffus de Lambert, distribution GGX, visibilité de Smith corrélée en hauteur, Fresnel de Schlick. Réflectance des diélectriques en incidence normale : 0,04. Rugosité perceptuelle bornée à 0,045 en bas, pour qu'un matériau parfaitement lisse garde un reflet visible.
 - Une lumière directionnelle (couleur × intensité) et un terme ambiant constant, appliqué aux parts diffuse et spéculaire. L'IBL le remplacera en P1.
-- Calcul en espace linéaire, encodage sRGB par la swapchain. Pas de tonemapping avant P1 : une valeur au-dessus de 1 sature en blanc.
+- Calcul en espace linéaire, dans l'image HDR ; exposition, tonemapping puis encodage sRGB après (voir « HDR et tonemapping »).
 - La vue est calculée en espace de rendu : la caméra est à l'origine, la direction vers l'observateur est `-position`.
 - `glslc` est cherché dans `%VULKAN_SDK%\Bin`, puis dans le `PATH`. Sans lui, la configuration CMake échoue avec un message qui dit quoi installer.
 

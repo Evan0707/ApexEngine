@@ -10,5 +10,7 @@ namespace apex::graphics {
 [[nodiscard]] std::span<const std::uint32_t> sceneVertexShader() noexcept;
 [[nodiscard]] std::span<const std::uint32_t> sceneFragmentShader() noexcept;
 [[nodiscard]] std::span<const std::uint32_t> shadowVertexShader() noexcept;
+[[nodiscard]] std::span<const std::uint32_t> fullscreenVertexShader() noexcept;
+[[nodiscard]] std::span<const std::uint32_t> tonemapFragmentShader() noexcept;
 
 } // namespace apex::graphics
