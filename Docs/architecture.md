@@ -88,6 +88,9 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 | 0018 | 6 | Ajout de Jolt Physics, un seul thread |
 | 0019 | 6 | Physique, personnage et caméra : objet `Runtime` pour l'état global de Jolt, personnage dans `Physics`, composants ajoutés à `World`, collider centré, configuration |
 | 0020 | 6 | Jolt compilé en flottants précis par un triplet vcpkg du dépôt : sa version Release par défaut est instable avec MSVC 19.52 |
+| 0021 | 7 | Rendu P1 : phase 7 avant la phase 8, fonctions désactivables, passes, cadrage des ombres dans l'extraction, ACES, culling, mipmaps, normal maps |
+| 0022 | 7 | Environnement : `.hdr` par stb_image, handle à état, irradiance et table BRDF sur le CPU, cubemap spéculaire sur le GPU, ciel généré |
+| 0023 | 7 | Outils de debug P1 : temps GPU en premier, colliders dessinés par le moteur avec les formes de `Physics`, bascules F2 et F4 |
 
 ## Revue des garde-fous (AC-17)
 
