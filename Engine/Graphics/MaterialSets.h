@@ -10,12 +10,15 @@
 namespace apex::graphics {
 
 // Internal to Graphics. Descriptor set 1, one per material (spec 5.4): binding 0 the base color texture,
-// binding 1 the metallic-roughness texture, both through one linear, repeating sampler (decision 0014).
-// The factors stay in the per-frame material table (decision 0011).
+// binding 1 the metallic-roughness texture, both through one trilinear, repeating sampler, anisotropic when
+// the GPU allows it (decisions 0014 and 0021). The factors stay in the per-frame material table (decision
+// 0011).
 class MaterialSets {
 public:
-    // maxSets: sets alive at once, counting those waiting for deferred destruction.
-    [[nodiscard]] static core::Result<MaterialSets> create(VkDevice device, std::uint32_t maxSets);
+    // maxSets: sets alive at once, counting those waiting for deferred destruction. maxAnisotropy: 1 for
+    // trilinear filtering only (decision 0021).
+    [[nodiscard]] static core::Result<MaterialSets> create(VkDevice device, std::uint32_t maxSets,
+                                                           float maxAnisotropy);
 
     MaterialSets() = default;
     ~MaterialSets();

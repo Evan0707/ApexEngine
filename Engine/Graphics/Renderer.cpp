@@ -258,7 +258,8 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     }
     state->frameBuffers = std::move(*frameBuffers);
 
-    core::Result<MaterialSets> materialSets = MaterialSets::create(state->device->device(), kMaxMaterialSets);
+    core::Result<MaterialSets> materialSets =
+        MaterialSets::create(state->device->device(), kMaxMaterialSets, state->device->maxAnisotropy());
     if (!materialSets) {
         logger.error("{}", materialSets.error().message);
         return std::unexpected(materialSets.error());

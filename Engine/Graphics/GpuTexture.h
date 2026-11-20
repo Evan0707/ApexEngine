@@ -11,8 +11,8 @@
 
 namespace apex::graphics {
 
-// Internal to Graphics. A sampled texture: one mip level (mipmaps are P1), RGBA 8 bits, in an sRGB format
-// for colors and a UNORM format for data (spec 3.3).
+// Internal to Graphics. A sampled texture: RGBA 8 bits with its full mip chain (decision 0021), in an sRGB
+// format for colors and a UNORM format for data (spec 3.3).
 struct GpuTexture {
     GpuImage image;
     VkImageView view = VK_NULL_HANDLE;

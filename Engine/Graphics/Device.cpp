@@ -2,6 +2,7 @@
 
 #include "Core/Version.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <format>
 #include <span>
@@ -137,12 +138,19 @@ core::Result<std::unique_ptr<Device>> Device::create(platform::Window& window, c
 
     const bool memoryBudget =
         physicalDevice->enable_extension_if_present(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+    const bool anisotropy =
+        physicalDevice->enable_features_if_present(VkPhysicalDeviceFeatures{.samplerAnisotropy = VK_TRUE});
     vkb::Result<vkb::Device> logicalDevice = vkb::DeviceBuilder(*physicalDevice).build();
     if (!logicalDevice) {
         return gpuError(logger, "Cannot create the Vulkan device", logicalDevice);
     }
     device->m_device = std::move(*logicalDevice);
     device->m_memoryBudgetEnabled = memoryBudget;
+    // 8x at most (decision 0021): sharp enough on the floor seen at a grazing angle, cheap on any GPU.
+    constexpr float kWantedAnisotropy = 8.0f;
+    device->m_maxAnisotropy =
+        anisotropy ? std::min(kWantedAnisotropy, physicalDevice->properties.limits.maxSamplerAnisotropy)
+                   : 1.0f;
 
     const vkb::Result<VkQueue> graphicsQueue = device->m_device.get_queue(vkb::QueueType::graphics);
     const vkb::Result<std::uint32_t> graphicsFamily =
@@ -175,6 +183,7 @@ core::Result<std::unique_ptr<Device>> Device::create(platform::Window& window, c
                 VK_API_VERSION_MINOR(properties.apiVersion), VK_API_VERSION_PATCH(properties.apiVersion));
     logger.info("Vulkan validation: {}", useValidation ? "enabled" : "disabled");
     logger.info("GPU timestamps: {}", device->m_timestampFormat.supported() ? "available" : "unavailable");
+    logger.info("Texture filtering: {:.0f}x anisotropic", device->m_maxAnisotropy);
     return device;
 }
 
@@ -225,6 +234,10 @@ VkQueue Device::presentQueue() const noexcept {
 
 bool Device::validationEnabled() const noexcept {
     return m_validationEnabled;
+}
+
+float Device::maxAnisotropy() const noexcept {
+    return m_maxAnisotropy;
 }
 
 const TimestampFormat& Device::timestampFormat() const noexcept {

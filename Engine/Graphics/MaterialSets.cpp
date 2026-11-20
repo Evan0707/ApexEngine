@@ -19,7 +19,7 @@ constexpr std::uint32_t kTexturesPerMaterial = 2;
 
 } // namespace
 
-core::Result<MaterialSets> MaterialSets::create(VkDevice device, std::uint32_t maxSets) {
+core::Result<MaterialSets> MaterialSets::create(VkDevice device, std::uint32_t maxSets, float maxAnisotropy) {
     MaterialSets sets;
     sets.m_device = device;
 
@@ -50,15 +50,17 @@ core::Result<MaterialSets> MaterialSets::create(VkDevice device, std::uint32_t m
         return setsError("descriptor pool", result);
     }
 
-    // Linear, repeating, one mip level: the samplers of glTF files are ignored (decision 0014).
+    // Trilinear, repeating, every mip level: the samplers of glTF files are ignored (decisions 0014, 0021).
     const VkSamplerCreateInfo samplerInfo{.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
                                           .magFilter = VK_FILTER_LINEAR,
                                           .minFilter = VK_FILTER_LINEAR,
-                                          .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                                          .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
                                           .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                                           .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
                                           .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                                          .maxLod = 0.0f};
+                                          .anisotropyEnable = maxAnisotropy > 1.0f ? VK_TRUE : VK_FALSE,
+                                          .maxAnisotropy = maxAnisotropy,
+                                          .maxLod = VK_LOD_CLAMP_NONE};
     if (const VkResult result = vkCreateSampler(device, &samplerInfo, nullptr, &sets.m_sampler);
         result != VK_SUCCESS) {
         return setsError("sampler", result);

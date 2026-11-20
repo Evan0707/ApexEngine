@@ -57,6 +57,8 @@ public:
     [[nodiscard]] bool memoryBudgetEnabled() const noexcept;
     // How the graphics queue writes timestamps: unsupported when it writes none.
     [[nodiscard]] const TimestampFormat& timestampFormat() const noexcept;
+    // The anisotropy samplers may use (decision 0021): 1 when the GPU does not filter anisotropically.
+    [[nodiscard]] float maxAnisotropy() const noexcept;
 
     // Waits for the GPU to finish all submitted work. Logged on failure, never fatal.
     void waitIdle() noexcept;
@@ -74,6 +76,7 @@ private:
     bool m_validationEnabled = false;
     bool m_memoryBudgetEnabled = false;
     TimestampFormat m_timestampFormat;
+    float m_maxAnisotropy = 1.0f;
 };
 
 } // namespace apex::graphics
