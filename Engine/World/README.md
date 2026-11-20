@@ -2,15 +2,16 @@
 
 **Rôle :** couche d'intégration du moteur : entités, composants, transformations, et extraction vers le rendu (cahier des charges, sections 4.3 et 5.6). `Graphics` et `Physics` ne connaissent ni les entités ni EnTT.
 
-**État (phase 5) :** composants du moteur, conversion des angles des fichiers de scène, recherches dans le registre, extraction vers le rendu (notes de décision 0015 et 0017). La liaison avec la physique arrive en phase 6.
+**État (phase 6) :** composants du moteur, conversion des angles des fichiers de scène, recherches dans le registre, extraction vers le rendu, liaison avec la physique (notes de décision 0015, 0017 et 0019).
 
 ## Interface publique
 
 | En-tête | Contenu |
 |---|---|
-| `World/Components.h` | `SceneId`, `Name`, `Transform`, `PreviousTransform`, `MeshRenderer`, `ColliderShape`, `Collider`, `BodyType`, `RigidBody`, `Camera`, `DirectionalLight`, `SceneEnvironment` |
+| `World/Components.h` | `SceneId`, `Name`, `Transform`, `PreviousTransform`, `MeshRenderer`, `ColliderShape`, `Collider`, `BodyType`, `RigidBody`, `PhysicsBody`, `CharacterBody`, `PhysicsCharacter`, `CharacterMotion`, `CharacterGround`, `Camera`, `DirectionalLight`, `SceneEnvironment` |
 | `World/Rotation.h` | `rotationFromEulerDegrees()`, `eulerDegreesFromRotation()` |
 | `World/SceneQueries.h` | `findBySceneId()`, `sceneEntityCount()`, `sceneEnvironment()` |
+| `World/PhysicsSync.h` | `scaledShape()`, `createPhysicsObjects()`, `destroyPhysicsObjects()`, `stepPhysics()` |
 | `World/RenderExtraction.h` | `rememberTransforms()`, `interpolateTransform()`, `extractRenderScene()` |
 
 ## Registre et composants
@@ -21,7 +22,9 @@
   - `Transform` : position (`WorldPosition`), rotation (quaternion), échelle. Pas de parent : la hiérarchie est hors périmètre (section 2.2) ;
   - `PreviousTransform` : la transformation au pas fixe précédent, pour l'interpolation (section 5.1) ;
   - `MeshRenderer` : un modèle du cache de ressources et, au besoin, un matériau qui remplace celui de toutes ses parties (décision 0017) ;
-  - `Collider` (boîte, sphère, capsule) et `RigidBody` (statique ou dynamique, masse) : lus et gardés dès la phase 5, sans effet avant `Physics` (phase 6) ;
+  - `Collider` (boîte, sphère, capsule, centré sur l'entité) et `RigidBody` (statique ou dynamique, masse) : la forme et le type du corps que `Physics` simule pour l'entité ;
+  - `CharacterBody` : capsule de personnage (section 5.8), pieds à la position de l'entité ; `CharacterMotion` : la vitesse voulue pour le prochain pas, écrite par le jeu ; `CharacterGround` : l'état au sol relu après le pas ;
+  - `PhysicsBody` et `PhysicsCharacter` : les handles des objets créés dans `Physics`, attachés par `createPhysicsObjects`, jamais écrits dans une scène ;
   - `Camera` : champ de vision vertical, plans proche et lointain ; elle regarde le long du −Z de l'entité ;
   - `DirectionalLight` : le sens dans lequel la lumière voyage, couleur linéaire, intensité.
 - `SceneEnvironment` (terme ambiant) n'appartient à aucune entité : il est dans le contexte du registre (`registry.ctx()`), lu par `sceneEnvironment()`.
@@ -42,6 +45,24 @@
 - Lumière : la première `DirectionalLight` trouvée (une seule lumière directionnelle, section 5.5). Le composant donne le sens dans lequel la lumière voyage ; le renderer reçoit la direction opposée, vers la lumière. Sans lumière, seul le terme ambiant éclaire.
 - Interpolation (section 5.1) : `rememberTransforms(registry)`, appelé au début de chaque pas fixe, copie chaque `Transform` dans `PreviousTransform`. L'extraction interpole entre les deux avec `alpha` (positions et échelles linéairement, rotations par le plus court chemin), caméra comprise. Une entité sans `PreviousTransform` est dessinée à sa transformation courante.
 
+## Liaison avec la physique (section 4.3, G-05, décision 0019)
+
+`Physics` ne connaît ni les entités ni EnTT. `World` lui pousse les données des entités et recopie ses résultats.
+
+- `createPhysicsObjects(registry, physics)` crée :
+  - un corps pour chaque entité qui porte `Transform` et `Collider` : statique sans `RigidBody`, sinon du type et de la masse du `RigidBody` ;
+  - un personnage pour chaque entité qui porte `Transform` et `CharacterBody`, et lui ajoute `CharacterMotion` et `CharacterGround`.
+  Les entités qui ont déjà leur handle sont laissées telles quelles : la fonction peut être rappelée après un ajout d'entités. Elle s'arrête au premier échec, avec une erreur qui nomme l'entité.
+- **Échelle.** `Physics` n'a pas d'échelle : `scaledShape()` multiplie les dimensions du collider par la valeur absolue de l'échelle de l'entité, une fois, à la création. Une sphère demande la même échelle sur les trois axes, une capsule la même sur X et Z ; une échelle nulle est refusée. Changer l'échelle ensuite ne change pas le corps.
+- `stepPhysics(registry, physics, deltaSeconds)` fait un pas fixe :
+  1. donne à chaque personnage la vitesse de son `CharacterMotion` ;
+  2. avance `Physics` ;
+  3. écrit la position et la rotation de chaque corps dynamique dans son `Transform` (l'échelle n'est pas touchée) ;
+  4. écrit la position de chaque personnage dans son `Transform` et son état dans `CharacterGround`. La rotation d'un personnage reste celle que le jeu lui donne.
+- Un corps statique garde la transformation de sa création : déplacer son `Transform` ensuite ne déplace pas le corps.
+- L'interpolation ne change pas : `rememberTransforms` avant le pas, et l'extraction interpole les corps comme le reste.
+- `destroyPhysicsObjects(registry, physics)` détruit les corps et les personnages créés et retire les handles : à appeler avant de vider le registre quand le monde physique survit à la scène.
+
 ## Recherches
 
 - `findBySceneId()` parcourt les entités : à utiliser à la mise en place, pas à chaque frame.
@@ -49,4 +70,4 @@
 
 ## Dépendances
 
-Autorisé : `Core`, `Resources`, `Graphics` (types de données), `Physics` (interface, phase 6). Interdit : appels Vulkan, types Jolt. Bibliothèque : EnTT 4.0.0, en-têtes seuls (décision 0015).
+Autorisé : `Core`, `Resources`, `Graphics` (types de données), `Physics` (interface : `PhysicsWorld.h` et `PhysicsTypes.h`). Interdit : appels Vulkan, types Jolt. Bibliothèque : EnTT 4.0.0, en-têtes seuls (décision 0015).

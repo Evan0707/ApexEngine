@@ -1,5 +1,6 @@
 {
   "version": 1,
   "window": { "width": 1920, "height": 1080 },
-  "free_camera": { "speed": 5.0, "sprint_multiplier": 4.0, "look_sensitivity": 0.0025 }
+  "free_camera": { "speed": 5.0, "sprint_multiplier": 4.0, "look_sensitivity": 0.0025 },
+  "physics": { "gravity": [0.0, -9.81, 0.0] }
 }

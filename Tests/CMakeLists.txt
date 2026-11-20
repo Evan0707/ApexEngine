@@ -48,6 +48,7 @@ add_executable(ApexTests
     Serialization/SceneJsonTests.cpp
     Serialization/SceneLoaderTests.cpp
     Serialization/SceneRoundTripTests.cpp
+    World/PhysicsSyncTests.cpp
     World/RenderExtractionTests.cpp
     World/RotationTests.cpp
     World/SceneQueriesTests.cpp

@@ -2,6 +2,7 @@
 
 #include "Core/Math.h"
 #include "Core/WorldPosition.h"
+#include "Physics/PhysicsTypes.h"
 #include "Resources/Handles.h"
 
 #include <string>
@@ -45,7 +46,8 @@ struct MeshRenderer {
 
 enum class ColliderShape { Box, Sphere, Capsule };
 
-// Meters, before the Transform's scale. Read by Physics from phase 6 on.
+// Meters, centered on the entity, before the Transform's scale (decision 0019). An entity with a Collider
+// gets a body: static without a RigidBody.
 struct Collider {
     ColliderShape shape = ColliderShape::Box;
     // Box.
@@ -66,6 +68,50 @@ struct RigidBody {
     float mass = 1.0f;
 
     [[nodiscard]] bool operator==(const RigidBody&) const noexcept = default;
+};
+
+// The body Physics simulates for the entity. Attached by createPhysicsObjects; never written to a scene.
+struct PhysicsBody {
+    physics::BodyHandle handle;
+};
+
+// An upright capsule moved by Physics as a character (spec 5.8), feet at the Transform's position. The
+// rules that drive it (speeds, jump, facing) are the game's.
+struct CharacterBody {
+    // Meters; the height is the whole capsule's.
+    float height = 1.8f;
+    float radius = 0.3f;
+    float maxSlopeRadians = glm::radians(45.0f);
+    // Tallest step walked up, in meters.
+    float stepHeight = 0.3f;
+    // Kilograms.
+    float mass = 70.0f;
+    // Newtons: the most the character pushes on a dynamic body.
+    float maxPushForce = 100.0f;
+
+    [[nodiscard]] bool operator==(const CharacterBody&) const noexcept = default;
+};
+
+// The character Physics simulates for the entity. Attached by createPhysicsObjects.
+struct PhysicsCharacter {
+    physics::CharacterHandle handle;
+};
+
+// The intent of spec 4.3: the velocity the character should move with during the next fixed step, gravity
+// and jump included (see PhysicsWorld::setCharacterVelocity). Written by the game, pushed by stepPhysics.
+struct CharacterMotion {
+    glm::vec3 velocity{0.0f};
+};
+
+// What Physics reports about the character after each fixed step. Written by stepPhysics.
+struct CharacterGround {
+    physics::GroundState state = physics::GroundState::InAir;
+    // The velocity last given to Physics.
+    glm::vec3 velocity{0.0f};
+    // Unit vector; zero in the air.
+    glm::vec3 normal{0.0f};
+    // Velocity of what the character stands on.
+    glm::vec3 groundVelocity{0.0f};
 };
 
 // Looks along the entity's -Z, +Y up.

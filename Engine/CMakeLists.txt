@@ -159,6 +159,8 @@ add_library(ApexEngine STATIC
     Serialization/SceneLoader.cpp
     Serialization/SceneLoader.h
     World/Components.h
+    World/PhysicsSync.cpp
+    World/PhysicsSync.h
     World/RenderExtraction.cpp
     World/RenderExtraction.h
     World/Rotation.cpp

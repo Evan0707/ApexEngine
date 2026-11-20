@@ -34,7 +34,8 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
     const auto config = parseEngineConfig(R"({
         "version": 1,
         "window": { "width": 1280, "height": 720 },
-        "free_camera": { "speed": 8.5, "sprint_multiplier": 2, "look_sensitivity": 0.001 }
+        "free_camera": { "speed": 8.5, "sprint_multiplier": 2, "look_sensitivity": 0.001 },
+        "physics": { "gravity": [0, -1.62, 0] }
     })",
                                           kEngine);
     REQUIRE(config.has_value());
@@ -43,6 +44,7 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
     REQUIRE(config->freeCameraSpeed == 8.5f);
     REQUIRE(config->freeCameraSprintMultiplier == 2.0f);
     REQUIRE(config->freeCameraLookSensitivity == 0.001f);
+    REQUIRE(config->gravity == glm::vec3(0.0f, -1.62f, 0.0f));
 }
 
 TEST_CASE("Fields left out of the engine configuration keep the specification's values", "[serialization]") {
@@ -52,6 +54,7 @@ TEST_CASE("Fields left out of the engine configuration keep the specification's 
     REQUIRE(config->windowHeight == 1080);
     REQUIRE(config->freeCameraSpeed == 5.0f);
     REQUIRE(config->freeCameraSprintMultiplier == 4.0f);
+    REQUIRE(config->gravity == glm::vec3(0.0f, -9.81f, 0.0f));
     REQUIRE(*parseEngineConfig(R"({"version": 1})", kEngine) == EngineConfig{});
 }
 
@@ -66,6 +69,10 @@ TEST_CASE("An invalid engine configuration names the file and the field", "[seri
                  {"field 'window.widht'", "unknown field"});
     requireError(parseEngineConfig(R"({"version": 1, "free_camera": {"speed": -1}})", kEngine), kEngine,
                  {"field 'free_camera.speed'", "greater than 0"});
+    requireError(parseEngineConfig(R"({"version": 1, "physics": {"gravity": [0, -9.81]}})", kEngine), kEngine,
+                 {"field 'physics.gravity'"});
+    requireError(parseEngineConfig(R"({"version": 1, "physics": {"gravty": [0, -9.81, 0]}})", kEngine),
+                 kEngine, {"field 'physics.gravty'", "unknown field"});
     requireError(parseEngineConfig(R"({"version": 1, "vsync": true})", kEngine), kEngine, {"field 'vsync'"});
     requireError(parseEngineConfig("{", kEngine), kEngine, {"invalid JSON"});
 }

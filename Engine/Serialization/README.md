@@ -93,6 +93,7 @@ Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal 
 | `free_camera.speed` | 5 | Mètres par seconde, strictement positif |
 | `free_camera.sprint_multiplier` | 4 | Strictement positif |
 | `free_camera.look_sensitivity` | 0,0025 | Radians par pixel de souris, strictement positif |
+| `physics.gravity` | [0, −9,81, 0] | Trois nombres, en m/s² (section 5.7) |
 
 `input.json` : la table d'actions.
 

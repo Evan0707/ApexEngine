@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Error.h"
+#include "Core/Math.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -11,8 +12,8 @@ namespace apex::serialization {
 // The only configuration file version this build reads (spec 3.1).
 inline constexpr int kConfigVersion = 1;
 
-// Config/engine.json (spec 5.2, 5.3, decision 0017). The default values are those of the specification:
-// a field left out of the file keeps them.
+// Config/engine.json (spec 5.2, 5.3, 5.7, decisions 0017 and 0019). The default values are those of the
+// specification: a field left out of the file keeps them.
 struct EngineConfig {
     // Size of the window's drawing area at start, in pixels.
     std::uint32_t windowWidth = 1920;
@@ -21,6 +22,8 @@ struct EngineConfig {
     float freeCameraSpeed = 5.0f;
     float freeCameraSprintMultiplier = 4.0f;
     float freeCameraLookSensitivity = 0.0025f;
+    // Physics: meters per second squared (spec 5.7).
+    glm::vec3 gravity{0.0f, -9.81f, 0.0f};
 
     [[nodiscard]] bool operator==(const EngineConfig&) const noexcept = default;
 };

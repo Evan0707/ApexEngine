@@ -109,7 +109,7 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         return std::unexpected(root.error());
     }
     if (core::Result<void> known =
-            rejectUnknownFields(*root, {"version", "window", "free_camera"}, context, {});
+            rejectUnknownFields(*root, {"version", "window", "free_camera", "physics"}, context, {});
         !known) {
         return std::unexpected(known.error());
     }
@@ -147,6 +147,18 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         if (read) {
             read = readOptional(*camera, "look_sensitivity", context, "free_camera",
                                 config.freeCameraLookSensitivity, readPositive);
+        }
+        if (!read) {
+            return std::unexpected(read.error());
+        }
+    }
+    if (const auto physics = root->find("physics"); physics != root->end()) {
+        core::Result<void> read = requireObject(*physics, context, "physics");
+        if (read) {
+            read = rejectUnknownFields(*physics, {"gravity"}, context, "physics");
+        }
+        if (read) {
+            read = readOptional(*physics, "gravity", context, "physics", config.gravity, readVec3);
         }
         if (!read) {
             return std::unexpected(read.error());
