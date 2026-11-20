@@ -183,11 +183,11 @@ core::Result<void> DemoApp::loadScene(const CommandLineOptions& options) {
         return loaded;
     }
     if (options.extraModel) {
-        // On the floor in front of the demo's starting camera. Centered on y = 0.5: a model of 1 m centered
-        // on its origin, such as the fallback cube, rests on the floor.
+        // On the floor, to the right of the character's starting place. Centered on y = 0.5: a model of 1 m
+        // centered on its origin, such as the fallback cube, rests on the floor.
         const entt::entity extra = m_registry.create();
         m_registry.emplace<world::SceneId>(extra, "extra_model");
-        m_registry.emplace<world::Transform>(extra, world::Transform{.position = {0.0f, 0.5f, 3.5f}});
+        m_registry.emplace<world::Transform>(extra, world::Transform{.position = {1.8f, 0.5f, 2.5f}});
         m_registry.emplace<world::MeshRenderer>(extra, m_cache->loadModel(*options.extraModel));
     }
 

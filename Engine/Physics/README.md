@@ -55,7 +55,7 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
 - Le personnage est une capsule debout déplacée par `CharacterVirtual` de Jolt (section 5.8) : aucun contrôleur n'est réécrit. Jolt résout les collisions, le glissement le long des murs, la pente maximale, les marches et la poussée des corps dynamiques.
 - La section 5.7 ne cite pas le personnage dans l'interface ; il y est parce qu'aucun type Jolt ne peut sortir du module (décision 0019).
-- `CharacterDesc` porte les valeurs de la section 5.8 par défaut : hauteur 1,8 m, rayon 0,3 m, pente maximale 45°, marche de 0,3 m, masse 70 kg, force de poussée 100 N. La position est celle des pieds.
+- `CharacterDesc` porte les valeurs de la section 5.8 par défaut : hauteur 1,8 m, rayon 0,3 m, pente maximale 45°, marche de 0,3 m, masse 70 kg, force de poussée 400 N (la valeur par défaut de Jolt, 100 N, fait glisser une pile de trois caisses de 20 kg sans la faire tomber). La position est celle des pieds.
 - **Qui décide de la vitesse.** `Physics` n'ajoute ni gravité ni saut. À chaque pas, l'appelant donne la vitesse complète par `setCharacterVelocity`, calculée à partir de `characterState()` :
   - au sol : vitesse du sol + vitesse horizontale voulue + vitesse de saut + gravité × pas ;
   - sinon : vitesse horizontale voulue + vitesse verticale courante + gravité × pas.

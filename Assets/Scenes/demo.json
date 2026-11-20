@@ -9,7 +9,7 @@
     },
     {
       "id": "camera",
-      "name": "Caméra libre",
+      "name": "Caméra",
       "transform": { "position": [0.0, 2.5, 7.0], "rotation_deg": [-15, 0, 0] },
       "camera": { "fov_deg": 70, "near": 0.1, "far": 500 }
     },
@@ -23,7 +23,7 @@
     {
       "id": "floor",
       "name": "Sol",
-      "transform": { "position": [0.0, -0.1, 0.0], "scale": [30.0, 0.2, 30.0] },
+      "transform": { "position": [0.0, -0.1, 0.0], "scale": [100.0, 0.2, 100.0] },
       "mesh": "Models/cube.glb",
       "material": { "base_color": [0.35, 0.36, 0.38], "metallic": 0.0, "roughness": 0.9 },
       "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
@@ -33,56 +33,49 @@
       "id": "reference_cube",
       "name": "Cube de référence (1 m)",
       "transform": { "position": [0.0, 0.5, 0.0] },
-      "mesh": "Models/reference_cube.glb"
+      "mesh": "Models/reference_cube.glb",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
     },
 
     {
       "id": "red_cube",
       "transform": { "position": [-2.5, 0.5, 1.0], "rotation_deg": [0, 20, 0] },
       "mesh": "Models/cube.glb",
-      "material": { "base_color": [0.7, 0.08, 0.06], "metallic": 0.0, "roughness": 0.4 }
+      "material": { "base_color": [0.7, 0.08, 0.06], "metallic": 0.0, "roughness": 0.4 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
     },
     {
       "id": "green_box",
       "transform": { "position": [2.5, 0.75, 0.5], "rotation_deg": [0, -15, 0], "scale": [1.5, 1.5, 1.5] },
       "mesh": "Models/cube.glb",
-      "material": { "base_color": [0.1, 0.45, 0.12], "metallic": 0.0, "roughness": 0.6 }
+      "material": { "base_color": [0.1, 0.45, 0.12], "metallic": 0.0, "roughness": 0.6 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
     },
     {
       "id": "blue_cube",
       "transform": { "position": [-1.2, 0.3, 2.5], "rotation_deg": [0, 45, 0], "scale": [0.6, 0.6, 0.6] },
       "mesh": "Models/cube.glb",
-      "material": { "base_color": [0.08, 0.2, 0.6], "metallic": 0.0, "roughness": 0.3 }
-    },
-    {
-      "id": "spinner",
-      "name": "Cube tournant",
-      "transform": { "position": [1.8, 0.4, 2.2], "scale": [0.8, 0.8, 0.8] },
-      "mesh": "Models/cube.glb",
-      "material": { "base_color": [0.08, 0.2, 0.6], "metallic": 0.0, "roughness": 0.3 }
+      "material": { "base_color": [0.08, 0.2, 0.6], "metallic": 0.0, "roughness": 0.3 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
     },
     {
       "id": "pillar",
       "transform": { "position": [-4.5, 1.5, -2.0], "scale": [0.6, 3.0, 0.6] },
       "mesh": "Models/cube.glb",
-      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.5 }
-    },
-
-    {
-      "id": "crate_01",
-      "name": "Caisse",
-      "transform": { "position": [4.5, 0.5, -1.5] },
-      "mesh": "Models/crate.gltf",
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.5 },
       "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
-      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+      "rigid_body": { "type": "static" }
     },
     {
-      "id": "crate_02",
-      "name": "Caisse",
-      "transform": { "position": [4.5, 1.5, -1.5], "rotation_deg": [0, 10, 0] },
-      "mesh": "Models/crate.gltf",
-      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
-      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+      "id": "spinner",
+      "name": "Cube tournant, au-dessus du pilier",
+      "transform": { "position": [-4.5, 3.6, -2.0], "scale": [0.8, 0.8, 0.8] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.08, 0.2, 0.6], "metallic": 0.0, "roughness": 0.3 }
     },
     {
       "id": "water_bottle",
@@ -91,26 +84,132 @@
       "mesh": "Models/water_bottle.glb"
     },
 
+    {
+      "id": "ramp_gentle",
+      "name": "Rampe de 15 degrés, du sol à la plateforme de 1,5 m",
+      "transform": { "position": [-7.2268, 0.6534, 6.0], "rotation_deg": [0, 0, -15], "scale": [5.7956, 0.2, 2.5] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.55, 0.42, 0.25], "metallic": 0.0, "roughness": 0.8 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+    {
+      "id": "platform_mid",
+      "name": "Plateforme de 1,5 m",
+      "transform": { "position": [-12.0, 0.75, 6.0], "scale": [4.0, 1.5, 4.0] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.45, 0.45, 0.5], "metallic": 0.0, "roughness": 0.7 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+    {
+      "id": "ramp_steep",
+      "name": "Rampe de 35 degrés, de la plateforme de 1,5 m à celle de 3 m",
+      "transform": { "position": [-14.9862, 2.1681, 6.0], "rotation_deg": [0, 0, -35], "scale": [2.6152, 0.2, 2.5] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.55, 0.42, 0.25], "metallic": 0.0, "roughness": 0.8 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+    {
+      "id": "platform_high",
+      "name": "Plateforme de 3 m",
+      "transform": { "position": [-18.0, 1.5, 6.0], "scale": [4.0, 3.0, 4.0] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.45, 0.45, 0.5], "metallic": 0.0, "roughness": 0.7 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+    {
+      "id": "platform_jump",
+      "name": "Plateforme de 1 m, à atteindre en sautant",
+      "transform": { "position": [-6.0, 0.5, 11.0], "scale": [4.0, 1.0, 4.0] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.75, 0.6, 0.1], "metallic": 0.0, "roughness": 0.6 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+    {
+      "id": "wall",
+      "name": "Mur de 10 cm",
+      "transform": { "position": [12.0, 1.5, 4.0], "scale": [0.1, 3.0, 8.0] },
+      "mesh": "Models/cube.glb",
+      "material": { "base_color": [0.7, 0.3, 0.25], "metallic": 0.0, "roughness": 0.8 },
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "static" }
+    },
+
+    {
+      "id": "crate_01",
+      "name": "Caisse, bas de la pile",
+      "transform": { "position": [5.5, 0.5, -1.5] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+    {
+      "id": "crate_02",
+      "name": "Caisse, milieu de la pile",
+      "transform": { "position": [5.5, 1.5, -1.5], "rotation_deg": [0, 10, 0] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+    {
+      "id": "crate_03",
+      "name": "Caisse, haut de la pile",
+      "transform": { "position": [5.5, 2.5, -1.5], "rotation_deg": [0, -5, 0] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+    {
+      "id": "crate_04",
+      "name": "Caisse",
+      "transform": { "position": [8.0, 0.5, 2.0], "rotation_deg": [0, 30, 0] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+    {
+      "id": "crate_05",
+      "name": "Caisse",
+      "transform": { "position": [8.0, 0.5, 5.5] },
+      "mesh": "Models/crate.gltf",
+      "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
+      "rigid_body": { "type": "dynamic", "mass": 20.0 }
+    },
+
     { "id": "sphere_plain_000", "transform": { "position": [-4.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.0 } },
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.0 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_plain_025", "transform": { "position": [-2.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.25 } },
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.25 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_plain_050", "transform": { "position": [0.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.5 } },
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.5 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_plain_075", "transform": { "position": [2.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.75 } },
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 0.75 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_plain_100", "transform": { "position": [4.0, 0.5, -4.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 1.0 } },
+      "material": { "base_color": [0.8, 0.8, 0.8], "metallic": 0.0, "roughness": 1.0 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
 
     { "id": "sphere_gold_000", "transform": { "position": [-4.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.0 } },
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.0 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_gold_025", "transform": { "position": [-2.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.25 } },
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.25 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_gold_050", "transform": { "position": [0.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.5 } },
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.5 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_gold_075", "transform": { "position": [2.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.75 } },
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 0.75 },
+      "collider": { "shape": "sphere", "radius": 0.5 } },
     { "id": "sphere_gold_100", "transform": { "position": [4.0, 0.5, -6.0] }, "mesh": "Models/sphere.glb",
-      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 1.0 } }
+      "material": { "base_color": [1.0, 0.77, 0.34], "metallic": 1.0, "roughness": 1.0 },
+      "collider": { "shape": "sphere", "radius": 0.5 } }
   ]
 }

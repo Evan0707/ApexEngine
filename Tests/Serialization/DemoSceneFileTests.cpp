@@ -6,9 +6,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace apex;
@@ -54,7 +56,7 @@ TEST_CASE("demo.json loads without an error or a warning, every model ready", "[
         UNSCOPED_INFO(problem);
     }
     REQUIRE(demo.problems.empty());
-    REQUIRE(world::sceneEntityCount(demo.registry) == 23);
+    REQUIRE(world::sceneEntityCount(demo.registry) == 32);
     for (const auto [entity, renderer] : demo.registry.view<world::MeshRenderer>().each()) {
         CAPTURE(demo.registry.get<world::SceneId>(entity).value);
         REQUIRE(demo.cache->state(renderer.model) == resources::ResourceState::Ready);
@@ -105,4 +107,50 @@ TEST_CASE("demo.json shows spheres from smooth to rough, plain and metallic", "[
     }
     REQUIRE(plain == 5);
     REQUIRE(metallic == 5);
+}
+
+TEST_CASE("demo.json has the test ground of spec 6.1", "[serialization]") {
+    const DemoFile demo;
+    const auto transformOf = [&](std::string_view id) -> const world::Transform& {
+        const entt::entity entity = world::findBySceneId(demo.registry, id);
+        REQUIRE(entity != entt::null);
+        return demo.registry.get<world::Transform>(entity);
+    };
+
+    // A floor of 100 m by 100 m at least, and a wall 10 cm thick.
+    REQUIRE(transformOf("floor").scale.x >= 100.0f);
+    REQUIRE(transformOf("floor").scale.z >= 100.0f);
+    REQUIRE(transformOf("wall").scale.x == 0.1f);
+    // The top of the platform to jump on is 1 m up.
+    const world::Transform& jump = transformOf("platform_jump");
+    REQUIRE(jump.position.y + 0.5f * jump.scale.y == 1.0f);
+
+    int platforms = 0;
+    int ramps = 0;
+    int dynamicCrates = 0;
+    for (const auto [entity, id, transform] : demo.registry.view<world::SceneId, world::Transform>().each()) {
+        if (id.value.starts_with("platform_")) {
+            ++platforms;
+            REQUIRE(demo.registry.all_of<world::Collider>(entity));
+        } else if (id.value.starts_with("ramp_")) {
+            ++ramps;
+            // Tilted, and not steeper than what the character climbs (spec 5.8: 45 degrees).
+            const float tilt = glm::degrees(2.0f * std::acos(std::abs(transform.rotation.w)));
+            REQUIRE(tilt > 5.0f);
+            REQUIRE(tilt < 45.0f);
+            REQUIRE(demo.registry.all_of<world::Collider>(entity));
+        } else if (id.value.starts_with("crate_")) {
+            const world::RigidBody* body = demo.registry.try_get<world::RigidBody>(entity);
+            REQUIRE(body != nullptr);
+            dynamicCrates += body->type == world::BodyType::Dynamic ? 1 : 0;
+        }
+    }
+    REQUIRE(platforms == 3);
+    REQUIRE(ramps == 2);
+    REQUIRE(dynamicCrates >= 5);
+
+    // The character is not a rigid body: no collider in the file (decision 0019).
+    const entt::entity player = world::findBySceneId(demo.registry, "player");
+    REQUIRE(demo.registry.all_of<world::Transform, world::MeshRenderer>(player));
+    REQUIRE_FALSE(demo.registry.any_of<world::Collider, world::RigidBody>(player));
 }

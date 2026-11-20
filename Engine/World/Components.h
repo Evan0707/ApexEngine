@@ -87,7 +87,7 @@ struct CharacterBody {
     // Kilograms.
     float mass = 70.0f;
     // Newtons: the most the character pushes on a dynamic body.
-    float maxPushForce = 100.0f;
+    float maxPushForce = 400.0f;
 
     [[nodiscard]] bool operator==(const CharacterBody&) const noexcept = default;
 };

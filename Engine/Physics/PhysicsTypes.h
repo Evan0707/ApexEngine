@@ -94,8 +94,9 @@ struct CharacterDesc {
     float stepHeight = 0.3f;
     // Kilograms: its weight on what it stands on.
     float mass = 70.0f;
-    // Newtons: the most it pushes on a dynamic body it walks into.
-    float maxPushForce = 100.0f;
+    // Newtons: the most it pushes on a dynamic body it walks into. 400 N topples a stack of three 20 kg
+    // crates; Jolt's own default, 100 N, only slides it.
+    float maxPushForce = 400.0f;
 };
 
 enum class GroundState {

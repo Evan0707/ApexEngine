@@ -16,6 +16,7 @@ add_executable(ApexTests
     Debug/LogHistoryTests.cpp
     Game/BindingsTests.cpp
     Game/CommandLineTests.cpp
+    Game/DemoParcoursTests.cpp
     Game/FreeCameraTests.cpp
     Game/GameSystemsTests.cpp
     Game/OrbitCameraTests.cpp

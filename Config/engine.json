@@ -11,7 +11,7 @@
     "jump_height": 1.2,
     "max_slope_deg": 45.0,
     "step_height": 0.3,
-    "push_force": 100.0
+    "push_force": 400.0
   },
   "third_person_camera": { "distance": 4.0, "aim_height": 1.6 }
 }
