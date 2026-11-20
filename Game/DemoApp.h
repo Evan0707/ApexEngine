@@ -108,6 +108,7 @@ private:
     input::ActionId m_toggleCursor{};
     input::ActionId m_toggleDebug{};
     input::ActionId m_toggleShadows{};
+    input::ActionId m_toggleColliders{};
     input::ActionId m_sprint{};
     input::ActionId m_jump{};
     input::ActionId m_switchCamera{};

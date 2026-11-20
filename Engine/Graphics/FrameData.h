@@ -69,6 +69,16 @@ struct FrameEnvironment {
     float lastLevel = 0.0f;
 };
 
+// One end of a segment of RenderScene::lines, in the per-frame vertex buffer (decision 0023).
+struct LineVertex {
+    // Render space.
+    glm::vec3 position;
+    // Linear RGBA.
+    glm::vec4 color;
+};
+static_assert(sizeof(LineVertex) == 28);
+static_assert(offsetof(LineVertex, color) == 12);
+
 // aspectRatio: width over height of the render target. shadowMapSize: pixels per side.
 [[nodiscard]] FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio,
                                               std::uint32_t shadowMapSize,

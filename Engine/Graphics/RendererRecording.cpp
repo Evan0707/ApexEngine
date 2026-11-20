@@ -128,6 +128,21 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
         }
     }
     frameBuffers.write(frameIndex, uniforms, objectData, materials.gpuData());
+
+    lineVertices.clear();
+    for (const RenderLine& line : scene.lines) {
+        if (lineVertices.size() + 2 > kMaxLineVertices) {
+            if (!warnedTooManyLines) {
+                logger->warning("{} lines to draw, only the first {} are (logged once)", scene.lines.size(),
+                                kMaxLineVertices / 2);
+                warnedTooManyLines = true;
+            }
+            break;
+        }
+        lineVertices.push_back(LineVertex{.position = line.start, .color = line.color});
+        lineVertices.push_back(LineVertex{.position = line.end, .color = line.color});
+    }
+    frameBuffers.writeLines(frameIndex, lineVertices);
 }
 
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
@@ -165,6 +180,21 @@ void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageI
                                VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
     recordTonemapPass(commands, imageIndex);
+    if (!lineVertices.empty()) {
+        // The scene's depth, kept for this pass; and the tonemapped image, drawn over.
+        transitionImage(commands,
+                        {depth.image(), VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, kDepthStages,
+                         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, kDepthStages,
+                         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
+        transitionImage(
+            commands,
+            {image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+             VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT});
+        recordLinePass(commands, imageIndex);
+    }
     // Last pass, without depth: the interface is drawn over the tonemapped image (decisions 0008 and 0021).
     if (overlay != nullptr) {
         transitionImage(
@@ -258,13 +288,13 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands) {
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = {.color = kClearColor},
     };
-    // Depth is not needed after the pass.
+    // Depth is needed after the pass only by the lines.
     const VkRenderingAttachmentInfo depthAttachment{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = depth.view(),
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .storeOp = lineVertices.empty() ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = {.depthStencil = {1.0f, 0}},
     };
     const VkRenderingInfo rendering{
@@ -362,6 +392,51 @@ void Renderer::State::recordTonemapPass(VkCommandBuffer commands, std::uint32_t 
                             static_cast<std::uint32_t>(sets.size()), sets.data(), 0, nullptr);
     // A full-screen triangle made by the vertex shader.
     vkCmdDraw(commands, 3, 1, 0, 0);
+    vkCmdEndRendering(commands);
+}
+
+void Renderer::State::recordLinePass(VkCommandBuffer commands, std::uint32_t imageIndex) {
+    const VkRenderingAttachmentInfo colorAttachment{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = swapchain.imageView(imageIndex),
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    };
+    const VkRenderingAttachmentInfo depthAttachment{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = depth.view(),
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+    };
+    const VkExtent2D extent = swapchain.extent();
+    const VkRenderingInfo rendering{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = {{0, 0}, extent},
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachment,
+        .pDepthAttachment = &depthAttachment,
+    };
+    vkCmdBeginRendering(commands, &rendering);
+    const VkViewport viewport{.x = 0.0f,
+                              .y = 0.0f,
+                              .width = static_cast<float>(extent.width),
+                              .height = static_cast<float>(extent.height),
+                              .minDepth = 0.0f,
+                              .maxDepth = 1.0f};
+    const VkRect2D scissor{{0, 0}, extent};
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline.handle());
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    const VkDescriptorSet frameSet = frameBuffers.descriptorSet(frameIndex);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline.layout(), 0, 1, &frameSet,
+                            0, nullptr);
+    const VkBuffer buffer = frameBuffers.lineBuffer(frameIndex);
+    const VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(commands, 0, 1, &buffer, &offset);
+    vkCmdDraw(commands, static_cast<std::uint32_t>(lineVertices.size()), 1, 0, 0);
     vkCmdEndRendering(commands);
 }
 

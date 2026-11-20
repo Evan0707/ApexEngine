@@ -30,7 +30,8 @@ void copyTo(GpuAllocator& allocator, const GpuBuffer& buffer, const void* data, 
 
 core::Result<FrameBuffers> FrameBuffers::create(VkDevice device, GpuAllocator& allocator,
                                                 const FrameBufferLimits& limits) {
-    APEX_ASSERT(limits.maxObjects > 0 && limits.maxMaterials > 0, "Empty per-frame buffers");
+    APEX_ASSERT(limits.maxObjects > 0 && limits.maxMaterials > 0 && limits.maxLineVertices > 0,
+                "Empty per-frame buffers");
     FrameBuffers buffers;
     buffers.m_device = device;
     buffers.m_allocator = &allocator;
@@ -81,6 +82,8 @@ core::Result<FrameBuffers> FrameBuffers::create(VkDevice device, GpuAllocator& a
              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
             {&perFrame.materials, "Material table", sizeof(MaterialGpu) * VkDeviceSize{limits.maxMaterials},
              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT},
+            {&perFrame.lines, "Line vertices", sizeof(LineVertex) * VkDeviceSize{limits.maxLineVertices},
+             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT},
         };
         for (const auto& request : requests) {
             core::Result<GpuBuffer> created = allocator.createMappedBuffer(
@@ -147,7 +150,7 @@ void FrameBuffers::destroy() noexcept {
         return;
     }
     for (const PerFrame& frame : m_frames) {
-        for (const GpuBuffer* buffer : {&frame.uniforms, &frame.objects, &frame.materials}) {
+        for (const GpuBuffer* buffer : {&frame.uniforms, &frame.objects, &frame.materials, &frame.lines}) {
             if (buffer->buffer != VK_NULL_HANDLE) {
                 m_allocator->destroyBuffer(*buffer);
             }
@@ -166,6 +169,14 @@ VkDescriptorSetLayout FrameBuffers::layout() const noexcept {
 
 VkDescriptorSet FrameBuffers::descriptorSet(std::uint32_t frame) const noexcept {
     return m_frames[frame].set;
+}
+
+void FrameBuffers::writeLines(std::uint32_t frame, std::span<const LineVertex> vertices) {
+    copyTo(*m_allocator, m_frames[frame].lines, vertices.data(), vertices.size_bytes());
+}
+
+VkBuffer FrameBuffers::lineBuffer(std::uint32_t frame) const noexcept {
+    return m_frames[frame].lines.buffer;
 }
 
 void FrameBuffers::bindShadowMap(VkImageView view, VkSampler sampler) {

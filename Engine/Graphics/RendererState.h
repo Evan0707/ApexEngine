@@ -54,6 +54,8 @@ inline constexpr std::uint32_t kMaxLightingSets = 8;
 inline constexpr std::uint32_t kMaxMaterialSets = 2 * kMaxMaterials + 2;
 // Room in the per-frame object buffer; objects beyond are not drawn, with a warning.
 inline constexpr std::uint32_t kMaxObjects = 4096;
+// Room in the per-frame line buffer: two per segment. Segments beyond are not drawn, with a warning.
+inline constexpr std::uint32_t kMaxLineVertices = 65536;
 
 // Logs "<what> failed: VkResult n" and returns it as a GpuFailure.
 [[nodiscard]] std::unexpected<core::Error> vulkanError(core::Logger& logger, std::string_view what,
@@ -95,6 +97,8 @@ struct Renderer::State {
     GraphicsPipeline scenePipeline;
     // The environment behind the scene, drawn after the objects in the main pass.
     GraphicsPipeline skyPipeline;
+    // Collider segments over the tonemapped image, tested against the scene's depth.
+    GraphicsPipeline linePipeline;
     // HDR image to swapchain: created with the swapchain, for its format.
     GraphicsPipeline tonemapPipeline;
     ImageInputSet sceneColorInput;
@@ -126,7 +130,9 @@ struct Renderer::State {
     std::vector<std::uint32_t> shadowDraws;
     // The scene's shadow settings of the frame being recorded.
     RenderShadow frameShadow;
+    std::vector<LineVertex> lineVertices;
     bool warnedTooManyObjects = false;
+    bool warnedTooManyLines = false;
 
     ~State() {
         if (device) {
@@ -167,6 +173,7 @@ struct Renderer::State {
     void recordShadowPass(VkCommandBuffer commands);
     void recordScenePass(VkCommandBuffer commands);
     void recordTonemapPass(VkCommandBuffer commands, std::uint32_t imageIndex);
+    void recordLinePass(VkCommandBuffer commands, std::uint32_t imageIndex);
     void recordOverlayPass(VkCommandBuffer commands, std::uint32_t imageIndex);
 };
 

@@ -1,5 +1,6 @@
 #include "Graphics/GraphicsPipeline.h"
 
+#include "Graphics/FrameData.h"
 #include "Resources/MeshData.h"
 
 #include <array>
@@ -103,9 +104,22 @@ core::Result<GraphicsPipeline> GraphicsPipeline::create(VkDevice device, const R
                                             .pName = "main"});
     }
 
-    const VkVertexInputBindingDescription binding{
-        .binding = 0, .stride = sizeof(resources::Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
+    const VkVertexInputBindingDescription binding{.binding = 0,
+                                                  .stride = desc.lineVertices
+                                                                ? std::uint32_t{sizeof(LineVertex)}
+                                                                : std::uint32_t{sizeof(resources::Vertex)},
+                                                  .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
     std::vector<VkVertexInputAttributeDescription> attributes;
+    if (desc.lineVertices) {
+        attributes.push_back({.location = 0,
+                              .binding = 0,
+                              .format = VK_FORMAT_R32G32B32_SFLOAT,
+                              .offset = offsetof(LineVertex, position)});
+        attributes.push_back({.location = 1,
+                              .binding = 0,
+                              .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+                              .offset = offsetof(LineVertex, color)});
+    }
     for (const AttributeLayout& attribute : kMeshAttributes) {
         if ((desc.meshAttributes & attribute.bit) != 0) {
             attributes.push_back(VkVertexInputAttributeDescription{.location = attribute.location,
@@ -122,8 +136,7 @@ core::Result<GraphicsPipeline> GraphicsPipeline::create(VkDevice device, const R
         .pVertexAttributeDescriptions = attributes.data(),
     };
     const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST};
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO, .topology = desc.topology};
     const VkPipelineViewportStateCreateInfo viewport{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,

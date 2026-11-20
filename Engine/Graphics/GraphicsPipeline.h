@@ -30,6 +30,9 @@ struct PipelineDesc {
     std::span<const VkDescriptorSetLayout> setLayouts;
     // MeshAttribute bits. 0: no vertex buffer (a full-screen triangle made by the vertex shader).
     std::uint32_t meshAttributes = 0;
+    // Instead of mesh attributes: LineVertex, position at location 0 and color at location 1.
+    bool lineVertices = false;
+    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
     // Used only when the target has a depth format.
     bool depthWrite = true;

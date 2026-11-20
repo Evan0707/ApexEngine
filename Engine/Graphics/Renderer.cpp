@@ -121,6 +121,28 @@ core::Result<void> Renderer::State::ensurePipelines() {
         deleter.enqueue([old = std::move(tonemapPipeline)]() mutable { old = GraphicsPipeline(); });
         tonemapPipeline = std::move(*tonemap);
     }
+    const RenderTargetDesc lineTarget{
+        .colorFormat = swapchain.format(), .depthFormat = depth.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
+    if (linePipeline.handle() == VK_NULL_HANDLE || !(linePipeline.target() == lineTarget)) {
+        const std::array lineLayouts{frameBuffers.layout()};
+        core::Result<GraphicsPipeline> lines =
+            GraphicsPipeline::create(device->device(), lineTarget,
+                                     PipelineDesc{.name = "line pipeline",
+                                                  .vertexShader = lineVertexShader(),
+                                                  .fragmentShader = lineFragmentShader(),
+                                                  .setLayouts = lineLayouts,
+                                                  .lineVertices = true,
+                                                  .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+                                                  .cullMode = VK_CULL_MODE_NONE,
+                                                  .depthWrite = false,
+                                                  .depthCompare = VK_COMPARE_OP_LESS_OR_EQUAL});
+        if (!lines) {
+            logger->error("{}", lines.error().message);
+            return std::unexpected(lines.error());
+        }
+        deleter.enqueue([old = std::move(linePipeline)]() mutable { old = GraphicsPipeline(); });
+        linePipeline = std::move(*lines);
+    }
 
     const RenderTargetDesc target{
         .colorFormat = sceneColor.format(), .depthFormat = depth.format(), .samples = VK_SAMPLE_COUNT_1_BIT};
@@ -248,10 +270,12 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
     }
     state->allocator = std::move(*allocator);
 
-    core::Result<FrameBuffers> frameBuffers = FrameBuffers::create(
-        state->device->device(), *state->allocator,
-        FrameBufferLimits{
-            .framesInFlight = kFramesInFlight, .maxObjects = kMaxObjects, .maxMaterials = kMaxMaterials});
+    core::Result<FrameBuffers> frameBuffers =
+        FrameBuffers::create(state->device->device(), *state->allocator,
+                             FrameBufferLimits{.framesInFlight = kFramesInFlight,
+                                               .maxObjects = kMaxObjects,
+                                               .maxMaterials = kMaxMaterials,
+                                               .maxLineVertices = kMaxLineVertices});
     if (!frameBuffers) {
         logger.error("{}", frameBuffers.error().message);
         return std::unexpected(frameBuffers.error());

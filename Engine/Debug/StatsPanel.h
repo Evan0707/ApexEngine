@@ -38,6 +38,8 @@ struct DebugControls {
     bool toneMapping = true;
     // Image-based lighting and sky (decision 0022); off: the constant ambient term.
     bool imageBasedLighting = true;
+    // Wireframe of the physics shapes (decision 0023), also F2.
+    bool colliders = false;
 };
 
 // Internal to Debug: draws the panel with Dear ImGui, inside DebugUi::buildFrame. open becomes false when

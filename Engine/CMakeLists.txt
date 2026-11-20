@@ -199,6 +199,8 @@ add_library(Apex::Engine ALIAS ApexEngine)
 
 apex_add_shaders(ApexEngine
     Graphics/Shaders/Fullscreen.vert
+    Graphics/Shaders/Line.frag
+    Graphics/Shaders/Line.vert
     Graphics/Shaders/Prefilter.frag
     Graphics/Shaders/Prefilter.vert
     Graphics/Shaders/Scene.frag

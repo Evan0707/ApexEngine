@@ -17,6 +17,7 @@ struct FrameBufferLimits {
     std::uint32_t framesInFlight = 2;
     std::uint32_t maxObjects = 0;
     std::uint32_t maxMaterials = 0;
+    std::uint32_t maxLineVertices = 0;
 };
 
 // Internal to Graphics. Descriptor set 0 of each frame in flight (spec 5.4, decisions 0011 and 0021): frame
@@ -38,6 +39,11 @@ public:
     [[nodiscard]] VkDescriptorSet descriptorSet(std::uint32_t frame) const noexcept;
     [[nodiscard]] const FrameBufferLimits& limits() const noexcept;
 
+    // The frame's line vertices (decision 0023), a vertex buffer outside the descriptor set. The frame's
+    // fence must have been waited for; at most maxLineVertices.
+    void writeLines(std::uint32_t frame, std::span<const LineVertex> vertices);
+    [[nodiscard]] VkBuffer lineBuffer(std::uint32_t frame) const noexcept;
+
     // Binding 3 of every frame's set, in SHADER_READ_ONLY_OPTIMAL. Once, before the first frame: the sets
     // must not be in use.
     void bindShadowMap(VkImageView view, VkSampler sampler);
@@ -51,6 +57,7 @@ private:
         GpuBuffer uniforms;
         GpuBuffer objects;
         GpuBuffer materials;
+        GpuBuffer lines;
         VkDescriptorSet set = VK_NULL_HANDLE;
     };
 

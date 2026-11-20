@@ -71,6 +71,7 @@ void drawToneMappingSection(DebugControls& controls) {
                        controls.maxExposureStops, "%+.1f stops", ImGuiSliderFlags_AlwaysClamp);
     ImGui::Checkbox("Tonemapping (ACES)", &controls.toneMapping);
     ImGui::Checkbox("Image-based lighting and sky", &controls.imageBasedLighting);
+    ImGui::Checkbox("Colliders (F2)", &controls.colliders);
 }
 
 void drawLogSection(const LogHistory& log) {

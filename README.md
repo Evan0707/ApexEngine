@@ -75,7 +75,7 @@ Le format de la scène et de la configuration est décrit dans `Engine/Serializa
 | Souris | Quand le curseur est capturé : oriente la caméra libre, ou fait tourner la caméra troisième personne autour du personnage |
 | F1 | Affiche ou masque le panneau de debug, où se règle le champ de vision (50° à 100°) |
 | F4 | Active ou coupe les ombres (actives au lancement) |
-| F2 | Logue l'appui ; sans effet pour l'instant |
+| F2 | Affiche ou masque le fil de fer des colliders, tels que la physique les simule |
 | Croix, Alt + F4 | Ferme l'application, code de sortie 0 |
 
 ### Parcours de validation (cahier des charges, section 6.2)

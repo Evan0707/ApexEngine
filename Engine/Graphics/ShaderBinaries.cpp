@@ -40,6 +40,14 @@ constexpr std::uint32_t kSkyFragment[] =
 #include "Shaders/Sky.frag.spv.inc"
     ;
 
+constexpr std::uint32_t kLineVertex[] =
+#include "Shaders/Line.vert.spv.inc"
+    ;
+
+constexpr std::uint32_t kLineFragment[] =
+#include "Shaders/Line.frag.spv.inc"
+    ;
+
 } // namespace
 
 std::span<const std::uint32_t> sceneVertexShader() noexcept {
@@ -76,6 +84,14 @@ std::span<const std::uint32_t> skyVertexShader() noexcept {
 
 std::span<const std::uint32_t> skyFragmentShader() noexcept {
     return kSkyFragment;
+}
+
+std::span<const std::uint32_t> lineVertexShader() noexcept {
+    return kLineVertex;
+}
+
+std::span<const std::uint32_t> lineFragmentShader() noexcept {
+    return kLineFragment;
 }
 
 } // namespace apex::graphics

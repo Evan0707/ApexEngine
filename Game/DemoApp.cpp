@@ -6,6 +6,7 @@
 #include "Debug/StatsPanel.h"
 #include "Resources/AssetPath.h"
 #include "Serialization/SceneLoader.h"
+#include "World/ColliderLines.h"
 #include "World/Components.h"
 #include "World/PhysicsSync.h"
 #include "World/RenderExtraction.h"
@@ -157,6 +158,7 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
     app.m_toggleCursor = *toggleCursor;
     app.m_toggleDebug = *toggleDebug;
     app.m_toggleShadows = *app.m_actions.find("ToggleShadows");
+    app.m_toggleColliders = *app.m_actions.find("ToggleColliders");
     // Present: findActions above checked every name.
     app.m_sprint = *app.m_actions.find("Sprint");
     app.m_jump = *app.m_actions.find("Jump");
@@ -279,6 +281,10 @@ void DemoApp::handleFrameActions() {
     }
     if (m_frame.wasPressed(m_toggleDebug)) {
         m_debugUi->setPanelVisible(!m_debugUi->panelVisible());
+    }
+    if (m_frame.wasPressed(m_toggleColliders)) {
+        m_controls.colliders = !m_controls.colliders;
+        m_logger->info("Colliders {}", m_controls.colliders ? "shown" : "hidden");
     }
     if (m_frame.wasPressed(m_toggleShadows)) {
         m_controls.shadows = !m_controls.shadows;
@@ -463,6 +469,12 @@ void DemoApp::extract(double alpha) {
             std::clamp(m_controls.exposureStops, m_controls.minExposureStops, m_controls.maxExposureStops),
         .enabled = m_controls.toneMapping};
     m_renderScene.environment.enabled = m_controls.imageBasedLighting;
+    if (m_controls.colliders) {
+        world::extractColliderLines(m_registry, *m_physics, m_cameraEntity, static_cast<float>(alpha),
+                                    m_renderScene);
+    } else {
+        m_renderScene.lines.clear();
+    }
     m_shadowSettings.enabled = m_controls.shadows;
     m_shadowSettings.constantBias = m_controls.shadowConstantBias;
     m_shadowSettings.slopeBias = m_controls.shadowSlopeBias;

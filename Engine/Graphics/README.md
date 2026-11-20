@@ -28,7 +28,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/GpuAllocator.h` (`GpuBuffer`, `GpuAllocator`), seul utilisateur de VMA. L'implémentation de VMA est compilée dans `VmaImplementation.cpp` ;
 - `Graphics/RenderTargetDesc.h` (`RenderTargetDesc`) : formats de couleur et de profondeur et nombre d'échantillons de la cible, passés à la création des pipelines (G-09) ;
 - `Graphics/DepthTarget.h` (`DepthTarget`) : une image de profondeur et sa vue (tampon de profondeur de la passe principale, shadow map) ;
-- `Graphics/GraphicsPipeline.h` (`MeshAttribute`, `PipelineDesc`, `GraphicsPipeline`) : un pipeline et son layout, décrit par ce qui change d'une passe à l'autre ;
+- `Graphics/GraphicsPipeline.h` (`MeshAttribute`, `PipelineDesc`, `GraphicsPipeline`) : un pipeline et son layout, décrit par ce qui change d'une passe à l'autre (attributs de sommet, topologie, élimination des faces, profondeur, biais) ;
 - `Graphics/ShadowMap.h` (`ShadowMap`) : la shadow map et son sampler de comparaison ;
 - `Graphics/ColorTarget.h` (`ColorTarget`) : une image de couleur dessinée puis lue par une autre passe (l'image HDR de la scène) ;
 - `Graphics/ImageInputSet.h` (`ImageInputSet`) : un jeu de descripteurs d'une seule image lue, celui de la passe de tonemapping ;
@@ -47,7 +47,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/UploadContext.h` (`BufferCopy`, `UploadContext`) : copies vers la mémoire GPU par buffers de transit ;
 - `Graphics/GpuMesh.h` (`GpuMesh`, `createGpuMesh()`, `destroyGpuMesh()`) ;
 - `Graphics/MaterialTable.h` (`MaterialGpu`, `MaterialTable`) : reflet des matériaux du cache, sans Vulkan, testé sans GPU ;
-- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `makeFrameUniforms()`, `exposureMultiplier()`, `shadowViewProjection()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
+- `Graphics/FrameData.h` (`FrameUniforms`, `ObjectGpu`, `LineVertex`, `makeFrameUniforms()`, `exposureMultiplier()`, `shadowViewProjection()`, `makeObjectGpu()`), sans Vulkan, testé sans GPU ;
 - `Graphics/FrameBuffers.h` (`FrameBufferLimits`, `FrameBuffers`) : buffers et jeu de descripteurs de chaque frame en vol ;
 - `Graphics/GpuTimestamps.h` (`TimestampFormat`, `elapsedSeconds()`), sans Vulkan, testé sans GPU ;
 - `Graphics/EnvironmentLighting.h` (`shBasis()`, `IrradianceSh`, `projectIrradiance()`, `irradianceAt()`, `computeBrdfTable()`) : la part de l'IBL calculée sur le CPU (décision 0022), sans Vulkan, testée sans GPU ;
@@ -68,7 +68,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Deux frames en vol (section 5.4) : chacune a son pool et son command buffer, sa fence et son sémaphore « image disponible ».
 - Le sémaphore « rendu terminé », attendu par la présentation, existe une fois par **image** de la swapchain, et non par frame en vol. Avec un sémaphore par frame, il pourrait être signalé de nouveau alors que la présentation précédente l'attend encore.
 - Le rendu se fait par dynamic rendering, sans render pass. Les transitions d'image utilisent synchronization2.
-- Quatre passes (notes 0011 et 0021) : l'ombre, dans la shadow map ; la scène, dans l'image HDR, qui efface la couleur et la profondeur ; le tonemapping, de l'image HDR vers l'image de la swapchain ; l'interface, qui charge la couleur et n'a pas de profondeur. Des barrières séparent chaque écriture de la lecture suivante. Le backend ImGui n'a pas à connaître le format de profondeur ni l'image HDR.
+- Cinq passes (notes 0011, 0021 et 0023) : l'ombre, dans la shadow map ; la scène, dans l'image HDR, qui efface la couleur et la profondeur ; le tonemapping, de l'image HDR vers l'image de la swapchain ; les lignes des colliders, s'il y en a, avec la profondeur de la scène ; l'interface, qui charge la couleur et n'a pas de profondeur. Des barrières séparent chaque écriture de la lecture suivante. Le backend ImGui n'a pas à connaître le format de profondeur ni l'image HDR.
 - Profondeur : `D32_SFLOAT` (section 5.4), choisi en un seul endroit (`Renderer.cpp`) et passé aux pipelines (G-09). Test « inférieur », effacement à 1. Le tampon est recréé avec la swapchain, à sa taille ; son contenu n'est pas conservé après la passe. Un seul tampon sert aux deux frames en vol : la barrière du début de frame attend les écritures de profondeur de la frame précédente.
 - Fenêtre réduite (taille nulle) : `renderFrame()` et `presentFrame()` ne font rien (section 5.2).
 
@@ -86,6 +86,13 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Pipeline de scène (`GraphicsPipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale, tangente et UV lues dans le format de sommet unique. Un attribut que le shader ne lit pas n'est pas déclaré : les layers le signaleraient ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
+
+## Lignes des colliders (phase 7, décision 0023)
+
+- `RenderScene::lines` : des segments en espace de rendu, avec leur couleur. Ils sont copiés à chaque frame dans un vertex buffer de la frame (`FrameBuffers::writeLines()`, 65 536 sommets au plus ; au-delà, avertissement écrit une fois).
+- Passe dessinée après le tonemapping, dans l'image de la swapchain : la couleur ne dépend pas de l'exposition. Elle charge le tampon de profondeur de la scène (gardé en fin de passe de scène seulement quand il y a des lignes) et teste « inférieur ou égal », sans écrire : un collider caché derrière un mur reste caché.
+- `Shaders/Line.vert` rapproche chaque sommet de la caméra de 0,5 % de sa distance (la caméra est à l'origine de l'espace de rendu) : une arête posée sur une surface reste devant elle au lieu de clignoter.
+- Pipeline : topologie en lignes, sommets `LineVertex` (position, couleur), jeu 0 de la frame pour la vue-projection, aucun push constant ; recréé avec la swapchain.
 
 ## Frustum culling (phase 7, décision 0021)
 
