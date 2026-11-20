@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODELS = ROOT / "Assets" / "Models"
+ENVIRONMENTS = ROOT / "Assets" / "Environments"
 TEST_DATA = ROOT / "Tests" / "Data"
 
 UNSIGNED_BYTE, UNSIGNED_SHORT, UNSIGNED_INT, FLOAT = 5121, 5123, 5125, 5126
@@ -136,6 +137,11 @@ class GltfBuilder:
 
 def cross(a, b):
     return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def normalize(v):
+    length = math.sqrt(sum(c * c for c in v))
+    return tuple(c / length for c in v)
 
 
 # Same layout as resources::makeCube: (normal, tangent), up = cross(normal, tangent).
@@ -415,14 +421,103 @@ def test_data():
     (TEST_DATA / "Gltf" / "truncated.glb").write_bytes(cube[: len(cube) // 2])
 
 
+# The demo's sun (Assets/Scenes/demo.json): the way to it. Its disk is not in the sky: the directional light
+# already lights the scene (decision 0022).
+TO_SUN = (0.4, 1.0, 0.35)
+# Colored panels on the horizon, to read reflections: azimuth in degrees from -Z towards +X, linear color.
+PANELS = ((0.0, (0.90, 0.12, 0.08)), (60.0, (0.12, 0.75, 0.18)), (120.0, (0.10, 0.25, 0.95)),
+          (180.0, (0.95, 0.80, 0.15)), (240.0, (0.90, 0.90, 0.90)), (300.0, (0.65, 0.15, 0.85)))
+PANEL_HALF_WIDTH = math.radians(9.0)
+PANEL_TOP = math.radians(11.0)
+SUN_DIRECTION = normalize(TO_SUN)
+
+
+def sky_radiance(direction):
+    """Linear RGB radiance seen along a unit direction."""
+    x, y, z = direction
+    if y < 0.0:
+        # Dark ground, a little lighter towards the horizon.
+        haze = math.exp(y * 12.0)
+        return tuple(dark + (light - dark) * haze for dark, light in zip((0.07, 0.065, 0.06), (0.30, 0.30, 0.30)))
+    elevation = math.asin(min(y, 1.0))
+    azimuth = math.atan2(x, -z)
+    if elevation < PANEL_TOP:
+        for center, color in PANELS:
+            offset = (azimuth - math.radians(center) + math.pi) % (2.0 * math.pi) - math.pi
+            if abs(offset) < PANEL_HALF_WIDTH:
+                return color
+    t = math.sqrt(y)
+    sky = [h + (zenith - h) * t for h, zenith in zip((0.80, 0.86, 0.95), (0.22, 0.38, 0.80))]
+    sun = SUN_DIRECTION
+    angle = math.acos(max(-1.0, min(1.0, x * sun[0] + y * sun[1] + z * sun[2])))
+    halo = 4.0 * math.exp(-(angle / 0.08) ** 2) + 0.5 * math.exp(-(angle / 0.4) ** 2)
+    return tuple(c + halo * s for c, s in zip(sky, (1.0, 0.92, 0.80)))
+
+
+def rgbe(color):
+    """Radiance's shared-exponent encoding of one linear RGB value."""
+    largest = max(color)
+    if largest < 1e-32:
+        return (0, 0, 0, 0)
+    mantissa, exponent = math.frexp(largest)
+    scale = mantissa * 256.0 / largest
+    return tuple(min(255, int(c * scale)) for c in color) + (exponent + 128,)
+
+
+def rle_channel(values):
+    """One channel of a scanline in Radiance's run-length encoding: runs of 3 to 127, literals of up to 128."""
+    out = bytearray()
+    i = 0
+    while i < len(values):
+        run = 1
+        while i + run < len(values) and run < 127 and values[i + run] == values[i]:
+            run += 1
+        if run >= 3:
+            out += bytes((128 + run, values[i]))
+            i += run
+            continue
+        start = i
+        i += 1
+        while i < len(values) and i - start < 128:
+            if i + 2 < len(values) and values[i] == values[i + 1] == values[i + 2]:
+                break
+            i += 1
+        out.append(i - start)
+        out += bytes(values[start:i])
+    return out
+
+
+def write_hdr(path, width, height, radiance):
+    """An equirectangular Radiance HDR image: rows from +Y down, the middle column towards -Z
+    (Engine/Resources/EnvironmentData.h)."""
+    data = bytearray(b"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n" + f"-Y {height} +X {width}\n".encode("ascii"))
+    for row in range(height):
+        polar = (row + 0.5) / height * math.pi
+        pixels = []
+        for column in range(width):
+            azimuth = ((column + 0.5) / width - 0.5) * 2.0 * math.pi
+            direction = (math.sin(polar) * math.sin(azimuth), math.cos(polar), -math.sin(polar) * math.cos(azimuth))
+            pixels.append(rgbe(radiance(direction)))
+        data += bytes((2, 2, width >> 8, width & 0xFF))
+        for channel in range(4):
+            data += rle_channel([pixel[channel] for pixel in pixels])
+    path.write_bytes(bytes(data))
+
+
+def environment():
+    ENVIRONMENTS.mkdir(parents=True, exist_ok=True)
+    write_hdr(ENVIRONMENTS / "sky.hdr", 1024, 512, sky_radiance)
+
+
 def main():
     MODELS.mkdir(parents=True, exist_ok=True)
     reference_cube()
     crate()
     primitives()
     character()
+    environment()
     test_data()
-    print("Assets written to", MODELS, "and", TEST_DATA)
+    print("Assets written to", MODELS, ENVIRONMENTS, "and", TEST_DATA)
 
 
 if __name__ == "__main__":

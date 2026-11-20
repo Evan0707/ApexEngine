@@ -41,6 +41,7 @@ add_executable(ApexTests
     Physics/StackingTests.cpp
     Platform/KeyTests.cpp
     Resources/AssetPathTests.cpp
+    Resources/EnvironmentTests.cpp
     Resources/GltfImporterTests.cpp
     Resources/GltfMaterialTests.cpp
     Resources/ImageDecoderTests.cpp

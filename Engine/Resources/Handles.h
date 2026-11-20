@@ -19,6 +19,7 @@ using MeshHandle = Handle<struct MeshTag>;
 using TextureHandle = Handle<struct TextureTag>;
 using MaterialHandle = Handle<struct MaterialTag>;
 using ModelHandle = Handle<struct ModelTag>;
+using EnvironmentHandle = Handle<struct EnvironmentTag>;
 
 // Spec 5.5. A stale handle reads as Failed: whoever uses it gets the fallback asset.
 enum class ResourceState { Loading, Ready, Failed };

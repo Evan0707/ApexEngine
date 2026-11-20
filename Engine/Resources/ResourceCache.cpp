@@ -127,6 +127,39 @@ TextureHandle ResourceCache::loadTexture(std::string_view path, ColorSpace color
     return handle;
 }
 
+EnvironmentHandle ResourceCache::loadEnvironment(std::string_view path) {
+    APEX_PROFILE_SCOPE("ResourceCache::loadEnvironment");
+    const core::Result<AssetPath> assetPath = AssetPath::parse(path);
+    if (!assetPath) {
+        m_logger->error("Cannot load environment: {}", assetPath.error().message);
+        const EnvironmentHandle failed = m_environments.reserve();
+        m_environments.setFailed(failed);
+        return failed;
+    }
+    if (const auto found = m_environmentPaths.find(*assetPath); found != m_environmentPaths.end()) {
+        return found->second;
+    }
+
+    ++m_filesRead;
+    const EnvironmentHandle handle = m_environments.reserve();
+    m_environmentPaths.emplace(*assetPath, handle);
+    const core::Result<std::vector<std::byte>> bytes = readFile(m_root / assetPath->str());
+    if (!bytes) {
+        // The constant ambient term lights the scene instead (decision 0022).
+        m_logger->error("Cannot load environment '{}': {}", assetPath->str(), bytes.error().message);
+        m_environments.setFailed(handle);
+        return handle;
+    }
+    core::Result<EnvironmentData> environment = decodeHdrImage(*bytes, assetPath->str());
+    if (!environment) {
+        m_logger->error("Cannot load environment '{}': {}", assetPath->str(), environment.error().message);
+        m_environments.setFailed(handle);
+        return handle;
+    }
+    m_environments.setReady(handle, std::move(*environment));
+    return handle;
+}
+
 TextureHandle ResourceCache::addDecodedTexture(std::string_view name, std::span<const std::byte> bytes,
                                                ColorSpace colorSpace) {
     const TextureHandle handle = m_textures.reserve();
@@ -190,6 +223,10 @@ ResourceState ResourceCache::state(TextureHandle texture) const noexcept {
     return m_textures.state(texture);
 }
 
+ResourceState ResourceCache::state(EnvironmentHandle environment) const noexcept {
+    return m_environments.state(environment);
+}
+
 std::span<const ModelPartRef> ResourceCache::parts(ModelHandle model) const noexcept {
     const Model* found = m_models.find(model);
     return found != nullptr ? std::span<const ModelPartRef>(found->parts) : m_fallbackModel.parts;
@@ -227,13 +264,19 @@ const ResourcePool<MaterialHandle, MaterialData>& ResourceCache::materials() con
     return m_materials;
 }
 
+const ResourcePool<EnvironmentHandle, EnvironmentData>& ResourceCache::environments() const noexcept {
+    return m_environments;
+}
+
 void ResourceCache::unloadAll() {
     m_models.clear();
     m_meshes.clear();
     m_textures.clear();
     m_materials.clear();
+    m_environments.clear();
     m_modelPaths.clear();
     m_texturePaths.clear();
+    m_environmentPaths.clear();
     createFallbacks();
     m_logger->info("Resources unloaded");
 }

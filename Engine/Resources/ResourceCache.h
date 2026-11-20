@@ -2,6 +2,7 @@
 
 #include "Core/Logger.h"
 #include "Resources/AssetPath.h"
+#include "Resources/EnvironmentData.h"
 #include "Resources/Handles.h"
 #include "Resources/MaterialData.h"
 #include "Resources/MeshData.h"
@@ -42,6 +43,9 @@ public:
     [[nodiscard]] ModelHandle loadModel(std::string_view path);
     // A texture used both as a color and as data is loaded twice, once per color space.
     [[nodiscard]] TextureHandle loadTexture(std::string_view path, ColorSpace colorSpace);
+    // A Radiance HDR image (.hdr): the light around the scene (decision 0022). No fallback: whoever reads a
+    // handle that is not ready lights the scene with the constant ambient term.
+    [[nodiscard]] EnvironmentHandle loadEnvironment(std::string_view path);
 
     // Resources made in code (primitives, materials of the demo): not keyed by a path. An invalid mesh
     // or material is Failed, with a log line naming it.
@@ -56,6 +60,7 @@ public:
 
     [[nodiscard]] ResourceState state(ModelHandle model) const noexcept;
     [[nodiscard]] ResourceState state(TextureHandle texture) const noexcept;
+    [[nodiscard]] ResourceState state(EnvironmentHandle environment) const noexcept;
     // The parts of a ready model; the fallback model's otherwise: a 1 m cube in the magenta checker.
     [[nodiscard]] std::span<const ModelPartRef> parts(ModelHandle model) const noexcept;
 
@@ -73,6 +78,7 @@ public:
     [[nodiscard]] const ResourcePool<MeshHandle, MeshData>& meshes() const noexcept;
     [[nodiscard]] const ResourcePool<TextureHandle, TextureData>& textures() const noexcept;
     [[nodiscard]] const ResourcePool<MaterialHandle, MaterialData>& materials() const noexcept;
+    [[nodiscard]] const ResourcePool<EnvironmentHandle, EnvironmentData>& environments() const noexcept;
 
     // Scene unloading (spec 5.5): every handle given so far becomes stale.
     void unloadAll();
@@ -95,6 +101,8 @@ private:
     ResourcePool<TextureHandle, TextureData> m_textures;
     ResourcePool<MaterialHandle, MaterialData> m_materials;
     ResourcePool<ModelHandle, Model> m_models;
+    ResourcePool<EnvironmentHandle, EnvironmentData> m_environments;
+    std::map<AssetPath, EnvironmentHandle> m_environmentPaths;
     std::map<AssetPath, ModelHandle> m_modelPaths;
     std::map<std::pair<AssetPath, ColorSpace>, TextureHandle> m_texturePaths;
     Model m_fallbackModel;

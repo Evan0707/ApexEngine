@@ -2,7 +2,7 @@
 
 **Rôle :** données CPU des assets, indépendantes du format de fichier (garde-fou G-04). À terme : cache, handles avec état, import glTF et textures, assets de secours (cahier des charges, section 5.5).
 
-**État (phase 4) :** structures CPU des meshes, matériaux, textures et modèles ; import glTF et GLB (décision 0012) ; décodage PNG et JPG (décision 0013) ; chemins d'assets normalisés, handles avec état, cache de ressources et assets de secours (décision 0014) ; primitives cube et sphère.
+**État (phase 7) :** structures CPU des meshes, matériaux, textures, modèles et environnements ; import glTF et GLB (décision 0012) ; décodage PNG, JPG et Radiance HDR (décisions 0013 et 0022) ; chemins d'assets normalisés, handles avec état, cache de ressources et assets de secours (décision 0014) ; primitives cube et sphère.
 
 ## Interface publique
 
@@ -12,14 +12,15 @@
 | `Resources/MaterialData.h` | `MaterialData` : couleur de base, métal, rugosité, handles des deux textures |
 | `Resources/Primitives.h` | `makeCube(size)`, `makeSphere(radius, segments, rings)` |
 | `Resources/AssetPath.h` | `AssetPath` : `parse()`, `resolveSibling()`, `str()` |
-| `Resources/Handles.h` | `Handle`, `MeshHandle`, `TextureHandle`, `MaterialHandle`, `ModelHandle`, `ResourceState` |
+| `Resources/Handles.h` | `Handle`, `MeshHandle`, `TextureHandle`, `MaterialHandle`, `ModelHandle`, `EnvironmentHandle`, `ResourceState` |
 | `Resources/TextureData.h` | `ColorSpace`, `TextureData` : image décodée en RGBA 8 bits |
-| `Resources/ImageDecoder.h` | `decodeImage()`, `kMaxImageSize` |
+| `Resources/EnvironmentData.h` | `EnvironmentData` : image équirectangulaire de radiance en RGB flottant ; `environmentUv()`, `environmentDirection()` |
+| `Resources/ImageDecoder.h` | `decodeImage()`, `decodeHdrImage()`, `kMaxImageSize` |
 | `Resources/FileReader.h` | `readFile()` |
 | `Resources/FallbackAssets.h` | `makeCheckerTexture()`, `makeWhiteTexture()`, `makeFallbackMesh()`, `makeDefaultMaterial()` |
 | `Resources/ModelData.h` | `ModelImage`, `ModelMaterial`, `ModelPart`, `ModelData` : ce que produit un importeur |
 | `Resources/GltfImporter.h` | `importGltf()` |
-| `Resources/ResourceCache.h` | `ModelPartRef`, `Model`, `ResourceCache` : `loadModel()`, `loadTexture()`, `addMesh()`, `addMaterial()`, `addModel()`, `state()`, `parts()`, assets de secours, `meshes()`, `textures()`, `materials()`, `unloadAll()`, `filesRead()` |
+| `Resources/ResourceCache.h` | `ModelPartRef`, `Model`, `ResourceCache` : `loadModel()`, `loadTexture()`, `loadEnvironment()`, `addMesh()`, `addMaterial()`, `addModel()`, `state()`, `parts()`, assets de secours, `meshes()`, `textures()`, `materials()`, `environments()`, `unloadAll()`, `filesRead()` |
 | `Resources/ResourcePool.h` | `ResourcePool` : ressources d'un type, avec leur état, désignées par handles |
 
 ## Données
@@ -47,7 +48,15 @@
 
 - `TextureData` : image décodée, indépendante du format (G-04), en RGBA 8 bits, lignes de haut en bas, avec l'espace de couleur voulu : sRGB pour une couleur, linéaire pour des données (section 3.3).
 - `decodeImage(octets, nom, espace)` décode un PNG ou un JPG par stb_image (décision 0013), seul fichier du moteur qui l'inclut. Les dimensions sont lues avant le décodage : au-delà de 4096 pixels de côté, l'image est refusée sans être décodée. L'erreur nomme l'image et dit pourquoi.
+- Une image Radiance HDR n'est pas une texture : `decodeImage()` la refuse (stb_image la ramènerait sinon en 8 bits).
 - `readFile(chemin)` lit un fichier entier ; `NotFound` s'il n'existe pas, `IoFailure` s'il ne se lit pas, avec le chemin dans le message.
+
+## Environnements (section 5.4, décision 0022)
+
+- `EnvironmentData` : la lumière qui arrive de toutes les directions, indépendante du format (G-04). Image équirectangulaire de radiance en RGB linéaire flottant, lignes du haut (+Y) vers le bas (−Y). Le long d'une ligne, la direction tourne autour de +Y ; la colonne du milieu regarde vers −Z.
+- `environmentUv(direction)` et `environmentDirection(environnement, x, y)` sont les deux sens de cette convention ; les shaders utilisent la même formule. `u = 0,5 + atan2(x, −z) / 2π`, `v = acos(y) / π`.
+- `decodeHdrImage(octets, nom)` décode un fichier Radiance (`.hdr`), compressé par plages ou non, par stb_image. Même limite de taille que les textures. L'erreur nomme l'image.
+- Limite de stb_image : un fichier non compressé tronqué n'est pas détecté (les pixels manquants valent zéro) ; un fichier compressé tronqué est refusé. Le ciel de la démonstration est compressé.
 
 ## Import glTF (décision 0012)
 
@@ -70,7 +79,8 @@
 - Une même image utilisée comme couleur et comme données serait chargée deux fois, une fois par espace de couleur (formats GPU différents).
 - `parts(modèle)` renvoie les parties d'un modèle prêt, sinon celles du modèle de secours : le cube de 1 m dans le damier magenta (`fallbackMaterial()`), impossible à manquer à l'écran (G-03, AC-11). `defaultMaterial()` reste le matériau par défaut, sans texture.
 - `addMesh()`, `addMaterial()` et `addModel()` ajoutent des ressources faites en code (primitives et matériaux de la démo), sans chemin. Un mesh invalide ou un facteur hors de [0 ; 1] donnent `Failed`, avec une ligne de log.
-- `meshes()`, `textures()` et `materials()` donnent accès en lecture aux pools : le renderer y lit ce qui est devenu prêt ou a été déchargé.
+- `loadEnvironment(chemin)` charge un environnement, une fois par chemin, comme une texture. Il n'y a pas d'environnement de secours : un handle qui n'est pas prêt fait éclairer la scène par le terme ambiant constant (décision 0022).
+- `meshes()`, `textures()`, `materials()` et `environments()` donnent accès en lecture aux pools : le renderer y lit ce qui est devenu prêt ou a été déchargé.
 - `modelPath(modèle)` rend le chemin d'asset d'un modèle chargé depuis un fichier (pour l'écriture d'une scène) ; `root()` le dossier des assets.
 - `unloadAll()` décharge tout (déchargement de la scène) : chaque handle donné jusque-là devient périmé, et les assets de secours sont recréés.
 - Chargement synchrone et sans verrou en phase 4 : l'état `Loading` ne dure que le temps de l'appel.

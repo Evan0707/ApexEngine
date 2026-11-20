@@ -139,6 +139,8 @@ add_library(ApexEngine STATIC
     Platform/Window.h
     Resources/AssetPath.cpp
     Resources/AssetPath.h
+    Resources/EnvironmentData.cpp
+    Resources/EnvironmentData.h
     Resources/FallbackAssets.cpp
     Resources/FallbackAssets.h
     Resources/FileReader.cpp
