@@ -110,7 +110,9 @@ add_library(ApexEngine STATIC
     Input/ActionState.cpp
     Input/ActionState.h
     Physics/JoltInclude.h
+    Physics/PhysicsBodies.cpp
     Physics/PhysicsSettings.h
+    Physics/PhysicsTypes.h
     Physics/PhysicsWorld.cpp
     Physics/PhysicsWorld.h
     Physics/PhysicsWorldState.h

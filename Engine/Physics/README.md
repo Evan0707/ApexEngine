@@ -2,7 +2,7 @@
 
 **Rôle :** simulation physique du moteur, par encapsulation de Jolt Physics (cahier des charges, sections 5.7 et 5.8). Le module ne connaît ni les entités ni EnTT : `World` lui pousse des données et recopie les résultats (section 4.3).
 
-**État (phase 6, tâche 1) :** état global de Jolt, monde physique vide, gravité, pas fixe (notes de décision 0018 et 0019). Les corps, les requêtes et le personnage arrivent dans les tâches suivantes.
+**État (phase 6, tâche 2) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques (notes de décision 0018, 0019 et 0020). Les requêtes et le personnage arrivent dans les tâches suivantes.
 
 ## Interface publique
 
@@ -10,7 +10,8 @@
 |---|---|
 | `Physics/Runtime.h` | `Runtime` : crée et détruit l'état global de Jolt |
 | `Physics/PhysicsSettings.h` | `PhysicsSettings` : gravité, capacités |
-| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()` |
+| `Physics/PhysicsTypes.h` | `BodyHandle`, `ShapeType`, `Shape`, `MotionType`, `BodyTransform`, `BodyDesc` |
+| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()` |
 
 Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
@@ -30,6 +31,18 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 - Un seul thread (décision 0018) : le résultat est le même d'une exécution à l'autre.
 - Repère et unités : ceux du moteur, identiques à ceux de Jolt (section 3.3). Simple précision.
 
+## Corps rigides
+
+- Formes (section 5.7) : boîte (demi-dimensions), sphère (rayon), capsule debout le long de Y (rayon et demi-hauteur entre les centres des deux sphères). Dimensions en mètres, centrées sur la position du corps. `Physics` ne connaît pas l'échelle : `World` l'applique avant (décision 0019).
+- Un corps est statique (il ne bouge jamais) ou dynamique (masse en kilogrammes, déplacé par la gravité, les contacts et les impulsions). La couche de collision vient de ce type.
+- `createBody` valide la description : dimensions et masse strictement positives, valeurs finies. Une description invalide donne `InvalidArgument` avec la raison ; un monde plein donne `PhysicsFailure`.
+- **Handles.** Un `BodyHandle` désigne un corps. Après `destroyBody`, le handle est périmé : toutes les fonctions l'acceptent et ne font rien, `transform()` rend une valeur vide. Jolt ne garde que 8 bits de génération : un emplacement réutilisé 256 fois peut faire correspondre un vieux handle au nouveau corps.
+- `setTransform` téléporte, sans balayage. `setLinearVelocity` et `applyImpulse` (en newtons-secondes, au centre de masse) réveillent un corps dynamique et ignorent un corps statique.
+- Un corps au repos s'endort après une demi-seconde environ ; `activeBodyCount()` compte ceux qui ne dorment pas.
+- Les corps dynamiques sont balayés (`LinearCast`) : un corps petit ou rapide ne traverse pas une géométrie mince (AC-08). Un corps gros et rapide peut s'enfoncer pendant un pas avant d'être repoussé.
+- Jolt laisse les corps au repos se recouvrir de 2 cm au plus (sa tolérance de pénétration, gardée par défaut pour la stabilité des piles) : une caisse posée repose jusqu'à 2 cm sous sa hauteur théorique.
+- Frottement 0,5 et restitution 0 par défaut, réglables par corps dans `BodyDesc`.
+
 ## Couches de collision
 
 | Couche | Touche |
@@ -45,8 +58,8 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
 ## Dépendances
 
-`Core` uniquement. Bibliothèque tierce : Jolt Physics 5.6.0, liée en privé par sa cible CMake ; `Jolt.dll` est copiée à côté des exécutables par vcpkg.
+`Core` uniquement. Bibliothèque tierce : Jolt Physics 5.6.0, liée en privé par sa cible CMake ; `Jolt.dll` est copiée à côté des exécutables par vcpkg. Jolt est compilé en flottants précis par le triplet `cmake/triplets/x64-windows.cmake` : avec ses options par défaut, sa version Release est instable avec MSVC 19.52 (décision 0020).
 
 ## Tests
 
-`Tests/Physics/`, étiquette `[physics]`, sans fenêtre ni GPU (section 5.7).
+`Tests/Physics/`, étiquette `[physics]`, sans fenêtre ni GPU (section 5.7). Ils couvrent AC-08 (un corps lâché de 10 m ne traverse pas le sol) et AC-09 (une pile de trois caisses reste en place 10 s), et tournent en Debug comme en Release.

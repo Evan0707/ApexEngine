@@ -30,6 +30,8 @@ add_executable(ApexTests
     Input/ActionMapTests.cpp
     Input/ActionStateTests.cpp
     Physics/PhysicsWorldTests.cpp
+    Physics/RigidBodyTests.cpp
+    Physics/StackingTests.cpp
     Platform/KeyTests.cpp
     Resources/AssetPathTests.cpp
     Resources/GltfImporterTests.cpp
