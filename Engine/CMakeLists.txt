@@ -75,6 +75,8 @@ add_library(ApexEngine STATIC
     Graphics/FrameData.h
     Graphics/FrameSync.cpp
     Graphics/FrameSync.h
+    Graphics/Frustum.cpp
+    Graphics/Frustum.h
     Graphics/GpuAllocator.cpp
     Graphics/GpuAllocator.h
     Graphics/GpuMemoryStats.h

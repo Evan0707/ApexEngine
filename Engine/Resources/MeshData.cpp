@@ -28,6 +28,23 @@ std::size_t triangleCount(const MeshData& mesh) noexcept {
     return mesh.indices.size() / 3;
 }
 
+BoundingSphere boundingSphere(const MeshData& mesh) noexcept {
+    if (mesh.vertices.empty()) {
+        return {};
+    }
+    glm::vec3 low = mesh.vertices.front().position;
+    glm::vec3 high = low;
+    for (const Vertex& vertex : mesh.vertices) {
+        low = glm::min(low, vertex.position);
+        high = glm::max(high, vertex.position);
+    }
+    BoundingSphere sphere{.center = (low + high) * 0.5f, .radius = 0.0f};
+    for (const Vertex& vertex : mesh.vertices) {
+        sphere.radius = std::max(sphere.radius, glm::length(vertex.position - sphere.center));
+    }
+    return sphere;
+}
+
 core::Result<void> validate(const MeshData& mesh, std::string_view name) {
     if (mesh.indices.empty() || mesh.indices.size() % 3 != 0) {
         return invalid(name,

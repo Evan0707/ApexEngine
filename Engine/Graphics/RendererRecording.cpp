@@ -1,4 +1,5 @@
 #include "Core/Profiling.h"
+#include "Graphics/Frustum.h"
 #include "Graphics/RendererState.h"
 #include "Graphics/VulkanBackendAccess.h"
 
@@ -58,6 +59,25 @@ Renderer::State::resolveMesh(const RenderObject& object) const noexcept {
 }
 
 void Renderer::State::prepareFrame(const RenderScene& scene) {
+    const VkExtent2D extent = swapchain.extent();
+    const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+    frameShadow = scene.shadow;
+    const GpuEnvironment* environment =
+        scene.environment.enabled ? environments.find(scene.environment.environment) : nullptr;
+    frameLightingSet = environment != nullptr ? environment->lightingSet : defaultLightingSet;
+    frameSky = environment != nullptr;
+    const FrameEnvironment lighting =
+        environment != nullptr ? FrameEnvironment{.irradiance = &environment->irradiance,
+                                                  .intensity = scene.environment.intensity,
+                                                  .lastLevel = static_cast<float>(kSpecularCubeLevels - 1)}
+                               : FrameEnvironment{};
+    const FrameUniforms uniforms = makeFrameUniforms(scene, aspectRatio, shadowMap.size(), lighting);
+
+    // Frustum culling (decision 0021): an object is kept when the camera sees it or, with shadows on, when
+    // the light's volume holds it; each pass draws its own.
+    const Frustum view = frustumFromMatrix(uniforms.viewProjection);
+    const bool shadows = uniforms.shadow.x > 0.5f;
+    const Frustum light = frustumFromMatrix(uniforms.lightViewProjection);
     drawItems.clear();
     for (std::uint32_t i = 0; i < scene.objects.size(); ++i) {
         const RenderObject& object = scene.objects[i];
@@ -65,8 +85,17 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
         if (mesh == nullptr) {
             continue;
         }
-        drawItems.push_back(DrawItem{
-            .objectIndex = i, .materialIndex = materials.gpuIndex(object.material), .meshIndex = meshIndex});
+        const resources::BoundingSphere sphere = transformSphere(object.modelRelativeToCamera, mesh->bounds);
+        const bool inView = intersects(view, sphere);
+        const bool castsShadow = shadows && intersects(light, sphere);
+        if (!inView && !castsShadow) {
+            continue;
+        }
+        drawItems.push_back(DrawItem{.objectIndex = i,
+                                     .materialIndex = materials.gpuIndex(object.material),
+                                     .meshIndex = meshIndex,
+                                     .inView = inView,
+                                     .castsShadow = castsShadow});
     }
     if (drawItems.size() > kMaxObjects) {
         if (!warnedTooManyObjects) {
@@ -81,29 +110,24 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
     objectData.clear();
     drawMeshes.clear();
     drawMaterialSets.clear();
-    for (const DrawItem& item : drawItems) {
+    sceneDraws.clear();
+    shadowDraws.clear();
+    for (std::uint32_t index = 0; index < drawItems.size(); ++index) {
+        const DrawItem& item = drawItems[index];
         const RenderObject& object = scene.objects[item.objectIndex];
         drawMeshes.push_back(resolveMesh(object).first);
         const VkDescriptorSet* materialSet = materialSetMirror.find(object.material);
         drawMaterialSets.push_back(materialSet != nullptr ? *materialSet
                                                           : defaultMaterialSet.value_or(VK_NULL_HANDLE));
-        objectData.push_back(
-            makeObjectGpu(scene.objects[item.objectIndex].modelRelativeToCamera, item.materialIndex));
+        objectData.push_back(makeObjectGpu(object.modelRelativeToCamera, item.materialIndex));
+        if (item.inView) {
+            sceneDraws.push_back(index);
+        }
+        if (item.castsShadow) {
+            shadowDraws.push_back(index);
+        }
     }
-    const VkExtent2D extent = swapchain.extent();
-    const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-    frameShadow = scene.shadow;
-    const GpuEnvironment* environment =
-        scene.environment.enabled ? environments.find(scene.environment.environment) : nullptr;
-    frameLightingSet = environment != nullptr ? environment->lightingSet : defaultLightingSet;
-    frameSky = environment != nullptr;
-    const FrameEnvironment lighting =
-        environment != nullptr ? FrameEnvironment{.irradiance = &environment->irradiance,
-                                                  .intensity = scene.environment.intensity,
-                                                  .lastLevel = static_cast<float>(kSpecularCubeLevels - 1)}
-                               : FrameEnvironment{};
-    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio, shadowMap.size(), lighting),
-                       objectData, materials.gpuData());
+    frameBuffers.write(frameIndex, uniforms, objectData, materials.gpuData());
 }
 
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
@@ -205,7 +229,7 @@ void Renderer::State::recordShadowPass(VkCommandBuffer commands) {
         vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, shadowPipeline.layout(), 0, 1,
                                 &frameSet, 0, nullptr);
         const GpuMesh* boundMesh = nullptr;
-        for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
+        for (const std::uint32_t drawIndex : shadowDraws) {
             const GpuMesh* mesh = drawMeshes[drawIndex];
             if (mesh != boundMesh) {
                 const VkDeviceSize offset = 0;
@@ -274,7 +298,7 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands) {
     counters.triangles = 0;
     const GpuMesh* boundMesh = nullptr;
     VkDescriptorSet boundMaterial = VK_NULL_HANDLE;
-    for (std::uint32_t drawIndex = 0; drawIndex < drawItems.size(); ++drawIndex) {
+    for (const std::uint32_t drawIndex : sceneDraws) {
         const GpuMesh* mesh = drawMeshes[drawIndex];
         const VkDescriptorSet materialSet = drawMaterialSets[drawIndex];
         if (materialSet == VK_NULL_HANDLE) {

@@ -16,6 +16,7 @@ core::Result<GpuMesh> createGpuMesh(GpuAllocator& allocator, UploadContext& uplo
 
     GpuMesh gpuMesh;
     gpuMesh.indexCount = static_cast<std::uint32_t>(mesh.indices.size());
+    gpuMesh.bounds = resources::boundingSphere(mesh);
     core::Result<GpuBuffer> vertices =
         allocator.createDeviceBuffer(std::format("{} (vertices)", name), vertexBytes.size(),
                                      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);

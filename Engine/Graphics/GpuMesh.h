@@ -15,6 +15,8 @@ struct GpuMesh {
     GpuBuffer vertices;
     GpuBuffer indices;
     std::uint32_t indexCount = 0;
+    // In the mesh's own space: frustum culling (decision 0021).
+    resources::BoundingSphere bounds;
 };
 
 // Validates the mesh, then uploads it. The error names the mesh (spec 5.4).

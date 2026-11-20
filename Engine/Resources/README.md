@@ -8,7 +8,7 @@
 
 | En-tête | Contenu |
 |---|---|
-| `Resources/MeshData.h` | `Vertex`, `MeshData`, `triangleCount()`, `validate()` |
+| `Resources/MeshData.h` | `Vertex`, `MeshData`, `triangleCount()`, `validate()`, `BoundingSphere`, `boundingSphere()` |
 | `Resources/MaterialData.h` | `MaterialData` : couleur de base, métal, rugosité, handles des deux textures |
 | `Resources/Primitives.h` | `makeCube(size)`, `makeSphere(radius, segments, rings)` |
 | `Resources/AssetPath.h` | `AssetPath` : `parse()`, `resolveSibling()`, `str()` |
@@ -27,6 +27,7 @@
 
 - Format de sommet unique (section 5.4) : position, normale, tangente, UV, 48 octets. La tangente suit glTF : `xyz` dans le sens des `u` croissants, `w` vaut +1 ou −1, et `cross(normale, tangente) * w` pointe vers le haut de la texture. L'origine des UV est le coin haut gauche (glTF).
 - `MeshData` : liste de triangles indexés sur 32 bits, faces avant dans le sens antihoraire (section 3.3).
+- `boundingSphere()` : une sphère qui contient tous les sommets, centrée sur leur boîte englobante (pas la plus petite possible, mais proche pour les formes de la démo). Sert au frustum culling de `Graphics` (décision 0021).
 - `validate()` vérifie ce que `Graphics` suppose : au moins un triangle, indices dans les bornes, positions finies, normales et tangentes unitaires. L'erreur nomme le mesh et l'élément fautif.
 - `MaterialData` : modèle PBR metallic-roughness de glTF, simplifié (section 5.5), couleur de base en linéaire, multipliée par la texture de couleur (sRGB) ; métal et rugosité multipliés par les canaux bleu et vert de la texture métal-rugosité (linéaire). Un handle de texture par défaut signifie « pas de texture ». Les valeurs par défaut forment le matériau par défaut du moteur : gris clair, non métallique, rugosité 0,5, sans texture.
 

@@ -33,6 +33,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/ColorTarget.h` (`ColorTarget`) : une image de couleur dessinée puis lue par une autre passe (l'image HDR de la scène) ;
 - `Graphics/ImageInputSet.h` (`ImageInputSet`) : un jeu de descripteurs d'une seule image lue, celui de la passe de tonemapping ;
 - `Graphics/MipLevels.h` (`mipLevelCount()`, `mipSize()`), sans Vulkan, testé sans GPU ;
+- `Graphics/Frustum.h` (`Frustum`, `frustumFromMatrix()`, `transformSphere()`, `intersects()`), sans Vulkan, testé sans GPU ;
 - `Graphics/LightingSets.h` (`LightingSets`) : le jeu 2 de la scène et du ciel, un par environnement ;
 - `Graphics/EnvironmentPrefilter.h` (`PrefilterParams`, `EnvironmentPrefilter`) : le pipeline qui préfiltre la cubemap spéculaire ;
 - `Graphics/GpuEnvironment.h` (`GpuEnvironment`, `createGpuEnvironment()`, `createBrdfTable()`, `createBlackCube()`) : un environnement sur le GPU ;
@@ -80,11 +81,17 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 
 ## Passe de scène (phase 3)
 
-- `renderFrame(scene)` résout les handles de chaque objet (voir « Ressources »). Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
+- `renderFrame(scene)` résout les handles de chaque objet (voir « Ressources »), puis élimine ce qui sort du champ (voir « Frustum culling »). Au-delà de 4096 objets, les suivants ne sont pas dessinés (avertissement écrit une fois).
 - Les objets sont triés par matériau puis par mesh, puis leurs données sont écrites dans le buffer de la frame dans cet ordre. Le dessin `i` utilise `firstInstance = i` : le vertex shader lit l'objet par `gl_InstanceIndex` (G-02). Les buffers de sommets et d'indices ne sont liés qu'au changement de mesh.
 - Pipeline de scène (`GraphicsPipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale et UV lues dans le format de sommet unique (la tangente attend les normal maps, P1). Un attribut que le shader ne lit pas n'est pas déclaré : les layers le signaleraient ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
+
+## Frustum culling (phase 7, décision 0021)
+
+- Chaque mesh envoyé garde sa sphère englobante (`resources::boundingSphere()`, centrée sur la boîte de ses sommets). À chaque frame, elle est placée par la matrice de l'objet, son rayon multiplié par la plus grande échelle des trois axes.
+- Deux volumes : celui de la caméra (vue-projection) et, ombres actives, celui de la lumière (la boîte orthographique de la zone). Plans extraits de la matrice (Gribb et Hartmann), pour la profondeur de 0 à 1 de Vulkan. Une sphère n'est éliminée que si elle est entièrement hors d'un plan : près d'un coin, un objet invisible peut être gardé, jamais l'inverse.
+- Un objet vu par l'un ou l'autre entre dans le buffer de la frame (une seule fois) ; chaque passe ne dessine que les siens (`sceneDraws`, `shadowDraws`). « Objets dessinés » du panneau : ceux de la passe principale (AC-P1-4) ; la passe d'ombre a son compteur.
 
 ## IBL et ciel (phase 7, décision 0022)
 

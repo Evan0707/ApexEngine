@@ -26,6 +26,7 @@ add_executable(ApexTests
     Graphics/DrawListTests.cpp
     Graphics/EnvironmentLightingTests.cpp
     Graphics/FrameDataTests.cpp
+    Graphics/FrustumTests.cpp
     Graphics/GpuTimestampsTests.cpp
     Graphics/MaterialTableTests.cpp
     Graphics/MipLevelsTests.cpp

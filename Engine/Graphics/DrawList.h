@@ -11,6 +11,9 @@ struct DrawItem {
     std::uint32_t objectIndex;
     std::uint32_t materialIndex;
     std::uint32_t meshIndex;
+    // Seen by the camera; inside the light's volume (frustum culling, decision 0021).
+    bool inView = true;
+    bool castsShadow = false;
 };
 
 // Sorts by material, then by mesh, keeping the scene order inside a group (spec 5.4): the draw

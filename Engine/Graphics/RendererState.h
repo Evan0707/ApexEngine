@@ -121,6 +121,9 @@ struct Renderer::State {
     std::vector<const GpuMesh*> drawMeshes;
     std::vector<VkDescriptorSet> drawMaterialSets;
     std::vector<ObjectGpu> objectData;
+    // Places in drawItems drawn by each pass, in draw order.
+    std::vector<std::uint32_t> sceneDraws;
+    std::vector<std::uint32_t> shadowDraws;
     // The scene's shadow settings of the frame being recorded.
     RenderShadow frameShadow;
     bool warnedTooManyObjects = false;
