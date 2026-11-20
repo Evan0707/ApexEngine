@@ -15,14 +15,16 @@ glm::mat4 shadowViewProjection(const RenderShadow& shadow) noexcept {
            shadow.lightView;
 }
 
-FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio,
-                                std::uint32_t shadowMapSize) noexcept {
+FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio, std::uint32_t shadowMapSize,
+                                const FrameEnvironment& environment) noexcept {
     const RenderCamera& camera = scene.camera;
     const glm::mat4 projection =
         perspectiveProjection(camera.verticalFovRadians, aspectRatio, camera.nearPlane, camera.farPlane);
     const bool shadows = scene.shadow.enabled && shadowMapSize > 0;
-    return FrameUniforms{
-        .viewProjection = projection * camera.view,
+    const glm::mat4 viewProjection = projection * camera.view;
+    FrameUniforms uniforms{
+        .viewProjection = viewProjection,
+        .inverseViewProjection = glm::inverse(viewProjection),
         .lightViewProjection = shadows ? shadowViewProjection(scene.shadow) : glm::mat4(1.0f),
         .directionToLight = glm::vec4(glm::normalize(scene.light.directionToLight), 0.0f),
         .lightRadiance = glm::vec4(scene.light.color * scene.light.intensity, 0.0f),
@@ -32,7 +34,16 @@ FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio,
                             kShadowFadeStart, 0.0f),
         .toneMapping = glm::vec4(exposureMultiplier(scene.toneMapping.exposureStops),
                                  scene.toneMapping.enabled ? 1.0f : 0.0f, 0.0f, 0.0f),
+        .irradiance = {},
+        .environment = glm::vec4(0.0f),
     };
+    if (environment.irradiance != nullptr) {
+        for (std::size_t i = 0; i < environment.irradiance->coefficients.size(); ++i) {
+            uniforms.irradiance[i] = glm::vec4(environment.irradiance->coefficients[i], 0.0f);
+        }
+        uniforms.environment = glm::vec4(1.0f, environment.intensity, environment.lastLevel, 0.0f);
+    }
+    return uniforms;
 }
 
 ObjectGpu makeObjectGpu(const glm::mat4& model, std::uint32_t materialIndex) noexcept {

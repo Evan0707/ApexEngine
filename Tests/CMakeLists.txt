@@ -28,6 +28,7 @@ add_executable(ApexTests
     Graphics/FrameDataTests.cpp
     Graphics/GpuTimestampsTests.cpp
     Graphics/MaterialTableTests.cpp
+    Graphics/MipLevelsTests.cpp
     Graphics/ProjectionTests.cpp
     Graphics/ResourceMirrorTests.cpp
     Graphics/ShaderBinariesTests.cpp

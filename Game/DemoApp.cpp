@@ -115,6 +115,7 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
     app.m_controls.shadowSlopeBias = config.shadowSlopeBias;
     app.m_controls.exposureStops = config.exposureStops;
     app.m_controls.toneMapping = config.toneMapping;
+    app.m_controls.imageBasedLighting = config.imageBasedLighting;
     if (core::Result<void> loaded = app.loadScene(options); !loaded) {
         return std::unexpected(loaded.error());
     }
@@ -461,6 +462,7 @@ void DemoApp::extract(double alpha) {
         .exposureStops =
             std::clamp(m_controls.exposureStops, m_controls.minExposureStops, m_controls.maxExposureStops),
         .enabled = m_controls.toneMapping};
+    m_renderScene.environment.enabled = m_controls.imageBasedLighting;
     m_shadowSettings.enabled = m_controls.shadows;
     m_shadowSettings.constantBias = m_controls.shadowConstantBias;
     m_shadowSettings.slopeBias = m_controls.shadowSlopeBias;

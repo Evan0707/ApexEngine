@@ -70,6 +70,7 @@ void drawToneMappingSection(DebugControls& controls) {
     ImGui::SliderFloat("Exposure", &controls.exposureStops, controls.minExposureStops,
                        controls.maxExposureStops, "%+.1f stops", ImGuiSliderFlags_AlwaysClamp);
     ImGui::Checkbox("Tonemapping (ACES)", &controls.toneMapping);
+    ImGui::Checkbox("Image-based lighting and sky", &controls.imageBasedLighting);
 }
 
 void drawLogSection(const LogHistory& log) {

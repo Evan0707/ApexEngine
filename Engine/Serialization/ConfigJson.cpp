@@ -300,7 +300,8 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
     if (const auto rendering = root->find("rendering"); rendering != root->end()) {
         core::Result<void> read = requireObject(*rendering, context, "rendering");
         if (read) {
-            read = rejectUnknownFields(*rendering, {"exposure_ev", "tonemapping"}, context, "rendering");
+            read =
+                rejectUnknownFields(*rendering, {"exposure_ev", "tonemapping", "ibl"}, context, "rendering");
         }
         if (read) {
             read = readOptional(*rendering, "exposure_ev", context, "rendering", config.exposureStops,
@@ -309,6 +310,9 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         if (read) {
             read =
                 readOptional(*rendering, "tonemapping", context, "rendering", config.toneMapping, readBool);
+        }
+        if (read) {
+            read = readOptional(*rendering, "ibl", context, "rendering", config.imageBasedLighting, readBool);
         }
         if (!read) {
             return std::unexpected(read.error());

@@ -48,6 +48,16 @@ struct RenderToneMapping {
     bool enabled = true;
 };
 
+// The light around the scene (spec 5.4, decision 0022).
+struct RenderEnvironment {
+    // Not ready, failed, stale or default: the constant ambient term lights the scene, without a sky (G-03).
+    resources::EnvironmentHandle environment;
+    // Multiplies the environment's radiance.
+    float intensity = 1.0f;
+    // Off: the constant ambient term, as without an environment.
+    bool enabled = true;
+};
+
 // One mesh with one material: a model gives one object per part (resources::ResourceCache::parts).
 struct RenderObject {
     // Not ready, failed or stale: the fallback mesh is drawn (G-03).
@@ -62,10 +72,11 @@ struct RenderObject {
 struct RenderScene {
     RenderCamera camera;
     RenderLight light;
-    // Constant ambient term, linear RGB (spec 5.5).
+    // Constant ambient term, linear RGB (spec 5.5): without an environment only.
     glm::vec3 ambient{0.03f};
     RenderShadow shadow;
     RenderToneMapping toneMapping;
+    RenderEnvironment environment;
     std::vector<RenderObject> objects;
 };
 

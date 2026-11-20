@@ -81,7 +81,7 @@
 - `addMesh()`, `addMaterial()` et `addModel()` ajoutent des ressources faites en code (primitives et matériaux de la démo), sans chemin. Un mesh invalide ou un facteur hors de [0 ; 1] donnent `Failed`, avec une ligne de log.
 - `loadEnvironment(chemin)` charge un environnement, une fois par chemin, comme une texture. Il n'y a pas d'environnement de secours : un handle qui n'est pas prêt fait éclairer la scène par le terme ambiant constant (décision 0022).
 - `meshes()`, `textures()`, `materials()` et `environments()` donnent accès en lecture aux pools : le renderer y lit ce qui est devenu prêt ou a été déchargé.
-- `modelPath(modèle)` rend le chemin d'asset d'un modèle chargé depuis un fichier (pour l'écriture d'une scène) ; `root()` le dossier des assets.
+- `modelPath(modèle)` et `environmentPath(environnement)` rendent le chemin d'asset d'un modèle ou d'un environnement chargé depuis un fichier (pour l'écriture d'une scène) ; `root()` le dossier des assets.
 - `unloadAll()` décharge tout (déchargement de la scène) : chaque handle donné jusque-là devient périmé, et les assets de secours sont recréés.
 - Chargement synchrone et sans verrou en phase 4 : l'état `Loading` ne dure que le temps de l'appel.
 

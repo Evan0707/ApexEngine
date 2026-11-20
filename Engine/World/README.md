@@ -28,7 +28,7 @@
   - `PhysicsBody` et `PhysicsCharacter` : les handles des objets créés dans `Physics`, attachés par `createPhysicsObjects`, jamais écrits dans une scène ;
   - `Camera` : champ de vision vertical, plans proche et lointain ; elle regarde le long du −Z de l'entité ;
   - `DirectionalLight` : le sens dans lequel la lumière voyage, couleur linéaire, intensité.
-- `SceneEnvironment` (terme ambiant) n'appartient à aucune entité : il est dans le contexte du registre (`registry.ctx()`), lu par `sceneEnvironment()`.
+- `SceneEnvironment` (terme ambiant, et environnement de la scène avec son intensité, décision 0022) n'appartient à aucune entité : il est dans le contexte du registre (`registry.ctx()`), lu par `sceneEnvironment()`.
 - Les composants propres à la démonstration (contrôleur de caméra, rotation d'un objet) sont dans `Game`.
 
 ## Rotations
@@ -43,6 +43,7 @@
 - C'est le seul endroit où une position monde devient une position de rendu, relative à la caméra : la position de la caméra est soustraite avant tout produit de matrices, ce qui garde la précision loin de l'origine (testé à 10 km). La vue n'est qu'une rotation.
 - Chaque entité qui porte `Transform` et `MeshRenderer` donne un objet par partie de son modèle, tous avec la même matrice. Un modèle pas prêt donne les parties du modèle de secours (cube en damier, G-03), et garde alors son damier même si l'entité a un matériau de remplacement.
 - Caméra : l'entité donnée par l'appelant, avec `Transform` et `Camera`. Sans elle, la vue part de l'origine du monde avec les réglages par défaut.
+- Environnement : le handle et l'intensité de `SceneEnvironment` sont recopiés dans `RenderScene::environment` ; l'application décide si l'IBL est active (`enabled`).
 - Lumière : la première `DirectionalLight` trouvée (une seule lumière directionnelle, section 5.5). Le composant donne le sens dans lequel la lumière voyage ; le renderer reçoit la direction opposée, vers la lumière. Sans lumière, seul le terme ambiant éclaire.
 - Interpolation (section 5.1) : `rememberTransforms(registry)`, appelé au début de chaque pas fixe, copie chaque `Transform` dans `PreviousTransform`. L'extraction interpole entre les deux avec `alpha` (positions et échelles linéairement, rotations par le plus court chemin), caméra comprise. Une entité sans `PreviousTransform` est dessinée à sa transformation courante.
 

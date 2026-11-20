@@ -55,6 +55,8 @@ public:
 
     // The asset path a model was loaded from. Nothing for a stale handle or a model made in code.
     [[nodiscard]] std::optional<AssetPath> modelPath(ModelHandle model) const;
+    // The asset path an environment was loaded from, failed or not. Nothing for a stale or default handle.
+    [[nodiscard]] std::optional<AssetPath> environmentPath(EnvironmentHandle environment) const;
     // The folder asset paths are relative to.
     [[nodiscard]] const std::filesystem::path& root() const noexcept;
 

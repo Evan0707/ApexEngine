@@ -66,6 +66,8 @@ add_library(ApexEngine STATIC
     Graphics/Device.h
     Graphics/EnvironmentLighting.cpp
     Graphics/EnvironmentLighting.h
+    Graphics/EnvironmentPrefilter.cpp
+    Graphics/EnvironmentPrefilter.h
     Graphics/FrameBuffers.cpp
     Graphics/FrameBuffers.h
     Graphics/FrameCounters.h
@@ -77,6 +79,8 @@ add_library(ApexEngine STATIC
     Graphics/GpuAllocator.h
     Graphics/GpuMemoryStats.h
     Graphics/GpuMesh.cpp
+    Graphics/GpuEnvironment.cpp
+    Graphics/GpuEnvironment.h
     Graphics/GpuMesh.h
     Graphics/GpuTimer.cpp
     Graphics/GpuTimer.h
@@ -88,10 +92,13 @@ add_library(ApexEngine STATIC
     Graphics/GpuTexture.h
     Graphics/ImageInputSet.cpp
     Graphics/ImageInputSet.h
+    Graphics/LightingSets.cpp
+    Graphics/LightingSets.h
     Graphics/MaterialSets.cpp
     Graphics/MaterialSets.h
     Graphics/MaterialTable.cpp
     Graphics/MaterialTable.h
+    Graphics/MipLevels.h
     Graphics/Projection.cpp
     Graphics/Projection.h
     Graphics/RenderOverlay.h
@@ -188,13 +195,18 @@ add_library(Apex::Engine ALIAS ApexEngine)
 
 apex_add_shaders(ApexEngine
     Graphics/Shaders/Fullscreen.vert
+    Graphics/Shaders/Prefilter.frag
+    Graphics/Shaders/Prefilter.vert
     Graphics/Shaders/Scene.frag
     Graphics/Shaders/Scene.vert
     Graphics/Shaders/Shadow.vert
+    Graphics/Shaders/Sky.frag
+    Graphics/Shaders/Sky.vert
     Graphics/Shaders/Tonemap.frag
 )
 # Included by the shaders above: tracked through glslc's depfiles, listed here for the IDE.
 target_sources(ApexEngine PRIVATE
+    Graphics/Shaders/Environment.glsl
     Graphics/Shaders/Frame.glsl
     Graphics/Shaders/Material.glsl
     Graphics/Shaders/Pbr.glsl

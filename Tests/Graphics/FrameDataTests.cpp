@@ -18,12 +18,16 @@ constexpr float kTolerance = 1e-5f;
 TEST_CASE("The per-frame structures match the GLSL layouts", "[graphics]") {
     // std140 uniform block of Frame.glsl.
     STATIC_REQUIRE(offsetof(FrameUniforms, viewProjection) == 0);
-    STATIC_REQUIRE(offsetof(FrameUniforms, lightViewProjection) == 64);
-    STATIC_REQUIRE(offsetof(FrameUniforms, directionToLight) == 128);
-    STATIC_REQUIRE(offsetof(FrameUniforms, lightRadiance) == 144);
-    STATIC_REQUIRE(offsetof(FrameUniforms, ambient) == 160);
-    STATIC_REQUIRE(offsetof(FrameUniforms, shadow) == 176);
-    STATIC_REQUIRE(offsetof(FrameUniforms, toneMapping) == 192);
+    STATIC_REQUIRE(offsetof(FrameUniforms, inverseViewProjection) == 64);
+    STATIC_REQUIRE(offsetof(FrameUniforms, lightViewProjection) == 128);
+    STATIC_REQUIRE(offsetof(FrameUniforms, directionToLight) == 192);
+    STATIC_REQUIRE(offsetof(FrameUniforms, lightRadiance) == 208);
+    STATIC_REQUIRE(offsetof(FrameUniforms, ambient) == 224);
+    STATIC_REQUIRE(offsetof(FrameUniforms, shadow) == 240);
+    STATIC_REQUIRE(offsetof(FrameUniforms, toneMapping) == 256);
+    // std140 array of vec4: a stride of 16 bytes.
+    STATIC_REQUIRE(offsetof(FrameUniforms, irradiance) == 272);
+    STATIC_REQUIRE(offsetof(FrameUniforms, environment) == 416);
     // std430 arrays: the stride of a struct is its size rounded up to its alignment (16 bytes here).
     STATIC_REQUIRE(sizeof(ObjectGpu) == 144);
     STATIC_REQUIRE(offsetof(ObjectGpu, materialIndex) == 128);
@@ -104,4 +108,30 @@ TEST_CASE("Frame uniforms carry the exposure and the tonemapping switch", "[grap
     REQUIRE(makeFrameUniforms(scene, 1.0f, 2048).toneMapping == glm::vec4(1.0f, 1.0f, 0.0f, 0.0f));
     scene.toneMapping = RenderToneMapping{.exposureStops = -1.0f, .enabled = false};
     REQUIRE(makeFrameUniforms(scene, 1.0f, 2048).toneMapping == glm::vec4(0.5f, 0.0f, 0.0f, 0.0f));
+}
+
+TEST_CASE("Frame uniforms carry the environment's irradiance only when it lights the frame", "[graphics]") {
+    const RenderScene scene;
+    REQUIRE(makeFrameUniforms(scene, 1.0f, 2048).environment.x == 0.0f);
+
+    IrradianceSh sh;
+    sh.coefficients[0] = {1.0f, 2.0f, 3.0f};
+    sh.coefficients[8] = {-1.0f, 0.5f, 0.0f};
+    const FrameUniforms uniforms = makeFrameUniforms(
+        scene, 1.0f, 2048, FrameEnvironment{.irradiance = &sh, .intensity = 0.5f, .lastLevel = 5.0f});
+    REQUIRE(uniforms.environment == glm::vec4(1.0f, 0.5f, 5.0f, 0.0f));
+    REQUIRE(uniforms.irradiance[0] == glm::vec4(1.0f, 2.0f, 3.0f, 0.0f));
+    REQUIRE(uniforms.irradiance[8] == glm::vec4(-1.0f, 0.5f, 0.0f, 0.0f));
+}
+
+TEST_CASE("The inverse view-projection takes the far plane back to directions of the view", "[graphics]") {
+    RenderScene scene;
+    scene.camera.verticalFovRadians = glm::radians(90.0f);
+    const FrameUniforms uniforms = makeFrameUniforms(scene, 1.0f, 2048);
+    const glm::vec4 far = uniforms.inverseViewProjection * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    const glm::vec3 direction = glm::normalize(glm::vec3(far) / far.w);
+    REQUIRE_THAT(direction.z, WithinAbs(-1.0, kTolerance));
+    // Top of the screen (Vulkan's -1) is up.
+    const glm::vec4 top = uniforms.inverseViewProjection * glm::vec4(0.0f, -1.0f, 1.0f, 1.0f);
+    REQUIRE(top.y / top.w > 0.0f);
 }

@@ -150,3 +150,21 @@ TEST_CASE("A valid scene file is loaded from disk", "[serialization]") {
     REQUIRE(world::sceneEntityCount(fixture.registry) == 2);
     REQUIRE(world::findBySceneId(fixture.registry, "first") != entt::entity{entt::null});
 }
+
+TEST_CASE("The scene's environment is loaded into the registry's context", "[serialization]") {
+    Fixture fixture;
+    fixture.load(R"({"version": 1, "environment": {"path": "Environments/sky.hdr", "intensity": 0.5},
+                     "entities": []})");
+    const world::SceneEnvironment environment = world::sceneEnvironment(fixture.registry);
+    REQUIRE(fixture.cache.state(environment.environment) == resources::ResourceState::Ready);
+    REQUIRE(environment.environmentIntensity == 0.5f);
+}
+
+TEST_CASE("A missing environment fails alone: the scene still loads", "[serialization]") {
+    Fixture fixture;
+    fixture.load(R"({"version": 1, "environment": {"path": "Environments/missing.hdr"},
+                     "entities": [{ "id": "sun", "light": { "direction": [0, -1, 0] } }]})");
+    REQUIRE(world::sceneEntityCount(fixture.registry) == 1);
+    const world::SceneEnvironment environment = world::sceneEnvironment(fixture.registry);
+    REQUIRE(fixture.cache.state(environment.environment) == resources::ResourceState::Failed);
+}

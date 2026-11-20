@@ -2,6 +2,7 @@
 
 layout(set = 0, binding = 0) uniform FrameUniforms {
     mat4 viewProjection;
+    mat4 inverseViewProjection;
     mat4 lightViewProjection;
     vec4 directionToLight;
     vec4 lightRadiance;
@@ -10,6 +11,10 @@ layout(set = 0, binding = 0) uniform FrameUniforms {
     vec4 shadow;
     // x: exposure multiplier, y: ACES curve on.
     vec4 toneMapping;
+    // Irradiance of the environment: nine spherical harmonics coefficients in rgb (decision 0022).
+    vec4 irradiance[9];
+    // x: image-based lighting on, y: intensity, z: last level of the specular cubemap.
+    vec4 environment;
 } frame;
 
 struct ObjectData {

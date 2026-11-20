@@ -9,6 +9,7 @@
 #include "Graphics/FrameData.h"
 #include "Graphics/FrameSync.h"
 #include "Graphics/GpuAllocator.h"
+#include "Graphics/GpuEnvironment.h"
 #include "Graphics/GpuMesh.h"
 #include "Graphics/GpuTexture.h"
 #include "Graphics/GpuTimer.h"
@@ -46,6 +47,8 @@ inline constexpr std::uint32_t kFramesInFlight = 2;
 
 // Room in the per-frame material table, default material included.
 inline constexpr std::uint32_t kMaxMaterials = 256;
+// Lighting descriptor sets alive at once: the default one, and a few environments with their replacements.
+inline constexpr std::uint32_t kMaxLightingSets = 8;
 // Material descriptor sets alive at once: every material twice (a set waiting for deferred destruction
 // and its replacement), plus the default material's.
 inline constexpr std::uint32_t kMaxMaterialSets = 2 * kMaxMaterials + 2;
@@ -63,8 +66,9 @@ struct Renderer::State {
     core::Logger* logger = nullptr;
     std::unique_ptr<Device> device;
     std::unique_ptr<GpuAllocator> allocator;
-    // Before the deleter: pending destructions free sets of its pool.
+    // Before the deleter: pending destructions free sets of their pools.
     MaterialSets materialSets;
+    LightingSets lightingSets;
     DeferredDeleter deleter{kFramesInFlight};
     FrameSync frames;
     GpuTimer gpuTimer;
@@ -76,10 +80,21 @@ struct Renderer::State {
     ResourceMirror<resources::MaterialHandle, resources::MaterialData, VkDescriptorSet> materialSetMirror;
     std::optional<VkDescriptorSet> defaultMaterialSet;
     std::uint64_t textureRevision = std::numeric_limits<std::uint64_t>::max();
+    // Image-based lighting (decision 0022).
+    EnvironmentPrefilter prefilter;
+    GpuTexture brdfTable;
+    GpuTexture blackCube;
+    VkDescriptorSet defaultLightingSet = VK_NULL_HANDLE;
+    ResourceMirror<resources::EnvironmentHandle, resources::EnvironmentData, GpuEnvironment> environments;
+    // Chosen by prepareFrame for the frame being recorded.
+    VkDescriptorSet frameLightingSet = VK_NULL_HANDLE;
+    bool frameSky = false;
     MaterialTable materials{kMaxMaterials};
     FrameBuffers frameBuffers;
     // Main pass, into the HDR image.
     GraphicsPipeline scenePipeline;
+    // The environment behind the scene, drawn after the objects in the main pass.
+    GraphicsPipeline skyPipeline;
     // HDR image to swapchain: created with the swapchain, for its format.
     GraphicsPipeline tonemapPipeline;
     ImageInputSet sceneColorInput;
@@ -118,6 +133,14 @@ struct Renderer::State {
             meshes.releaseAll([this](GpuMesh&& mesh) { destroyGpuMesh(*allocator, mesh); });
             textures.releaseAll(
                 [this](GpuTexture&& texture) { destroyGpuTexture(device->device(), *allocator, texture); });
+            environments.releaseAll([this](GpuEnvironment&& environment) {
+                destroyGpuEnvironment(device->device(), *allocator, lightingSets, environment);
+            });
+            for (const GpuTexture* texture : {&brdfTable, &blackCube}) {
+                if (texture->image.image != VK_NULL_HANDLE) {
+                    destroyGpuTexture(device->device(), *allocator, *texture);
+                }
+            }
         }
     }
 
@@ -125,6 +148,7 @@ struct Renderer::State {
     [[nodiscard]] core::Result<bool> recreateSwapchain(platform::PixelSize size);
     [[nodiscard]] core::Result<void> ensurePipelines();
     [[nodiscard]] core::Result<void> createShadowResources(std::uint32_t size);
+    [[nodiscard]] core::Result<void> createLightingResources();
     // Resolves the handles, sorts by material and fills the frame's buffers.
     void prepareFrame(const RenderScene& scene);
     // The view of a texture: white for "no texture", the checker when not ready or failed (G-03).

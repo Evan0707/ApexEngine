@@ -32,10 +32,12 @@ struct DebugControls {
     float shadowConstantBias = 0.02f;
     float shadowSlopeBias = 2.0f;
     // HDR output (decision 0021): exposure in stops and the ACES curve.
-    float exposureStops = 0.0f;
+    float exposureStops = -1.0f;
     float minExposureStops = -4.0f;
     float maxExposureStops = 4.0f;
     bool toneMapping = true;
+    // Image-based lighting and sky (decision 0022); off: the constant ambient term.
+    bool imageBasedLighting = true;
 };
 
 // Internal to Debug: draws the panel with Dear ImGui, inside DebugUi::buildFrame. open becomes false when

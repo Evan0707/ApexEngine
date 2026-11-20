@@ -24,6 +24,22 @@ constexpr std::uint32_t kTonemapFragment[] =
 #include "Shaders/Tonemap.frag.spv.inc"
     ;
 
+constexpr std::uint32_t kPrefilterVertex[] =
+#include "Shaders/Prefilter.vert.spv.inc"
+    ;
+
+constexpr std::uint32_t kPrefilterFragment[] =
+#include "Shaders/Prefilter.frag.spv.inc"
+    ;
+
+constexpr std::uint32_t kSkyVertex[] =
+#include "Shaders/Sky.vert.spv.inc"
+    ;
+
+constexpr std::uint32_t kSkyFragment[] =
+#include "Shaders/Sky.frag.spv.inc"
+    ;
+
 } // namespace
 
 std::span<const std::uint32_t> sceneVertexShader() noexcept {
@@ -44,6 +60,22 @@ std::span<const std::uint32_t> fullscreenVertexShader() noexcept {
 
 std::span<const std::uint32_t> tonemapFragmentShader() noexcept {
     return kTonemapFragment;
+}
+
+std::span<const std::uint32_t> prefilterVertexShader() noexcept {
+    return kPrefilterVertex;
+}
+
+std::span<const std::uint32_t> prefilterFragmentShader() noexcept {
+    return kPrefilterFragment;
+}
+
+std::span<const std::uint32_t> skyVertexShader() noexcept {
+    return kSkyVertex;
+}
+
+std::span<const std::uint32_t> skyFragmentShader() noexcept {
+    return kSkyFragment;
 }
 
 } // namespace apex::graphics

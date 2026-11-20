@@ -93,8 +93,17 @@ void Renderer::State::prepareFrame(const RenderScene& scene) {
     const VkExtent2D extent = swapchain.extent();
     const float aspectRatio = static_cast<float>(extent.width) / static_cast<float>(extent.height);
     frameShadow = scene.shadow;
-    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio, shadowMap.size()), objectData,
-                       materials.gpuData());
+    const GpuEnvironment* environment =
+        scene.environment.enabled ? environments.find(scene.environment.environment) : nullptr;
+    frameLightingSet = environment != nullptr ? environment->lightingSet : defaultLightingSet;
+    frameSky = environment != nullptr;
+    const FrameEnvironment lighting =
+        environment != nullptr ? FrameEnvironment{.irradiance = &environment->irradiance,
+                                                  .intensity = scene.environment.intensity,
+                                                  .lastLevel = static_cast<float>(kSpecularCubeLevels - 1)}
+                               : FrameEnvironment{};
+    frameBuffers.write(frameIndex, makeFrameUniforms(scene, aspectRatio, shadowMap.size(), lighting),
+                       objectData, materials.gpuData());
 }
 
 void Renderer::State::recordFrame(VkCommandBuffer commands, std::uint32_t imageIndex) {
@@ -258,6 +267,8 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands) {
     const VkDescriptorSet frameSet = frameBuffers.descriptorSet(frameIndex);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 0, 1,
                             &frameSet, 0, nullptr);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scenePipeline.layout(), 2, 1,
+                            &frameLightingSet, 0, nullptr);
 
     counters.drawCalls = 0;
     counters.triangles = 0;
@@ -285,6 +296,11 @@ void Renderer::State::recordScenePass(VkCommandBuffer commands) {
         vkCmdDrawIndexed(commands, mesh->indexCount, 1, 0, 0, drawIndex);
         ++counters.drawCalls;
         counters.triangles += mesh->indexCount / 3;
+    }
+    // Last: only the pixels no object covered pass the depth test at the far plane.
+    if (frameSky) {
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, skyPipeline.handle());
+        vkCmdDraw(commands, 3, 1, 0, 0);
     }
 
     vkCmdEndRendering(commands);

@@ -25,7 +25,7 @@ void rememberTransforms(entt::registry& registry);
 // relative to the camera (G-07). Transforms are interpolated with alpha where a PreviousTransform exists.
 // camera: the entity seen through, with a Transform and a Camera; without one, the view is from the world
 // origin with the default Camera. The first DirectionalLight found lights the scene (spec 5.5); without
-// one, only the ambient term does.
+// one, only the ambient term or the environment does. scene.environment.enabled is left as it was.
 void extractRenderScene(const entt::registry& registry, const resources::ResourceCache& cache,
                         entt::entity camera, float alpha, graphics::RenderScene& scene);
 

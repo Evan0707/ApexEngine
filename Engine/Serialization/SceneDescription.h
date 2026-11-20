@@ -68,9 +68,20 @@ struct EntityDesc {
     [[nodiscard]] bool operator==(const EntityDesc&) const noexcept = default;
 };
 
+// The light around the scene (spec 5.4, decision 0022).
+struct EnvironmentDesc {
+    // Normalized asset path of a Radiance HDR image.
+    std::string path;
+    // Multiplies its radiance; not negative.
+    float intensity = 1.0f;
+
+    [[nodiscard]] bool operator==(const EnvironmentDesc&) const noexcept = default;
+};
+
 struct SceneDescription {
-    // Constant ambient term, linear RGB.
+    // Constant ambient term, linear RGB: lights the scene without an environment.
     glm::vec3 ambient{0.03f};
+    std::optional<EnvironmentDesc> environment;
     std::vector<EntityDesc> entities;
 
     [[nodiscard]] bool operator==(const SceneDescription&) const noexcept = default;

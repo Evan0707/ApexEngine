@@ -263,6 +263,31 @@ namespace {
     return assetPath->str();
 }
 
+[[nodiscard]] core::Result<EnvironmentDesc> readEnvironment(const Json& value, const JsonContext& context,
+                                                            std::string_view field) {
+    if (core::Result<void> valid = requireObject(value, context, field); !valid) {
+        return std::unexpected(valid.error());
+    }
+    if (core::Result<void> known = rejectUnknownFields(value, {"path", "intensity"}, context, field);
+        !known) {
+        return std::unexpected(known.error());
+    }
+    if (!value.contains("path")) {
+        return jsonError(context, joinField(field, "path"), "missing");
+    }
+    EnvironmentDesc environment;
+    if (core::Result<void> read = readOptional(value, "path", context, field, environment.path, readMesh);
+        !read) {
+        return std::unexpected(read.error());
+    }
+    if (core::Result<void> read =
+            readOptional(value, "intensity", context, field, environment.intensity, readNonNegative);
+        !read) {
+        return std::unexpected(read.error());
+    }
+    return environment;
+}
+
 // Stores a component read into an optional member of the entity.
 template <typename T, typename Reader>
 [[nodiscard]] core::Result<void> readComponent(const Json& entity, std::string_view key,
@@ -363,7 +388,7 @@ core::Result<SceneDescription> parseScene(std::string_view text, std::string_vie
             std::format("version {} is not supported; this build reads version {}", number, kSceneVersion));
     }
     if (core::Result<void> known =
-            rejectUnknownFields(*root, {"version", "ambient", "entities"}, context, {});
+            rejectUnknownFields(*root, {"version", "ambient", "environment", "entities"}, context, {});
         !known) {
         return std::unexpected(known.error());
     }
@@ -372,6 +397,13 @@ core::Result<SceneDescription> parseScene(std::string_view text, std::string_vie
     if (core::Result<void> read = readOptional(*root, "ambient", context, {}, scene.ambient, readColor);
         !read) {
         return std::unexpected(read.error());
+    }
+    if (const auto environment = root->find("environment"); environment != root->end()) {
+        core::Result<EnvironmentDesc> read = readEnvironment(*environment, context, "environment");
+        if (!read) {
+            return std::unexpected(read.error());
+        }
+        scene.environment = std::move(*read);
     }
     const auto entities = root->find("entities");
     if (entities == root->end() || !entities->is_array()) {
@@ -477,6 +509,10 @@ std::string writeScene(const SceneDescription& scene) {
     OrderedJson root;
     root["version"] = kSceneVersion;
     root["ambient"] = toJson(scene.ambient);
+    if (scene.environment) {
+        root["environment"] = {{"path", scene.environment->path},
+                               {"intensity", tidy(scene.environment->intensity)}};
+    }
     OrderedJson entities = OrderedJson::array();
     for (const EntityDesc& entity : scene.entities) {
         entities.push_back(toJson(entity));

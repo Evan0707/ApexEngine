@@ -29,7 +29,7 @@ Un modèle introuvable n'est pas une erreur de scène : le cache l'écrit dans l
 
 ## Écriture et aller-retour (section 7.4)
 
-- `describeScene(registry, cache)` fait le chemin inverse d'`instantiateScene()` : les entités qui portent un `SceneId`, triées par identifiant (le registre n'a pas d'ordre propre), dans les unités du fichier. Le chemin d'un modèle vient du cache (`ResourceCache::modelPath()`) ; un modèle créé en code n'a pas de chemin, et son entité est décrite sans `mesh`.
+- `describeScene(registry, cache)` fait le chemin inverse d'`instantiateScene()`, environnement compris (son chemin vient de `ResourceCache::environmentPath()`) : les entités qui portent un `SceneId`, triées par identifiant (le registre n'a pas d'ordre propre), dans les unités du fichier. Le chemin d'un modèle vient du cache (`ResourceCache::modelPath()`) ; un modèle créé en code n'a pas de chemin, et son entité est décrite sans `mesh`.
 - `writeScene(scene)` écrit une description dans le format lu par `parseScene()`. Les champs sont dans un ordre fixe et les nombres sous leur forme la plus courte qui redonne le même `float` (0,1 s'écrit `0.1`) : une même scène donne toujours le même texte.
 - Garanties testées : texte → description → texte → description redonne la même description, exactement ; une scène passée par le registre revient identique, aux arrondis près sur les angles (qui passent par un quaternion) et le champ de vision (qui passe par des radians).
 - La démonstration ne sauvegarde pas de scène : l'écriture sert aux tests et à de futurs outils.
@@ -40,6 +40,7 @@ Un modèle introuvable n'est pas une erreur de scène : le cache l'écrit dans l
 {
   "version": 1,
   "ambient": [0.06, 0.07, 0.09],
+  "environment": { "path": "Environments/sky.hdr", "intensity": 0.5 },
   "entities": [
     {
       "id": "crate_01",
@@ -60,7 +61,8 @@ Un modèle introuvable n'est pas une erreur de scène : le cache l'écrit dans l
 | Champ | Règle |
 |---|---|
 | `version` | Obligatoire, entier, égal à 1 |
-| `ambient` | Trois nombres positifs ou nuls ; 0,03 par défaut |
+| `ambient` | Trois nombres positifs ou nuls ; 0,03 par défaut. N'éclaire que sans environnement |
+| `environment` | Facultatif (décision 0022) : `path` obligatoire, chemin d'asset d'une image Radiance HDR, normalisé à la lecture ; `intensity` positive ou nulle, 1 par défaut. Un fichier absent ou invalide n'est pas une erreur de scène : le cache l'écrit dans le log et le terme ambiant éclaire la scène |
 | `entities` | Obligatoire, tableau |
 | `id` | Obligatoire, chaîne non vide, unique dans la scène |
 | `name` | Chaîne non vide |
@@ -107,8 +109,9 @@ Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal 
 | `shadows.area` | 40 | Côté de la zone ombrée autour du personnage, en mètres, strictement positif |
 | `shadows.constant_bias` | 0,02 | Biais de profondeur constant, en mètres, positif ou nul |
 | `shadows.slope_bias` | 2 | Biais de pente du rasterizer, positif ou nul |
-| `rendering.exposure_ev` | 0 | Exposition en stops, de −4 à 4 (section 5.4) ; l'image HDR est multipliée par 2^stops |
+| `rendering.exposure_ev` | −1 | Exposition en stops, de −4 à 4 (section 5.4) ; l'image HDR est multipliée par 2^stops. −1 a été choisi sur la scène de démonstration |
 | `rendering.tonemapping` | true | Courbe ACES au lancement ; sans elle, les valeurs au-dessus de 1 saturent |
+| `rendering.ibl` | true | Éclairage par l'environnement de la scène et ciel au lancement (décision 0022) ; sans lui, le terme ambiant constant |
 
 `input.json` : la table d'actions.
 

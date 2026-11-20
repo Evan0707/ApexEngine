@@ -13,7 +13,7 @@ Sauf `VulkanBackendAccess.h`, aucun en-tête public n'inclut Vulkan : `Game` peu
 | `Graphics/ValidationLog.h` | `ValidationSeverity`, `ValidationLog` : `report()`, `messageCount()` |
 | `Graphics/FrameCounters.h` | `FrameCounters` : objets dessinés (un appel de dessin chacun) et triangles de la dernière frame, temps d'attente du CPU, temps GPU |
 | `Graphics/GpuMemoryStats.h` | `GpuMemoryStats` : mémoire GPU utilisée et budget |
-| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderToneMapping`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
+| `Graphics/RenderScene.h` | `RenderCamera`, `RenderLight`, `RenderShadow`, `RenderToneMapping`, `RenderEnvironment`, `RenderObject`, `RenderScene` : tout ce que `Graphics` dessine dans une frame (G-01) |
 | `Graphics/RenderOverlay.h` | `RenderOverlay` : ce qui est dessiné par-dessus la scène (l'interface de debug) |
 | `Graphics/VulkanBackendAccess.h` | `OverlayCommands`, `VulkanBackendInfo`, `vulkanBackendInfo()`. **Seul en-tête public avec des types Vulkan, réservé à `Debug/ImGuiBackend.cpp`** (note 0009) |
 | `Graphics/Renderer.h` | `RendererConfig` (dont la résolution de la shadow map), `Renderer` : `create()`, `syncResources()`, `renderFrame()`, `presentFrame()`, `memoryStats()`, `lastFrameCounters()`, `setOverlay()` |
@@ -32,6 +32,10 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - `Graphics/ShadowMap.h` (`ShadowMap`) : la shadow map et son sampler de comparaison ;
 - `Graphics/ColorTarget.h` (`ColorTarget`) : une image de couleur dessinée puis lue par une autre passe (l'image HDR de la scène) ;
 - `Graphics/ImageInputSet.h` (`ImageInputSet`) : un jeu de descripteurs d'une seule image lue, celui de la passe de tonemapping ;
+- `Graphics/MipLevels.h` (`mipLevelCount()`, `mipSize()`), sans Vulkan, testé sans GPU ;
+- `Graphics/LightingSets.h` (`LightingSets`) : le jeu 2 de la scène et du ciel, un par environnement ;
+- `Graphics/EnvironmentPrefilter.h` (`PrefilterParams`, `EnvironmentPrefilter`) : le pipeline qui préfiltre la cubemap spéculaire ;
+- `Graphics/GpuEnvironment.h` (`GpuEnvironment`, `createGpuEnvironment()`, `createBrdfTable()`, `createBlackCube()`) : un environnement sur le GPU ;
 - `Graphics/RendererState.h` : l'état privé du `Renderer` et ses limites (frames en vol, objets, matériaux).
 - `Graphics/FrameSync.h` (`FrameResources`, `FrameSync`) ;
 - `Graphics/ResourceMirror.h` (`ResourceMirror`), sans Vulkan, testé sans GPU ;
@@ -81,6 +85,17 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 - Pipeline de scène (`GraphicsPipeline`) : jeu de descripteurs 0 de la frame et jeu 1 du matériau, aucun push constant ; position, normale et UV lues dans le format de sommet unique (la tangente attend les normal maps, P1). Un attribut que le shader ne lit pas n'est pas déclaré : les layers le signaleraient ; faces arrière éliminées, faces avant antihoraires ; test de profondeur « inférieur » ; viewport et scissor dynamiques. Il est créé avec la swapchain, pour ses formats de couleur et de profondeur. Si une recréation change un format, l'ancien pipeline passe par la destruction différée.
 - `lastFrameCounters()` : objets dessinés et triangles de la dernière frame rendue, et le temps passé bloqué sur la fence, l'acquisition et la présentation (`waitSeconds`), qui permet au panneau de debug de calculer le temps CPU.
 - Le triangle de la phase 2 est retiré ; le tag `phase-2` le conserve.
+
+## IBL et ciel (phase 7, décision 0022)
+
+- `syncResources()` reflète aussi les environnements du cache. À l'envoi d'un environnement : irradiance projetée sur neuf harmoniques sphériques (CPU), image équirectangulaire envoyée en flottants 16 bits avec ses mipmaps (blits), cubemap spéculaire de 256 × 256 par face et 6 niveaux préfiltrée sur le GPU, puis l'image équirectangulaire est libérée. Le log donne la durée (environ 1,2 s en Debug sur la machine de référence). Un échec est écrit avec le nom de l'environnement ; la scène est alors éclairée par le terme ambiant.
+- Préfiltrage (`Shaders/Prefilter.frag`) : un triangle plein écran par face et par niveau, l'instance donnant le niveau et la face. Niveau 0 : copie de l'image source ; niveau n : rugosité n / 5, 128 échantillons GGX autour de la normale (vue le long de la normale, approximation de Karis), chacun lisant le niveau de la source qui correspond à son angle solide (filtered importance sampling). Paramètres dans un uniform buffer, aucun push constant.
+- Table BRDF du « split sum » : 64 × 64, calculée une fois sur le CPU à la création du renderer, envoyée en `R16G16_SFLOAT`.
+- Jeu 2 de la scène (`LightingSets`) : cubemap spéculaire (binding 0) et table BRDF (binding 1), un seul sampler trilinéaire. Sans environnement prêt, ou l'IBL coupée : le jeu par défaut, avec une cubemap noire de 1 × 1, et le terme ambiant constant (G-03).
+- `FrameUniforms` : les neuf coefficients (multipliés par l'intensité dans le shader), un indicateur, l'intensité et le dernier niveau de la cubemap. `Shaders/Environment.glsl` : irradiance par les harmoniques, spéculaire par la cubemap au niveau `rugosité × 5` et la table BRDF. Il remplace le terme ambiant quand l'environnement est actif.
+- Ciel (`Shaders/Sky.vert`, `Sky.frag`) : un triangle plein écran au plan lointain, dessiné après les objets dans la passe de scène, test de profondeur « inférieur ou égal », sans écriture de profondeur. La direction vient de l'inverse de la vue-projection ; il lit le niveau 0 de la cubemap. Même layout que le pipeline de scène : les jeux liés pour les objets le restent.
+- Convention des directions : celle de `resources::environmentUv()` pour l'image source, l'ordre des faces de Vulkan pour la cubemap (+X, −X, +Y, −Y, +Z, −Z).
+- Génération des mipmaps : `ImageCopy::mipLevels` ; chaque niveau est fait par un blit linéaire du précédent, et tous finissent lisibles par les fragment shaders. `UploadContext::run()` exécute un travail ponctuel sur le GPU et l'attend (préfiltrage, cubemap noire).
 
 ## HDR et tonemapping (phase 7, décision 0021)
 
@@ -171,7 +186,7 @@ En-têtes internes, inclus uniquement par les fichiers `.cpp` de `Graphics` :
 ## Éclairage (phase 3)
 
 - Modèle metallic-roughness de glTF 2.0, simplifié (section 5.5), dans `Pbr.glsl` : diffus de Lambert, distribution GGX, visibilité de Smith corrélée en hauteur, Fresnel de Schlick. Réflectance des diélectriques en incidence normale : 0,04. Rugosité perceptuelle bornée à 0,045 en bas, pour qu'un matériau parfaitement lisse garde un reflet visible.
-- Une lumière directionnelle (couleur × intensité) et un terme ambiant constant, appliqué aux parts diffuse et spéculaire. L'IBL le remplacera en P1.
+- Une lumière directionnelle (couleur × intensité) et un terme ambiant constant, appliqué aux parts diffuse et spéculaire. Avec un environnement, l'IBL le remplace (voir « IBL et ciel »).
 - Calcul en espace linéaire, dans l'image HDR ; exposition, tonemapping puis encodage sRGB après (voir « HDR et tonemapping »).
 - La vue est calculée en espace de rendu : la caméra est à l'origine, la direction vers l'observateur est `-position`.
 - `glslc` est cherché dans `%VULKAN_SDK%\Bin`, puis dans le `PATH`. Sans lui, la configuration CMake échoue avec un message qui dit quoi installer.

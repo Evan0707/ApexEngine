@@ -69,7 +69,11 @@ void extractRenderScene(const entt::registry& registry, const resources::Resourc
         };
         break;
     }
-    scene.ambient = sceneEnvironment(registry).ambient;
+    const SceneEnvironment environment = sceneEnvironment(registry);
+    scene.ambient = environment.ambient;
+    // The caller decides whether image-based lighting is on.
+    scene.environment.environment = environment.environment;
+    scene.environment.intensity = environment.environmentIntensity;
 
     scene.objects.clear();
     for (const auto [entity, transform, renderer] : registry.view<Transform, MeshRenderer>().each()) {

@@ -1,6 +1,7 @@
 #include "Core/Profiling.h"
 #include "Graphics/RendererState.h"
 
+#include <chrono>
 #include <cstddef>
 #include <optional>
 
@@ -45,6 +46,32 @@ void Renderer::syncResources(const resources::ResourceCache& cache) {
         [&state](GpuTexture&& texture) {
             state.deleter.enqueue([device = state.device->device(), allocator = state.allocator.get(),
                                    texture] { destroyGpuTexture(device, *allocator, texture); });
+        });
+    state.environments.sync(
+        cache.environments(),
+        [&state](resources::EnvironmentHandle,
+                 const resources::EnvironmentData& environment) -> std::optional<GpuEnvironment> {
+            const auto start = std::chrono::steady_clock::now();
+            core::Result<GpuEnvironment> created =
+                createGpuEnvironment(state.device->device(), *state.allocator, state.upload, state.prefilter,
+                                     state.lightingSets, state.brdfTable.view, environment.name, environment);
+            if (!created) {
+                // The constant ambient term lights the scene instead (decision 0022).
+                state.logger->error("Cannot upload environment '{}': {}", environment.name,
+                                    created.error().message);
+                return std::nullopt;
+            }
+            const std::chrono::duration<double, std::milli> elapsed =
+                std::chrono::steady_clock::now() - start;
+            state.logger->info("GPU upload: environment '{}', {}x{} pixels, prefiltered in {:.0f} ms",
+                               environment.name, environment.width, environment.height, elapsed.count());
+            return *created;
+        },
+        [&state](GpuEnvironment&& environment) {
+            state.deleter.enqueue([&state, environment] {
+                destroyGpuEnvironment(state.device->device(), *state.allocator, state.lightingSets,
+                                      environment);
+            });
         });
     state.syncMaterialSets(cache);
     if (uploadedMeshes + uploadedTextures > 0) {

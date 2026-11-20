@@ -1,5 +1,7 @@
 #include "Graphics/UploadContext.h"
 
+#include "Graphics/MipLevels.h"
+
 #include <format>
 #include <limits>
 #include <utility>
@@ -35,6 +37,66 @@ private:
     GpuAllocator* m_allocator;
     std::vector<GpuBuffer> m_buffers;
 };
+
+void imageBarrier(VkCommandBuffer commands, VkImage image, std::uint32_t level, std::uint32_t levelCount,
+                  VkImageLayout from, VkImageLayout to, VkPipelineStageFlags2 srcStage,
+                  VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess) {
+    const VkImageMemoryBarrier2 barrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = srcStage,
+        .srcAccessMask = srcAccess,
+        .dstStageMask = dstStage,
+        .dstAccessMask = dstAccess,
+        .oldLayout = from,
+        .newLayout = to,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = image,
+        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, level, levelCount, 0, 1}};
+    const VkDependencyInfo dependency{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                      .imageMemoryBarrierCount = 1,
+                                      .pImageMemoryBarriers = &barrier};
+    vkCmdPipelineBarrier2(commands, &dependency);
+}
+
+// Level 0 is in TRANSFER_DST_OPTIMAL. Each level is blitted from the one before; every level ends in
+// SHADER_READ_ONLY_OPTIMAL, visible to the fragment shaders of later submissions.
+void recordMipChain(VkCommandBuffer commands, const ImageCopy& copy) {
+    for (std::uint32_t level = 1; level < copy.mipLevels; ++level) {
+        imageBarrier(commands, copy.destination, level - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+                     VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT,
+                     VK_ACCESS_2_TRANSFER_READ_BIT);
+        imageBarrier(commands, copy.destination, level, 1, VK_IMAGE_LAYOUT_UNDEFINED,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+                     VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        const auto extent = [&copy](std::uint32_t at) {
+            return VkOffset3D{static_cast<std::int32_t>(mipSize(copy.width, at)),
+                              static_cast<std::int32_t>(mipSize(copy.height, at)), 1};
+        };
+        const VkImageBlit2 region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+                                  .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level - 1, 0, 1},
+                                  .srcOffsets = {VkOffset3D{0, 0, 0}, extent(level - 1)},
+                                  .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1},
+                                  .dstOffsets = {VkOffset3D{0, 0, 0}, extent(level)}};
+        const VkBlitImageInfo2 blit{.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+                                    .srcImage = copy.destination,
+                                    .srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                    .dstImage = copy.destination,
+                                    .dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    .regionCount = 1,
+                                    .pRegions = &region,
+                                    .filter = VK_FILTER_LINEAR};
+        vkCmdBlitImage2(commands, &blit);
+        imageBarrier(commands, copy.destination, level - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_NONE,
+                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
+    imageBarrier(commands, copy.destination, copy.mipLevels - 1, 1, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+                 VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                 VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+}
 
 } // namespace
 
@@ -200,6 +262,10 @@ core::Result<void> UploadContext::uploadImage(GpuAllocator& allocator, std::stri
                                    .imageExtent = {copy.width, copy.height, 1}};
     vkCmdCopyBufferToImage(m_commands, staging[0].buffer, copy.destination,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    if (copy.mipLevels > 1) {
+        recordMipChain(m_commands, copy);
+        return submitAndWait(name);
+    }
 
     // Ready to be sampled by later frames: their fragment shaders wait for the copy.
     const VkImageMemoryBarrier2 toShader{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -217,6 +283,15 @@ core::Result<void> UploadContext::uploadImage(GpuAllocator& allocator, std::stri
                                      .imageMemoryBarrierCount = 1,
                                      .pImageMemoryBarriers = &toShader};
     vkCmdPipelineBarrier2(m_commands, &afterCopy);
+    return submitAndWait(name);
+}
+
+core::Result<void> UploadContext::run(std::string_view name,
+                                      const std::function<void(VkCommandBuffer)>& record) {
+    if (core::Result<void> begun = begin(name); !begun) {
+        return begun;
+    }
+    record(m_commands);
     return submitAndWait(name);
 }
 

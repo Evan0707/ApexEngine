@@ -15,7 +15,13 @@ namespace apex::serialization {
 
 void instantiateScene(const SceneDescription& scene, entt::registry& registry,
                       resources::ResourceCache& cache) {
-    registry.ctx().insert_or_assign(world::SceneEnvironment{.ambient = scene.ambient});
+    world::SceneEnvironment environment{.ambient = scene.ambient};
+    if (scene.environment) {
+        // A missing or invalid file is logged by the cache; the ambient term lights the scene (G-03).
+        environment.environment = cache.loadEnvironment(scene.environment->path);
+        environment.environmentIntensity = scene.environment->intensity;
+    }
+    registry.ctx().insert_or_assign(environment);
 
     for (const EntityDesc& description : scene.entities) {
         const entt::entity entity = registry.create();
@@ -83,7 +89,12 @@ core::Result<void> loadSceneFile(const std::filesystem::path& file, std::string_
 
 SceneDescription describeScene(const entt::registry& registry, const resources::ResourceCache& cache) {
     SceneDescription scene;
-    scene.ambient = world::sceneEnvironment(registry).ambient;
+    const world::SceneEnvironment environment = world::sceneEnvironment(registry);
+    scene.ambient = environment.ambient;
+    if (const std::optional<resources::AssetPath> path = cache.environmentPath(environment.environment)) {
+        scene.environment =
+            EnvironmentDesc{.path = path->str(), .intensity = environment.environmentIntensity};
+    }
 
     for (const auto [entity, sceneId] : registry.view<world::SceneId>().each()) {
         EntityDesc description;

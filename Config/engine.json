@@ -15,5 +15,5 @@
   },
   "third_person_camera": { "distance": 4.0, "aim_height": 1.6 },
   "shadows": { "enabled": true, "map_size": 2048, "area": 40.0, "constant_bias": 0.02, "slope_bias": 2.0 },
-  "rendering": { "exposure_ev": 0.0, "tonemapping": true }
+  "rendering": { "exposure_ev": -1.0, "tonemapping": true, "ibl": true }
 }

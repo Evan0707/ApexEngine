@@ -1,6 +1,7 @@
 {
   "version": 1,
   "ambient": [0.06, 0.07, 0.09],
+  "environment": { "path": "Environments/sky.hdr", "intensity": 0.5 },
   "entities": [
     {
       "id": "sun",

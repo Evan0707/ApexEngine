@@ -152,6 +152,25 @@ TEST_CASE("A field of the wrong type or size names the entity and the field", "[
     requireError(withEntity(R"("mesh": 12)"), {"field 'mesh'", "expected a string"});
     requireError(withEntity(R"("name": "")"), {"field 'name'", "empty"});
     requireError(R"({"version": 1, "ambient": [1, 2], "entities": []})", {"field 'ambient'"});
+    requireError(R"({"version": 1, "environment": {"intensity": 1}, "entities": []})",
+                 {"field 'environment.path'", "missing"});
+    requireError(R"({"version": 1, "environment": {"path": "sky.hdr", "intensity": -1}, "entities": []})",
+                 {"field 'environment.intensity'"});
+    requireError(R"({"version": 1, "environment": {"path": "../sky.hdr"}, "entities": []})",
+                 {"field 'environment.path'"});
+    requireError(R"({"version": 1, "environment": {"file": "sky.hdr"}, "entities": []})",
+                 {"field 'environment.file'", "unknown field"});
+}
+
+TEST_CASE("The environment of a scene is optional, its intensity 1 by default", "[serialization]") {
+    const auto without = parseScene(R"({"version": 1, "entities": []})", "Scenes/test.json");
+    REQUIRE(without.has_value());
+    REQUIRE_FALSE(without->environment.has_value());
+    const auto with = parseScene(R"({"version": 1, "environment": {"path": "Environments\\.\\sky.hdr"},
+                                     "entities": []})",
+                                 "Scenes/test.json");
+    REQUIRE(with.has_value());
+    REQUIRE(with->environment == EnvironmentDesc{.path = "Environments/sky.hdr", .intensity = 1.0f});
 }
 
 TEST_CASE("Values out of range are refused", "[serialization]") {

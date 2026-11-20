@@ -172,7 +172,7 @@ TEST_CASE("A model that is not ready is drawn as the fallback, checker included"
     REQUIRE(scene.objects[0].material == fixture.cache.fallbackMaterial());
 }
 
-TEST_CASE("The light and the ambient term are extracted", "[world]") {
+TEST_CASE("The light, the ambient term and the environment are extracted", "[world]") {
     Fixture fixture;
     REQUIRE(fixture.extract().light.intensity == 0.0f);
     REQUIRE(fixture.extract().ambient == SceneEnvironment{}.ambient);
@@ -181,7 +181,9 @@ TEST_CASE("The light and the ambient term are extracted", "[world]") {
     fixture.registry.emplace<DirectionalLight>(
         sun,
         DirectionalLight{.direction = {0.0f, -2.0f, 0.0f}, .color = {1.0f, 0.9f, 0.8f}, .intensity = 3.0f});
-    fixture.registry.ctx().emplace<SceneEnvironment>(SceneEnvironment{.ambient = {0.1f, 0.2f, 0.3f}});
+    const apex::resources::EnvironmentHandle sky{.index = 4, .generation = 2};
+    fixture.registry.ctx().emplace<SceneEnvironment>(
+        SceneEnvironment{.ambient = {0.1f, 0.2f, 0.3f}, .environment = sky, .environmentIntensity = 0.5f});
 
     const RenderScene scene = fixture.extract();
     // The component says where the light goes; the renderer wants where it comes from.
@@ -189,6 +191,8 @@ TEST_CASE("The light and the ambient term are extracted", "[world]") {
     REQUIRE(scene.light.color == glm::vec3(1.0f, 0.9f, 0.8f));
     REQUIRE(scene.light.intensity == 3.0f);
     REQUIRE(scene.ambient == glm::vec3(0.1f, 0.2f, 0.3f));
+    REQUIRE(scene.environment.environment == sky);
+    REQUIRE(scene.environment.intensity == 0.5f);
 }
 
 TEST_CASE("rememberTransforms keeps the state of the step that just ended", "[world]") {

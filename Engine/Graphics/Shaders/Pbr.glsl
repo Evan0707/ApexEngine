@@ -52,7 +52,7 @@ vec3 shadeDirectionalLight(MaterialData material, vec3 n, vec3 v, vec3 l, vec3 r
     return (diffuse + specular) * radiance * nDotL;
 }
 
-// Constant ambient term (spec 5.5), replaced by image-based lighting in P1.
+// Constant ambient term (spec 5.5), replaced by image-based lighting when the scene has an environment.
 vec3 shadeAmbient(MaterialData material, vec3 ambient) {
     return ambient * (diffuseColor(material) + specularColor(material));
 }

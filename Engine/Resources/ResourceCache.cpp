@@ -211,6 +211,15 @@ std::optional<AssetPath> ResourceCache::modelPath(ModelHandle model) const {
     return std::nullopt;
 }
 
+std::optional<AssetPath> ResourceCache::environmentPath(EnvironmentHandle environment) const {
+    for (const auto& [path, handle] : m_environmentPaths) {
+        if (handle == environment) {
+            return path;
+        }
+    }
+    return std::nullopt;
+}
+
 const std::filesystem::path& ResourceCache::root() const noexcept {
     return m_root;
 }

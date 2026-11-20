@@ -23,6 +23,7 @@ namespace {
 constexpr std::string_view kFullScene = R"({
     "version": 1,
     "ambient": [0.1, 0.2, 0.3],
+    "environment": { "path": "Environments/sky.hdr", "intensity": 0.75 },
     "entities": [
         { "id": "camera", "transform": { "position": [0, 2.5, 7], "rotation_deg": [-15, 30, 0] },
           "camera": { "fov_deg": 65, "near": 0.25, "far": 300 } },
@@ -93,6 +94,7 @@ TEST_CASE("A scene survives the trip through the registry", "[serialization]") {
 
     const SceneDescription described = describeScene(registry, cache);
     REQUIRE(described.ambient == original.ambient);
+    REQUIRE(described.environment == original.environment);
     REQUIRE(described.entities.size() == original.entities.size());
     for (std::size_t i = 0; i < original.entities.size(); ++i) {
         const EntityDesc& before = original.entities[i];

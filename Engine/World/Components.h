@@ -136,8 +136,11 @@ struct DirectionalLight {
 
 // Scene-wide settings, stored in the registry's context.
 struct SceneEnvironment {
-    // Constant ambient term, linear RGB (spec 5.5).
+    // Constant ambient term, linear RGB (spec 5.5): lights the scene without an environment.
     glm::vec3 ambient{0.03f};
+    // The light around the scene (spec 5.4, decision 0022). A default handle: none.
+    resources::EnvironmentHandle environment;
+    float environmentIntensity = 1.0f;
 
     [[nodiscard]] bool operator==(const SceneEnvironment&) const noexcept = default;
 };

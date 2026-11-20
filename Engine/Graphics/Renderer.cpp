@@ -127,7 +127,23 @@ core::Result<void> Renderer::State::ensurePipelines() {
     if (scenePipeline.handle() != VK_NULL_HANDLE && scenePipeline.target() == target) {
         return {};
     }
-    const std::array setLayouts{frameBuffers.layout(), materialSets.layout()};
+    const std::array setLayouts{frameBuffers.layout(), materialSets.layout(), lightingSets.layout()};
+    // Same layouts as the scene's: the sets bound for the objects stay bound for the sky.
+    core::Result<GraphicsPipeline> sky =
+        GraphicsPipeline::create(device->device(), target,
+                                 PipelineDesc{.name = "sky pipeline",
+                                              .vertexShader = skyVertexShader(),
+                                              .fragmentShader = skyFragmentShader(),
+                                              .setLayouts = setLayouts,
+                                              .cullMode = VK_CULL_MODE_NONE,
+                                              .depthWrite = false,
+                                              .depthCompare = VK_COMPARE_OP_LESS_OR_EQUAL});
+    if (!sky) {
+        logger->error("{}", sky.error().message);
+        return std::unexpected(sky.error());
+    }
+    deleter.enqueue([old = std::move(skyPipeline)]() mutable { old = GraphicsPipeline(); });
+    skyPipeline = std::move(*sky);
     core::Result<GraphicsPipeline> created =
         GraphicsPipeline::create(device->device(), target,
                                  PipelineDesc{.name = "scene pipeline",
@@ -142,6 +158,40 @@ core::Result<void> Renderer::State::ensurePipelines() {
     // A frame in flight may still use the old pipeline.
     deleter.enqueue([old = std::move(scenePipeline)]() mutable { old = GraphicsPipeline(); });
     scenePipeline = std::move(*created);
+    return {};
+}
+
+core::Result<void> Renderer::State::createLightingResources() {
+    core::Result<LightingSets> sets = LightingSets::create(device->device(), kMaxLightingSets);
+    if (!sets) {
+        logger->error("{}", sets.error().message);
+        return std::unexpected(sets.error());
+    }
+    lightingSets = std::move(*sets);
+    core::Result<GpuTexture> table = createBrdfTable(device->device(), *allocator, upload);
+    if (!table) {
+        logger->error("{}", table.error().message);
+        return std::unexpected(table.error());
+    }
+    brdfTable = *table;
+    core::Result<GpuTexture> black = createBlackCube(device->device(), *allocator, upload);
+    if (!black) {
+        logger->error("{}", black.error().message);
+        return std::unexpected(black.error());
+    }
+    blackCube = *black;
+    const std::optional<VkDescriptorSet> set = lightingSets.allocate(blackCube.view, brdfTable.view);
+    if (!set) {
+        return vulkanError(*logger, "Allocating the default lighting set", VK_ERROR_OUT_OF_POOL_MEMORY);
+    }
+    defaultLightingSet = *set;
+    core::Result<EnvironmentPrefilter> created =
+        EnvironmentPrefilter::create(device->device(), *allocator, kEnvironmentFormat);
+    if (!created) {
+        logger->error("{}", created.error().message);
+        return std::unexpected(created.error());
+    }
+    prefilter = std::move(*created);
     return {};
 }
 
@@ -253,6 +303,9 @@ core::Result<std::unique_ptr<Renderer>> Renderer::create(platform::Window& windo
         return std::unexpected(upload.error());
     }
     state->upload = std::move(*upload);
+    if (core::Result<void> lighting = state->createLightingResources(); !lighting) {
+        return std::unexpected(lighting.error());
+    }
 
     // Created now when the window has a size: the debug interface needs its format at creation.
     // Otherwise the first renderFrame creates it.

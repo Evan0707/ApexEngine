@@ -45,8 +45,11 @@ struct EngineConfig {
     float shadowConstantBias = 0.02f;
     float shadowSlopeBias = 2.0f;
     // HDR output (spec 5.4, decision 0021): exposure in stops, from -4 to 4, and the ACES curve on or off.
-    float exposureStops = 0.0f;
+    // -1: chosen on the demo scene, lit by a sun of intensity 3 and its sky.
+    float exposureStops = -1.0f;
     bool toneMapping = true;
+    // Image-based lighting from the scene's environment (decision 0022); off: the constant ambient term.
+    bool imageBasedLighting = true;
 
     [[nodiscard]] bool operator==(const EngineConfig&) const noexcept = default;
 };

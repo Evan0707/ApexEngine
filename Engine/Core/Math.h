@@ -9,10 +9,12 @@
 #include <glm/ext/quaternion_trigonometric.hpp>
 #include <glm/ext/scalar_constants.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtc/packing.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/matrix.hpp>
+#include <glm/packing.hpp>
 #include <glm/trigonometric.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Math.h"
+#include "Graphics/EnvironmentLighting.h"
 #include "Graphics/RenderScene.h"
 
 #include <cstddef>
@@ -14,6 +15,8 @@ namespace apex::graphics {
 // Uniform buffer, std140.
 struct FrameUniforms {
     glm::mat4 viewProjection;
+    // Clip space back to render space: the sky's directions.
+    glm::mat4 inverseViewProjection;
     // Render space to the shadow map's clip space (decision 0021).
     glm::mat4 lightViewProjection;
     // xyz: unit vector towards the light, in render space (world orientation).
@@ -27,13 +30,20 @@ struct FrameUniforms {
     glm::vec4 shadow;
     // x: exposure multiplier. y: 1 for the ACES curve, 0 to clip at 1.
     glm::vec4 toneMapping;
+    // rgb: the environment's irradiance, nine spherical harmonics coefficients (decision 0022).
+    glm::vec4 irradiance[9];
+    // x: 1 when the environment lights the scene. y: its intensity. z: last level of its specular cubemap.
+    glm::vec4 environment;
 };
-static_assert(sizeof(FrameUniforms) == 208);
-static_assert(offsetof(FrameUniforms, lightViewProjection) == 64);
-static_assert(offsetof(FrameUniforms, directionToLight) == 128);
-static_assert(offsetof(FrameUniforms, ambient) == 160);
-static_assert(offsetof(FrameUniforms, shadow) == 176);
-static_assert(offsetof(FrameUniforms, toneMapping) == 192);
+static_assert(sizeof(FrameUniforms) == 432);
+static_assert(offsetof(FrameUniforms, inverseViewProjection) == 64);
+static_assert(offsetof(FrameUniforms, lightViewProjection) == 128);
+static_assert(offsetof(FrameUniforms, directionToLight) == 192);
+static_assert(offsetof(FrameUniforms, ambient) == 224);
+static_assert(offsetof(FrameUniforms, shadow) == 240);
+static_assert(offsetof(FrameUniforms, toneMapping) == 256);
+static_assert(offsetof(FrameUniforms, irradiance) == 272);
+static_assert(offsetof(FrameUniforms, environment) == 416);
 
 // One element of the per-object storage buffer, std430, read with gl_InstanceIndex (G-02).
 struct ObjectGpu {
@@ -51,9 +61,18 @@ static_assert(offsetof(ObjectGpu, materialIndex) == 128);
 // Shadows fade out over the last tenth of the area (decision 0021).
 inline constexpr float kShadowFadeStart = 0.9f;
 
+// The environment that lights a frame. No irradiance: the constant ambient term does.
+struct FrameEnvironment {
+    const IrradianceSh* irradiance = nullptr;
+    float intensity = 1.0f;
+    // Last level of the specular cubemap: the level for a roughness of 1.
+    float lastLevel = 0.0f;
+};
+
 // aspectRatio: width over height of the render target. shadowMapSize: pixels per side.
 [[nodiscard]] FrameUniforms makeFrameUniforms(const RenderScene& scene, float aspectRatio,
-                                              std::uint32_t shadowMapSize) noexcept;
+                                              std::uint32_t shadowMapSize,
+                                              const FrameEnvironment& environment = {}) noexcept;
 
 // 2^stops.
 [[nodiscard]] float exposureMultiplier(float stops) noexcept;

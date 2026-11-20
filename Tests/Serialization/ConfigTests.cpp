@@ -40,7 +40,7 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
                        "max_slope_deg": 40, "step_height": 0, "push_force": 250 },
         "third_person_camera": { "distance": 6, "aim_height": 1.2 },
         "shadows": { "enabled": false, "map_size": 4096, "area": 60, "constant_bias": 0, "slope_bias": 1.5 },
-        "rendering": { "exposure_ev": -1.5, "tonemapping": false }
+        "rendering": { "exposure_ev": -1.5, "tonemapping": false, "ibl": false }
     })",
                                           kEngine);
     REQUIRE(config.has_value());
@@ -67,6 +67,7 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
     REQUIRE(config->shadowSlopeBias == 1.5f);
     REQUIRE(config->exposureStops == -1.5f);
     REQUIRE_FALSE(config->toneMapping);
+    REQUIRE_FALSE(config->imageBasedLighting);
 }
 
 TEST_CASE("Fields left out of the engine configuration keep the specification's values", "[serialization]") {
