@@ -65,7 +65,7 @@
     {
       "id": "crate_01",
       "name": "Caisse",
-      "transform": { "position": [4.5, 0.0, -1.5] },
+      "transform": { "position": [4.5, 0.5, -1.5] },
       "mesh": "Models/crate.gltf",
       "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
       "rigid_body": { "type": "dynamic", "mass": 20.0 }
@@ -73,7 +73,7 @@
     {
       "id": "crate_02",
       "name": "Caisse",
-      "transform": { "position": [4.5, 1.0, -1.5], "rotation_deg": [0, 10, 0] },
+      "transform": { "position": [4.5, 1.5, -1.5], "rotation_deg": [0, 10, 0] },
       "mesh": "Models/crate.gltf",
       "collider": { "shape": "box", "half_extents": [0.5, 0.5, 0.5] },
       "rigid_body": { "type": "dynamic", "mass": 20.0 }

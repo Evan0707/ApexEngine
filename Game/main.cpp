@@ -13,6 +13,8 @@
 #include "Graphics/Renderer.h"
 #include "Graphics/ValidationLog.h"
 #include "Input/ActionMap.h"
+#include "Physics/PhysicsWorld.h"
+#include "Physics/Runtime.h"
 #include "Platform/Paths.h"
 #include "Platform/Window.h"
 #include "Resources/ResourceCache.h"
@@ -114,6 +116,19 @@ template <typename Config, typename Load>
     }
     resources::ResourceCache cache(assetsRoot, logger);
 
+    // Spec 5.1: Physics after Resources. The runtime holds Jolt's process-wide state (decision 0019).
+    core::Result<physics::Runtime> physicsRuntime = physics::Runtime::create();
+    if (!physicsRuntime) {
+        logger.error("{}", physicsRuntime.error().message);
+        return kExitFailure;
+    }
+    core::Result<std::unique_ptr<physics::PhysicsWorld>> physicsWorld = physics::PhysicsWorld::create(
+        *physicsRuntime, physics::PhysicsSettings{.gravity = engineConfig->gravity});
+    if (!physicsWorld) {
+        logger.error("{}", physicsWorld.error().message);
+        return kExitFailure;
+    }
+
     core::Result<std::unique_ptr<debug::DebugUi>> debugUi =
         debug::DebugUi::create(*window, **renderer, logger);
     if (!debugUi) {
@@ -125,7 +140,8 @@ template <typename Config, typename Load>
                                     .debugUi = **debugUi,
                                     .logHistory = logHistory,
                                     .logger = logger,
-                                    .cache = cache};
+                                    .cache = cache,
+                                    .physics = **physicsWorld};
     // The scene is loaded last (spec 5.1), by the application that owns the registry.
     core::Result<game::DemoApp> app =
         game::DemoApp::create(systems, std::move(*actions), options, *engineConfig);

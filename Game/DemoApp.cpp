@@ -7,6 +7,7 @@
 #include "Resources/AssetPath.h"
 #include "Serialization/SceneLoader.h"
 #include "World/Components.h"
+#include "World/PhysicsSync.h"
 #include "World/RenderExtraction.h"
 #include "World/SceneQueries.h"
 
@@ -153,7 +154,8 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
 DemoApp::DemoApp(const DemoSystems& systems, input::ActionMap actions)
     : m_window(&systems.window), m_renderer(&systems.renderer), m_debugUi(&systems.debugUi),
       m_logHistory(&systems.logHistory), m_logger(&systems.logger), m_cache(&systems.cache),
-      m_actions(std::move(actions)), m_frame(m_actions), m_simulation(m_actions) {}
+      m_physics(&systems.physics), m_actions(std::move(actions)), m_frame(m_actions),
+      m_simulation(m_actions) {}
 
 core::Result<void> DemoApp::loadScene(const CommandLineOptions& options) {
     const core::Result<resources::AssetPath> scenePath = resources::AssetPath::parse(options.scene);
@@ -187,7 +189,13 @@ core::Result<void> DemoApp::loadScene(const CommandLineOptions& options) {
     m_controls.maxVerticalFovDegrees = m_cameraSettings.maxVerticalFovDegrees;
     m_controls.verticalFovDegrees = clampVerticalFov(
         glm::degrees(m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians), m_cameraSettings);
-    m_logger->info("Scene '{}' loaded: {} entities", scenePath->str(), world::sceneEntityCount(m_registry));
+    // Bodies for the colliders of the scene (spec 4.3).
+    if (core::Result<void> created = world::createPhysicsObjects(m_registry, *m_physics); !created) {
+        return core::makeError(created.error().code,
+                               std::format("Scene '{}': {}", scenePath->str(), created.error().message));
+    }
+    m_logger->info("Scene '{}' loaded: {} entities, {} physics bodies", scenePath->str(),
+                   world::sceneEntityCount(m_registry), m_physics->bodyCount());
     return {};
 }
 
@@ -313,6 +321,8 @@ void DemoApp::simulate(const core::FixedStep& step) {
     logMouseLook(step);
     stepCamera(step);
     stepSpinners(m_registry, step.deltaSeconds);
+    // After the game wrote its intents: Physics advances and the transforms follow (spec 4.3).
+    world::stepPhysics(m_registry, *m_physics, step.deltaSeconds);
 
     m_simulation.clearTransient();
 }
@@ -367,6 +377,8 @@ void DemoApp::render() {
                                                 .counters = m_renderer->lastFrameCounters(),
                                                 .memory = m_renderer->memoryStats(),
                                                 .entityCount = world::sceneEntityCount(m_registry),
+                                                .bodyCount = m_physics->bodyCount(),
+                                                .activeBodyCount = m_physics->activeBodyCount(),
                                                 .log = *m_logHistory},
                           m_controls);
     if (!m_failed) {

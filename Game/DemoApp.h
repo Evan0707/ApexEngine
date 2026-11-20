@@ -14,6 +14,7 @@
 #include "Graphics/Renderer.h"
 #include "Input/ActionMap.h"
 #include "Input/ActionState.h"
+#include "Physics/PhysicsWorld.h"
 #include "Platform/Window.h"
 #include "Resources/ResourceCache.h"
 #include "Serialization/EngineConfig.h"
@@ -36,12 +37,13 @@ struct DemoSystems {
     const debug::LogHistory& logHistory;
     core::Logger& logger;
     resources::ResourceCache& cache;
+    physics::PhysicsWorld& physics;
 };
 
-// Phase 5 demo: loads a scene file into its registry (spec 5.1: last), gives its entities "camera" and
-// "spinner" their behavior, and draws what the registry holds, seen by the free camera, with the debug
-// panel (F1). Logs window events and actions, toggles cursor capture with the ToggleCursor action; the
-// mouse turns the camera only while the cursor is captured.
+// Phase 6 demo: loads a scene file into its registry (spec 5.1: last), gives its entities "camera" and
+// "spinner" their behavior, lets Physics move the bodies of its colliders, and draws what the registry
+// holds, seen by the free camera, with the debug panel (F1). Logs window events and actions, toggles cursor
+// capture with the ToggleCursor action; the mouse turns the camera only while the cursor is captured.
 class DemoApp final : public core::FramePhases {
 public:
     // options: scene, frame limit and benchmark mode; the renderer's vsync setting is only logged.
@@ -84,6 +86,7 @@ private:
     const debug::LogHistory* m_logHistory;
     core::Logger* m_logger;
     resources::ResourceCache* m_cache;
+    physics::PhysicsWorld* m_physics;
     // The world of the demo (spec 5.6): owned here, passed by reference (G-06).
     entt::registry m_registry;
     entt::entity m_cameraEntity = entt::null;

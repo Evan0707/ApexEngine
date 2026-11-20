@@ -2,7 +2,7 @@
 
 **Rôle :** outils de débogage : panneau ImGui affiché par F1, console des derniers avertissements et erreurs, statistiques de frame (cahier des charges, section 5.9).
 
-**État (phase 3) :** panneau de debug de la section 5.9 (Dear ImGui, note de décision 0008), affiché par F1 : FPS, temps CPU et temps de frame, entités, objets dessinés, triangles, mémoire GPU, réglage du champ de vision (note 0011), console des 100 derniers avertissements et erreurs. Les éléments P1 du panneau arrivent en phase 7.
+**État (phase 6) :** panneau de debug de la section 5.9 (Dear ImGui, note de décision 0008), affiché par F1 : FPS, temps CPU et temps de frame, entités, corps physiques, objets dessinés, triangles, mémoire GPU, réglage du champ de vision (note 0011), console des 100 derniers avertissements et erreurs. Les éléments P1 du panneau arrivent en phase 7.
 
 ## Interface publique
 
@@ -52,7 +52,7 @@ En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et
 ## Panneau (F1)
 
 - Masqué au démarrage. L'action `ToggleDebug` (F1) l'affiche ou le masque ; son bouton de fermeture le masque aussi.
-- Contenu (section 5.9) : FPS ; temps CPU par frame et durée de frame, moyenne et maximum sur une seconde ; entités (0 avant le module `World`, phase 5) ; objets dessinés et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
+- Contenu (section 5.9) : FPS ; temps CPU par frame et durée de frame, moyenne et maximum sur une seconde ; entités ; corps physiques et nombre de ceux qui ne dorment pas (ajout de la phase 6, hors de la liste de la section 5.9) ; objets dessinés et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
 - Réglages (note 0011) : `buildFrame(data, controls)` reçoit une `DebugControls` que les widgets modifient : champ de vision vertical, de 50° à 100° (section 5.3). Le panneau ne connaît pas la caméra ; l'application lit la valeur et l'applique. Le même mécanisme servira à l'exposition et aux bascules de la phase 7.
 - La console suit les nouvelles lignes tant que la vue est en bas ; remonter permet de lire les plus anciennes.
 - Les couleurs ajoutées par le panneau sont données en sRGB et converties en linéaire, comme le thème.

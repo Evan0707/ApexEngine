@@ -16,6 +16,9 @@ struct DebugPanelData {
     graphics::GpuMemoryStats memory;
     // 0 until the World module (phase 5).
     std::size_t entityCount = 0;
+    // Physics bodies, and those that are not asleep.
+    std::size_t bodyCount = 0;
+    std::size_t activeBodyCount = 0;
     const LogHistory& log;
 };
 

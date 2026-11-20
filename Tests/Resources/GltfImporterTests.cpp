@@ -131,11 +131,12 @@ TEST_CASE("Primitives that share a material are merged into one part", "[resourc
     requireNear(first.vertices[5].position, {0.0f, 6.0f, 0.0f});
 }
 
-TEST_CASE("The crate's node lifts it onto the floor", "[resources]") {
+TEST_CASE("The crate's node doubles its mesh into a 1 m cube centered on the origin", "[resources]") {
+    // Centered as its box collider (decision 0019).
     const ModelData model = importOrFail(asset("Models/crate.gltf"));
     const auto [low, high] = bounds(model.parts[0].mesh);
-    requireNear(low, {-0.5f, 0.0f, -0.5f});
-    requireNear(high, {0.5f, 1.0f, 0.5f});
+    requireNear(low, {-0.5f, -0.5f, -0.5f});
+    requireNear(high, {0.5f, 0.5f, 0.5f});
 }
 
 TEST_CASE("A model exported by another tool imports at its real size", "[resources]") {

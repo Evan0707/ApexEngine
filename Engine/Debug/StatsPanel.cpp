@@ -33,6 +33,7 @@ void drawFrameSection(const FrameTimeStats& frameTimes) {
 
 void drawSceneSection(const DebugPanelData& data) {
     ImGui::Text("Entities: %zu", data.entityCount);
+    ImGui::Text("Physics bodies: %zu (%zu awake)", data.bodyCount, data.activeBodyCount);
     ImGui::Text("Objects drawn: %u", data.counters.drawCalls);
     ImGui::Text("Triangles: %llu", static_cast<unsigned long long>(data.counters.triangles));
     ImGui::Text("GPU memory: %.0f MiB used, %.0f MiB budget",

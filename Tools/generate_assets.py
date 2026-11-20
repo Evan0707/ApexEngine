@@ -269,10 +269,11 @@ def crate():
     material = builder.material("Crate", metallic=1.0, roughness=1.0,
                                 color_texture=builder.texture_from_uri("crate_color.jpg"),
                                 metal_rough_texture=builder.texture_from_uri("crate_metal_rough.png"))
-    positions, normals, uvs, indices = cube_geometry(1.0, lambda _: (0.0, 0.0, 1.0, 1.0))
+    positions, normals, uvs, indices = cube_geometry(0.5, lambda _: (0.0, 0.0, 1.0, 1.0))
     mesh = builder.mesh("Crate", [builder.primitive(positions, normals, uvs, indices, material=material)])
-    # The mesh is centered; its node lifts it so that the crate rests on y = 0 (flattened at import).
-    body = builder.node(root=False, name="CrateBody", mesh=mesh, translation=[0.0, 0.5, 0.0])
+    # Centered on its origin, as its box collider (decision 0019). The mesh is half size and its node doubles
+    # it, so that the demo exercises a node transform (flattened at import).
+    body = builder.node(root=False, name="CrateBody", mesh=mesh, scale=[2.0, 2.0, 2.0])
     builder.node(name="Crate", children=[body])
     builder.write_gltf(MODELS / "crate.gltf", binary_uri="crate.bin")
 
