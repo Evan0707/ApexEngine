@@ -41,7 +41,8 @@ void drawFrameSection(const FrameTimeStats& frameTimes) {
 void drawSceneSection(const DebugPanelData& data) {
     ImGui::Text("Entities: %zu", data.entityCount);
     ImGui::Text("Physics bodies: %zu (%zu awake)", data.bodyCount, data.activeBodyCount);
-    ImGui::Text("Objects drawn: %u", data.counters.drawCalls);
+    ImGui::Text("Objects drawn: %u (shadow pass: %u)", data.counters.drawCalls,
+                data.counters.shadowDrawCalls);
     ImGui::Text("Triangles: %llu", static_cast<unsigned long long>(data.counters.triangles));
     ImGui::Text("GPU memory: %.0f MiB used, %.0f MiB budget",
                 static_cast<double>(data.memory.usedBytes) / kBytesPerMebibyte,
@@ -51,6 +52,18 @@ void drawSceneSection(const DebugPanelData& data) {
 void drawCameraSection(DebugControls& controls) {
     ImGui::SliderFloat("Field of view", &controls.verticalFovDegrees, controls.minVerticalFovDegrees,
                        controls.maxVerticalFovDegrees, "%.0f degrees", ImGuiSliderFlags_AlwaysClamp);
+}
+
+// Ranges of the sliders; the configuration may go beyond them.
+constexpr float kMaxConstantBias = 0.2f;
+constexpr float kMaxSlopeBias = 8.0f;
+
+void drawShadowSection(DebugControls& controls) {
+    ImGui::Checkbox("Shadows (F4)", &controls.shadows);
+    ImGui::BeginDisabled(!controls.shadows);
+    ImGui::SliderFloat("Constant bias", &controls.shadowConstantBias, 0.0f, kMaxConstantBias, "%.3f m");
+    ImGui::SliderFloat("Slope bias", &controls.shadowSlopeBias, 0.0f, kMaxSlopeBias, "%.2f");
+    ImGui::EndDisabled();
 }
 
 void drawLogSection(const LogHistory& log) {
@@ -89,6 +102,8 @@ void drawStatsPanel(const DebugPanelData& data, DebugControls& controls, bool& o
         drawSceneSection(data);
         ImGui::Separator();
         drawCameraSection(controls);
+        ImGui::Separator();
+        drawShadowSection(controls);
         ImGui::Separator();
         drawLogSection(data.log);
     }

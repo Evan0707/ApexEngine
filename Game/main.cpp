@@ -97,8 +97,10 @@ template <typename Config, typename Load>
         return kExitFailure;
     }
 
-    const graphics::RendererConfig rendererConfig{
-        .applicationName = "Apex Demo", .enableValidation = kEnableValidation, .vsync = options.vsync};
+    const graphics::RendererConfig rendererConfig{.applicationName = "Apex Demo",
+                                                  .enableValidation = kEnableValidation,
+                                                  .vsync = options.vsync,
+                                                  .shadowMapSize = engineConfig->shadowMapSize};
     core::Result<std::unique_ptr<graphics::Renderer>> renderer =
         graphics::Renderer::create(*window, logger, validation, rendererConfig);
     if (!renderer) {

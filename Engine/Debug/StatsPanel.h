@@ -27,6 +27,10 @@ struct DebugControls {
     float verticalFovDegrees = 70.0f;
     float minVerticalFovDegrees = 50.0f;
     float maxVerticalFovDegrees = 100.0f;
+    // Shadows (decision 0021): on or off (also F4), depth bias in meters and slope factor.
+    bool shadows = true;
+    float shadowConstantBias = 0.02f;
+    float shadowSlopeBias = 2.0f;
 };
 
 // Internal to Debug: draws the panel with Dear ImGui, inside DebugUi::buildFrame. open becomes false when

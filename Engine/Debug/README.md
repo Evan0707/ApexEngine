@@ -53,8 +53,8 @@ En-tête interne : `Debug/ImGuiBackend.h` (`ImGuiBackend`), les backends SDL3 et
 ## Panneau (F1)
 
 - Masqué au démarrage. L'action `ToggleDebug` (F1) l'affiche ou le masque ; son bouton de fermeture le masque aussi.
-- Contenu (section 5.9) : FPS ; temps CPU, temps GPU (P1) et durée de frame, moyenne et maximum sur une seconde ; entités ; corps physiques et nombre de ceux qui ne dorment pas (ajout de la phase 6, hors de la liste de la section 5.9) ; objets dessinés et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
-- Réglages (note 0011) : `buildFrame(data, controls)` reçoit une `DebugControls` que les widgets modifient : champ de vision vertical, de 50° à 100° (section 5.3). Le panneau ne connaît pas la caméra ; l'application lit la valeur et l'applique. Le même mécanisme servira à l'exposition et aux bascules de la phase 7.
+- Contenu (section 5.9) : FPS ; temps CPU, temps GPU (P1) et durée de frame, moyenne et maximum sur une seconde ; entités ; corps physiques et nombre de ceux qui ne dorment pas (ajout de la phase 6, hors de la liste de la section 5.9) ; objets dessinés (et ceux de la passe d'ombre) et triangles de la dernière frame ; mémoire GPU utilisée et budget ; console des 100 derniers avertissements et erreurs, en jaune et en rouge.
+- Réglages (note 0011) : `buildFrame(data, controls)` reçoit une `DebugControls` que les widgets modifient : champ de vision vertical, de 50° à 100° (section 5.3) ; ombres (case, aussi basculée par F4), biais constant de 0 à 0,2 m et biais de pente de 0 à 8 (note 0021). Le panneau ne connaît ni la caméra ni le renderer ; l'application lit les valeurs et les applique.
 - La console suit les nouvelles lignes tant que la vue est en bas ; remonter permet de lire les plus anciennes.
 - Les couleurs ajoutées par le panneau sont données en sRGB et converties en linéaire, comme le thème.
 

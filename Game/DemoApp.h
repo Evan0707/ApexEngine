@@ -21,6 +21,7 @@
 #include "Resources/ResourceCache.h"
 #include "Serialization/EngineConfig.h"
 #include "World/Components.h"
+#include "World/ShadowFocus.h"
 
 #include <entt/entity/registry.hpp>
 
@@ -106,6 +107,7 @@ private:
 
     input::ActionId m_toggleCursor{};
     input::ActionId m_toggleDebug{};
+    input::ActionId m_toggleShadows{};
     input::ActionId m_sprint{};
     input::ActionId m_jump{};
     input::ActionId m_switchCamera{};
@@ -124,6 +126,8 @@ private:
     OrbitCameraSettings m_orbitSettings;
     PlayerSettings m_playerSettings;
     world::CharacterBody m_characterBody;
+    // Framing from the configuration; on/off and biases come from the panel's controls each frame.
+    world::ShadowSettings m_shadowSettings;
     // False: free camera, the character receives no input (spec 6.2 starts this way). True: the camera
     // orbits around the character, which the move, sprint and jump actions drive.
     bool m_thirdPerson = false;

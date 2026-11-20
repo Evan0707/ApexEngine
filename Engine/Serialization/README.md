@@ -2,7 +2,7 @@
 
 **Rôle :** lecture et écriture des scènes et de la configuration en JSON (cahier des charges, sections 3.1, 5.2 et 5.6).
 
-**État (phase 6) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration, dont la gravité, le personnage et la caméra troisième personne (notes de décision 0016, 0017 et 0019).
+**État (phase 7) :** lecture et écriture d'une scène, version 1 du format, et lecture de la configuration, dont la gravité, le personnage, la caméra troisième personne et les ombres (notes de décision 0016, 0017, 0019 et 0021).
 
 ## Interface publique
 
@@ -102,6 +102,11 @@ Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal 
 | `character.push_force` | 400 | Newtons, positif ou nul : la force maximale exercée sur un corps poussé. 400 N font tomber une pile de trois caisses de 20 kg ; 100 N la font seulement glisser |
 | `third_person_camera.distance` | 4 | Mètres entre le point visé et la caméra (section 5.3), strictement positif |
 | `third_person_camera.aim_height` | 1,6 | Hauteur du point visé au-dessus des pieds du personnage, en mètres, positive ou nulle |
+| `shadows.enabled` | true | Ombres au lancement (section 5.4, décision 0021) ; F4 et le panneau les basculent ensuite |
+| `shadows.map_size` | 2048 | Pixels par côté de la shadow map, entier de 256 à 8192. Lu au lancement seulement |
+| `shadows.area` | 40 | Côté de la zone ombrée autour du personnage, en mètres, strictement positif |
+| `shadows.constant_bias` | 0,02 | Biais de profondeur constant, en mètres, positif ou nul |
+| `shadows.slope_bias` | 2 | Biais de pente du rasterizer, positif ou nul |
 
 `input.json` : la table d'actions.
 

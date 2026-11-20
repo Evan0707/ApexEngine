@@ -13,5 +13,6 @@
     "step_height": 0.3,
     "push_force": 400.0
   },
-  "third_person_camera": { "distance": 4.0, "aim_height": 1.6 }
+  "third_person_camera": { "distance": 4.0, "aim_height": 1.6 },
+  "shadows": { "enabled": true, "map_size": 2048, "area": 40.0, "constant_bias": 0.02, "slope_bias": 2.0 }
 }

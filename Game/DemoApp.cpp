@@ -107,6 +107,11 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
                              .maxSlopeRadians = glm::radians(config.characterMaxSlopeDegrees),
                              .stepHeight = config.characterStepHeight,
                              .maxPushForce = config.characterPushForce};
+    app.m_shadowSettings.mapSize = config.shadowMapSize;
+    app.m_shadowSettings.areaSize = config.shadowAreaSize;
+    app.m_controls.shadows = config.shadowsEnabled;
+    app.m_controls.shadowConstantBias = config.shadowConstantBias;
+    app.m_controls.shadowSlopeBias = config.shadowSlopeBias;
     if (core::Result<void> loaded = app.loadScene(options); !loaded) {
         return std::unexpected(loaded.error());
     }
@@ -147,6 +152,7 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
 
     app.m_toggleCursor = *toggleCursor;
     app.m_toggleDebug = *toggleDebug;
+    app.m_toggleShadows = *app.m_actions.find("ToggleShadows");
     // Present: findActions above checked every name.
     app.m_sprint = *app.m_actions.find("Sprint");
     app.m_jump = *app.m_actions.find("Jump");
@@ -269,6 +275,10 @@ void DemoApp::handleFrameActions() {
     }
     if (m_frame.wasPressed(m_toggleDebug)) {
         m_debugUi->setPanelVisible(!m_debugUi->panelVisible());
+    }
+    if (m_frame.wasPressed(m_toggleShadows)) {
+        m_controls.shadows = !m_controls.shadows;
+        m_logger->info("Shadows {}", m_controls.shadows ? "on" : "off");
     }
 }
 
@@ -444,9 +454,12 @@ void DemoApp::extract(double alpha) {
     m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians =
         glm::radians(clampVerticalFov(m_controls.verticalFovDegrees, m_cameraSettings));
     world::extractRenderScene(m_registry, *m_cache, m_cameraEntity, static_cast<float>(alpha), m_renderScene);
+    m_shadowSettings.enabled = m_controls.shadows;
+    m_shadowSettings.constantBias = m_controls.shadowConstantBias;
+    m_shadowSettings.slopeBias = m_controls.shadowSlopeBias;
     // Centered on the character, even in free camera (spec 5.4).
     world::extractShadow(m_registry, m_cameraEntity, m_playerEntity, static_cast<float>(alpha),
-                         world::ShadowSettings{}, m_renderScene);
+                         m_shadowSettings, m_renderScene);
 }
 
 void DemoApp::render() {

@@ -38,7 +38,8 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
         "physics": { "gravity": [0, -1.62, 0] },
         "character": { "height": 1.6, "radius": 0.25, "walk_speed": 3, "run_speed": 6, "jump_height": 1,
                        "max_slope_deg": 40, "step_height": 0, "push_force": 250 },
-        "third_person_camera": { "distance": 6, "aim_height": 1.2 }
+        "third_person_camera": { "distance": 6, "aim_height": 1.2 },
+        "shadows": { "enabled": false, "map_size": 4096, "area": 60, "constant_bias": 0, "slope_bias": 1.5 }
     })",
                                           kEngine);
     REQUIRE(config.has_value());
@@ -58,6 +59,11 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
     REQUIRE(config->characterPushForce == 250.0f);
     REQUIRE(config->thirdPersonCameraDistance == 6.0f);
     REQUIRE(config->thirdPersonCameraAimHeight == 1.2f);
+    REQUIRE_FALSE(config->shadowsEnabled);
+    REQUIRE(config->shadowMapSize == 4096);
+    REQUIRE(config->shadowAreaSize == 60.0f);
+    REQUIRE(config->shadowConstantBias == 0.0f);
+    REQUIRE(config->shadowSlopeBias == 1.5f);
 }
 
 TEST_CASE("Fields left out of the engine configuration keep the specification's values", "[serialization]") {
@@ -100,6 +106,18 @@ TEST_CASE("An invalid engine configuration names the file and the field", "[seri
                  {"field 'character'"});
     requireError(parseEngineConfig(R"({"version": 1, "third_person_camera": {"distance": 0}})", kEngine),
                  kEngine, {"field 'third_person_camera.distance'", "greater than 0"});
+    requireError(parseEngineConfig(R"({"version": 1, "shadows": {"enabled": 1}})", kEngine), kEngine,
+                 {"field 'shadows.enabled'", "true or false"});
+    requireError(parseEngineConfig(R"({"version": 1, "shadows": {"map_size": 2048.5}})", kEngine), kEngine,
+                 {"field 'shadows.map_size'", "whole number"});
+    requireError(parseEngineConfig(R"({"version": 1, "shadows": {"map_size": 128}})", kEngine), kEngine,
+                 {"field 'shadows.map_size'", "between 256 and 8192"});
+    requireError(parseEngineConfig(R"({"version": 1, "shadows": {"area": 0}})", kEngine), kEngine,
+                 {"field 'shadows.area'", "greater than 0"});
+    requireError(parseEngineConfig(R"({"version": 1, "shadows": {"slope_bias": -1}})", kEngine), kEngine,
+                 {"field 'shadows.slope_bias'", "not negative"});
+    requireError(parseEngineConfig(R"({"version": 1, "shadows": {"pcf": 3}})", kEngine), kEngine,
+                 {"field 'shadows.pcf'", "unknown field"});
     requireError(parseEngineConfig(R"({"version": 1, "vsync": true})", kEngine), kEngine, {"field 'vsync'"});
     requireError(parseEngineConfig("{", kEngine), kEngine, {"invalid JSON"});
 }

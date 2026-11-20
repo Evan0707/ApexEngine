@@ -16,6 +16,9 @@ namespace {
 
 // Larger than any window a display can show; guards against a typo with too many digits.
 constexpr float kMaxWindowSize = 16384.0f;
+// Shadow map sizes: below, shadows are blocks; above, the memory of a 4K texture for one light.
+constexpr float kMinShadowMapSize = 256.0f;
+constexpr float kMaxShadowMapSize = 8192.0f;
 
 // Parses the text, checks that it is an object of the supported version.
 [[nodiscard]] core::Result<Json> parseConfigRoot(std::string_view text, const JsonContext& context) {
@@ -62,6 +65,28 @@ constexpr float kMaxWindowSize = 16384.0f;
     if (!value.is_number_integer() || *number < 1.0f || *number > kMaxWindowSize) {
         return jsonError(context, field,
                          std::format("expected a whole number of pixels between 1 and {}", kMaxWindowSize));
+    }
+    return static_cast<std::uint32_t>(*number);
+}
+
+[[nodiscard]] core::Result<bool> readBool(const Json& value, const JsonContext& context,
+                                          std::string_view field) {
+    if (!value.is_boolean()) {
+        return jsonError(context, field, "expected true or false");
+    }
+    return value.get<bool>();
+}
+
+[[nodiscard]] core::Result<std::uint32_t> readShadowMapSize(const Json& value, const JsonContext& context,
+                                                            std::string_view field) {
+    const core::Result<float> number = readNumber(value, context, field);
+    if (!number) {
+        return std::unexpected(number.error());
+    }
+    if (!value.is_number_integer() || *number < kMinShadowMapSize || *number > kMaxShadowMapSize) {
+        return jsonError(context, field,
+                         std::format("expected a whole number of pixels between {} and {}", kMinShadowMapSize,
+                                     kMaxShadowMapSize));
     }
     return static_cast<std::uint32_t>(*number);
 }
@@ -165,7 +190,8 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         return std::unexpected(root.error());
     }
     if (core::Result<void> known = rejectUnknownFields(
-            *root, {"version", "window", "free_camera", "physics", "character", "third_person_camera"},
+            *root,
+            {"version", "window", "free_camera", "physics", "character", "third_person_camera", "shadows"},
             context, {});
         !known) {
         return std::unexpected(known.error());
@@ -224,6 +250,34 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         }
         if (read) {
             read = readOptional(*physics, "gravity", context, "physics", config.gravity, readVec3);
+        }
+        if (!read) {
+            return std::unexpected(read.error());
+        }
+    }
+    if (const auto shadows = root->find("shadows"); shadows != root->end()) {
+        core::Result<void> read = requireObject(*shadows, context, "shadows");
+        if (read) {
+            read = rejectUnknownFields(
+                *shadows, {"enabled", "map_size", "area", "constant_bias", "slope_bias"}, context, "shadows");
+        }
+        if (read) {
+            read = readOptional(*shadows, "enabled", context, "shadows", config.shadowsEnabled, readBool);
+        }
+        if (read) {
+            read = readOptional(*shadows, "map_size", context, "shadows", config.shadowMapSize,
+                                readShadowMapSize);
+        }
+        if (read) {
+            read = readOptional(*shadows, "area", context, "shadows", config.shadowAreaSize, readPositive);
+        }
+        if (read) {
+            read = readOptional(*shadows, "constant_bias", context, "shadows", config.shadowConstantBias,
+                                readNotNegative);
+        }
+        if (read) {
+            read = readOptional(*shadows, "slope_bias", context, "shadows", config.shadowSlopeBias,
+                                readNotNegative);
         }
         if (!read) {
             return std::unexpected(read.error());

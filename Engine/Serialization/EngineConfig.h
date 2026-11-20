@@ -12,8 +12,8 @@ namespace apex::serialization {
 // The only configuration file version this build reads (spec 3.1).
 inline constexpr int kConfigVersion = 1;
 
-// Config/engine.json (spec 5.2, 5.3, 5.7, decisions 0017 and 0019). The default values are those of the
-// specification: a field left out of the file keeps them.
+// Config/engine.json (spec 5.2, 5.3, 5.4, 5.7, decisions 0017, 0019 and 0021). The default values are those
+// of the specification: a field left out of the file keeps them.
 struct EngineConfig {
     // Size of the window's drawing area at start, in pixels.
     std::uint32_t windowWidth = 1920;
@@ -37,6 +37,13 @@ struct EngineConfig {
     // character's feet.
     float thirdPersonCameraDistance = 4.0f;
     float thirdPersonCameraAimHeight = 1.6f;
+    // Shadows (spec 5.4, decision 0021): on at start, pixels per side of the shadow map, meters of the side
+    // of the area around the character, depth bias in meters and slope factor.
+    bool shadowsEnabled = true;
+    std::uint32_t shadowMapSize = 2048;
+    float shadowAreaSize = 40.0f;
+    float shadowConstantBias = 0.02f;
+    float shadowSlopeBias = 2.0f;
 
     [[nodiscard]] bool operator==(const EngineConfig&) const noexcept = default;
 };

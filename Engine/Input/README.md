@@ -56,7 +56,7 @@ const apex::input::InputBindings bindings{
 auto actions = apex::input::ActionMap::create(bindings);
 ```
 
-F2 (colliders) et F4 (ombres) sont des fonctions P1 : leurs actions seront ajoutées avec ces fonctions.
+F2 (`ToggleColliders`) et F4 (`ToggleShadows`) sont des fonctions P1 (phase 7) : leurs actions sont dans `Config/input.json`, et c'est `Game` qui les applique.
 
 ## État des actions
 
