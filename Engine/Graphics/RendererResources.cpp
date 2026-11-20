@@ -108,7 +108,10 @@ void Renderer::State::syncMaterialSets(const resources::ResourceCache& cache) {
             freeLater(std::move(*defaultMaterialSet));
         }
         const VkImageView white = resolveTexture({}, cache.checkerTexture(), cache.whiteTexture());
-        defaultMaterialSet = white != VK_NULL_HANDLE ? materialSets.allocate(white, white) : std::nullopt;
+        const VkImageView flat = resolveTexture({}, cache.flatNormalTexture(), cache.flatNormalTexture());
+        defaultMaterialSet = white != VK_NULL_HANDLE && flat != VK_NULL_HANDLE
+                                 ? materialSets.allocate(white, white, flat)
+                                 : std::nullopt;
     }
     materialSetMirror.sync(
         cache.materials(),
@@ -118,10 +121,14 @@ void Renderer::State::syncMaterialSets(const resources::ResourceCache& cache) {
                 resolveTexture(material.baseColorTexture, cache.checkerTexture(), cache.whiteTexture());
             const VkImageView metallicRoughness = resolveTexture(
                 material.metallicRoughnessTexture, cache.checkerTexture(), cache.whiteTexture());
-            if (baseColor == VK_NULL_HANDLE || metallicRoughness == VK_NULL_HANDLE) {
+            // A normal map that is not ready gives a flat surface, not the checker (decision 0021).
+            const VkImageView normal =
+                resolveTexture(material.normalTexture, cache.flatNormalTexture(), cache.flatNormalTexture());
+            if (baseColor == VK_NULL_HANDLE || metallicRoughness == VK_NULL_HANDLE ||
+                normal == VK_NULL_HANDLE) {
                 return std::nullopt;
             }
-            std::optional<VkDescriptorSet> set = materialSets.allocate(baseColor, metallicRoughness);
+            std::optional<VkDescriptorSet> set = materialSets.allocate(baseColor, metallicRoughness, normal);
             if (!set) {
                 logger->warning("No room for another material descriptor set: the default material is used");
             }

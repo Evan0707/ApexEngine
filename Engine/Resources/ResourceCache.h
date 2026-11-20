@@ -75,6 +75,8 @@ public:
     [[nodiscard]] TextureHandle checkerTexture() const noexcept;
     // Given for a material without a texture.
     [[nodiscard]] TextureHandle whiteTexture() const noexcept;
+    // Given for a material without a normal map, or whose normal map is not ready or failed (decision 0021).
+    [[nodiscard]] TextureHandle flatNormalTexture() const noexcept;
 
     // Read by the renderer to upload what became ready and release what was unloaded.
     [[nodiscard]] const ResourcePool<MeshHandle, MeshData>& meshes() const noexcept;
@@ -111,6 +113,7 @@ private:
     MaterialHandle m_defaultMaterial;
     TextureHandle m_checker;
     TextureHandle m_white;
+    TextureHandle m_flatNormal;
     std::size_t m_filesRead = 0;
 };
 

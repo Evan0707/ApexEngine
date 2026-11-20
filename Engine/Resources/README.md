@@ -9,7 +9,7 @@
 | En-tête | Contenu |
 |---|---|
 | `Resources/MeshData.h` | `Vertex`, `MeshData`, `triangleCount()`, `validate()`, `BoundingSphere`, `boundingSphere()` |
-| `Resources/MaterialData.h` | `MaterialData` : couleur de base, métal, rugosité, handles des deux textures |
+| `Resources/MaterialData.h` | `MaterialData` : couleur de base, métal, rugosité, facteur de la normal map, handles des trois textures |
 | `Resources/Primitives.h` | `makeCube(size)`, `makeSphere(radius, segments, rings)` |
 | `Resources/AssetPath.h` | `AssetPath` : `parse()`, `resolveSibling()`, `str()` |
 | `Resources/Handles.h` | `Handle`, `MeshHandle`, `TextureHandle`, `MaterialHandle`, `ModelHandle`, `EnvironmentHandle`, `ResourceState` |
@@ -17,7 +17,7 @@
 | `Resources/EnvironmentData.h` | `EnvironmentData` : image équirectangulaire de radiance en RGB flottant ; `environmentUv()`, `environmentDirection()` |
 | `Resources/ImageDecoder.h` | `decodeImage()`, `decodeHdrImage()`, `kMaxImageSize` |
 | `Resources/FileReader.h` | `readFile()` |
-| `Resources/FallbackAssets.h` | `makeCheckerTexture()`, `makeWhiteTexture()`, `makeFallbackMesh()`, `makeDefaultMaterial()` |
+| `Resources/FallbackAssets.h` | `makeCheckerTexture()`, `makeWhiteTexture()`, `makeFlatNormalTexture()`, `makeFallbackMesh()`, `makeDefaultMaterial()` |
 | `Resources/ModelData.h` | `ModelImage`, `ModelMaterial`, `ModelPart`, `ModelData` : ce que produit un importeur |
 | `Resources/GltfImporter.h` | `importGltf()` |
 | `Resources/ResourceCache.h` | `ModelPartRef`, `Model`, `ResourceCache` : `loadModel()`, `loadTexture()`, `loadEnvironment()`, `addMesh()`, `addMaterial()`, `addModel()`, `state()`, `parts()`, assets de secours, `meshes()`, `textures()`, `materials()`, `environments()`, `unloadAll()`, `filesRead()` |
@@ -29,7 +29,7 @@
 - `MeshData` : liste de triangles indexés sur 32 bits, faces avant dans le sens antihoraire (section 3.3).
 - `boundingSphere()` : une sphère qui contient tous les sommets, centrée sur leur boîte englobante (pas la plus petite possible, mais proche pour les formes de la démo). Sert au frustum culling de `Graphics` (décision 0021).
 - `validate()` vérifie ce que `Graphics` suppose : au moins un triangle, indices dans les bornes, positions finies, normales et tangentes unitaires. L'erreur nomme le mesh et l'élément fautif.
-- `MaterialData` : modèle PBR metallic-roughness de glTF, simplifié (section 5.5), couleur de base en linéaire, multipliée par la texture de couleur (sRGB) ; métal et rugosité multipliés par les canaux bleu et vert de la texture métal-rugosité (linéaire). Un handle de texture par défaut signifie « pas de texture ». Les valeurs par défaut forment le matériau par défaut du moteur : gris clair, non métallique, rugosité 0,5, sans texture.
+- `MaterialData` : modèle PBR metallic-roughness de glTF, simplifié (section 5.5), couleur de base en linéaire, multipliée par la texture de couleur (sRGB) ; métal et rugosité multipliés par les canaux bleu et vert de la texture métal-rugosité (linéaire). Normal map (P1, décision 0021) : texture linéaire en espace tangent, convention glTF (+X à droite, +Y vers le haut de la texture, +Z hors de la surface), et son facteur `normalScale` (le `scale` de glTF), qui multiplie X et Y. Un handle de texture par défaut signifie « pas de texture » (surface plate pour la normal map). Les valeurs par défaut forment le matériau par défaut du moteur : gris clair, non métallique, rugosité 0,5, sans texture.
 
 ## Chemins d'assets
 
@@ -66,7 +66,7 @@
 - Hiérarchie aplatie (section 5.5, décision 0014) : chaque primitive est transformée par la matrice monde de son nœud, puis les primitives d'un même matériau sont fusionnées en une partie. Un nœud qui inverse le repère (échelle négative) inverse aussi l'ordre des sommets de ses triangles, pour garder des faces avant antihoraires.
 - Lus : `POSITION`, `NORMAL`, `TANGENT`, `TEXCOORD_0` (entiers normalisés compris), indices 8, 16 ou 32 bits, ou aucun indice. Les points et les lignes sont ignorés.
 - Normales absentes : moyenne des faces voisines, pondérée par leur aire. Tangentes absentes : calculées à partir des UV, avec la convention de `Vertex` ; une tangente impossible à calculer (UV dégénérés) devient une perpendiculaire quelconque à la normale.
-- Matériaux : facteurs metallic-roughness (bornés à [0 ; 1]) et indices des images de couleur de base et de métal-rugosité. Les valeurs absentes du fichier prennent celles de glTF (blanc, métal et rugosité à 1). Une primitive sans matériau reçoit le matériau par défaut du moteur (gris, non métallique), plus lisible sans IBL que celui de glTF. Seul le premier jeu d'UV existe : `texCoord` est ignoré, comme les samplers, les normal maps (P1), l'occlusion et l'émissif.
+- Matériaux : facteurs metallic-roughness (bornés à [0 ; 1]) et indices des images de couleur de base et de métal-rugosité. Les valeurs absentes du fichier prennent celles de glTF (blanc, métal et rugosité à 1). Une primitive sans matériau reçoit le matériau par défaut du moteur (gris, non métallique), plus lisible sans IBL que celui de glTF. La normal map (`normalTexture` et son `scale`) est lue depuis la phase 7. Seul le premier jeu d'UV existe : `texCoord` est ignoré, comme les samplers, l'occlusion et l'émissif.
 - Images : non décodées par l'importeur. Une image est soit un chemin relatif au modèle, déjà décodé des échappements d'URI, soit des octets (GLB, `data:` en base64). Le cache les charge ; une image absente n'empêche pas l'import du modèle.
 - Scène lue : la scène par défaut, sinon la première, sinon tous les nœuds sans parent. Une hiérarchie de plus de 64 niveaux est refusée (protection contre un cycle).
 - Limite : le chemin du fichier est passé à cgltf en encodage ANSI pour les `.bin` externes ; un dossier dont le nom contient des caractères hors de cet encodage ne fonctionnera pas.
@@ -90,6 +90,7 @@
 
 - `makeCheckerTexture()` : damier magenta et noir de 64 × 64 pixels, cases de 8, en sRGB, pour une texture en échec.
 - `makeWhiteTexture()` : un texel blanc, pour un matériau sans texture : multiplier par 1 laisse les facteurs inchangés.
+- `makeFlatNormalTexture()` (`flatNormalTexture()` du cache) : un texel (128, 128, 255), linéaire, la normale de la surface elle-même. Une normal map absente, en chargement ou en échec la remplace : le damier, lu comme des normales, tordrait l'éclairage sans signaler l'erreur, que le log signale déjà (décision 0021).
 - `makeFallbackMesh()` : cube de 1 m centré sur l'origine, pour un modèle en échec ; `makeDefaultMaterial()` : le matériau par défaut.
 
 ## Primitives

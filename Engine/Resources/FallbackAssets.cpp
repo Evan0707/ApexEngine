@@ -38,6 +38,14 @@ TextureData makeWhiteTexture(ColorSpace colorSpace) {
         .name = "White", .width = 1, .height = 1, .pixels = {255, 255, 255, 255}, .colorSpace = colorSpace};
 }
 
+TextureData makeFlatNormalTexture() {
+    return TextureData{.name = "Flat normal",
+                       .width = 1,
+                       .height = 1,
+                       .pixels = {128, 128, 255, 255},
+                       .colorSpace = ColorSpace::Linear};
+}
+
 MeshData makeFallbackMesh() {
     return makeCube(1.0f);
 }

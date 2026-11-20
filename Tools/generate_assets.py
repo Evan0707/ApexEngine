@@ -16,7 +16,7 @@ import math
 import pathlib
 import struct
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODELS = ROOT / "Assets" / "Models"
@@ -103,13 +103,18 @@ class GltfBuilder:
         return self._append("textures", {"source": image, "sampler": 0})
 
     def material(self, name, color=(1.0, 1.0, 1.0, 1.0), metallic=1.0, roughness=1.0, color_texture=None,
-                 metal_rough_texture=None):
+                 metal_rough_texture=None, normal_texture=None, normal_scale=None):
         pbr = {"baseColorFactor": list(color), "metallicFactor": metallic, "roughnessFactor": roughness}
         if color_texture is not None:
             pbr["baseColorTexture"] = {"index": color_texture}
         if metal_rough_texture is not None:
             pbr["metallicRoughnessTexture"] = {"index": metal_rough_texture}
-        return self._append("materials", {"name": name, "pbrMetallicRoughness": pbr})
+        material = {"name": name, "pbrMetallicRoughness": pbr}
+        if normal_texture is not None:
+            material["normalTexture"] = {"index": normal_texture}
+            if normal_scale is not None:
+                material["normalTexture"]["scale"] = normal_scale
+        return self._append("materials", material)
 
     def _json_bytes(self):
         return json.dumps(self.doc, indent=2, sort_keys=True).encode("utf-8")
@@ -287,6 +292,48 @@ def reference_cube():
     builder.write_glb(MODELS / "reference_cube.glb")
 
 
+def crate_height(size):
+    """The relief of the crate's face, matching its color texture: grooves between the planks, grain lines a
+    little lower, a raised frame and raised metal corners."""
+    height = Image.new("L", (size, size), 128)
+    draw = ImageDraw.Draw(height)
+    for plank in range(6):
+        top = plank * size // 6
+        draw.rectangle([0, top, size - 1, top + 2], fill=40)
+        draw.rectangle([0, top + size // 6 - 3, size - 1, top + size // 6 - 1], fill=40)
+        for grain in range(5):
+            y = top + 12 + grain * 13
+            draw.line([(20, y), (size - 20, y + (grain % 2) * 4)], fill=112, width=2)
+    frame = 40
+    for rect in ([0, 0, size - 1, frame], [0, size - frame, size - 1, size - 1], [0, 0, frame, size - 1],
+                 [size - frame, 0, size - 1, size - 1]):
+        draw.rectangle(rect, fill=176)
+    corner = 72
+    for x, y in ((0, 0), (size - corner, 0), (0, size - corner), (size - corner, size - corner)):
+        draw.rectangle([x, y, x + corner - 1, y + corner - 1], fill=200)
+    return height.filter(ImageFilter.GaussianBlur(1.5))
+
+
+def normal_map(height, strength=2.0):
+    """A tangent-space normal map from a height map, glTF convention: +X right, +Y towards the top of the
+    image, +Z out of the surface."""
+    width, rows = height.size
+    values = list(height.tobytes())
+    pixels = []
+    for row in range(rows):
+        for column in range(width):
+            def at(x, y):
+                return values[min(max(y, 0), rows - 1) * width + min(max(x, 0), width - 1)] / 255.0
+            dx = at(column + 1, row) - at(column - 1, row)
+            # Rows grow downwards: up the image is -row.
+            dy = at(column, row + 1) - at(column, row - 1)
+            normal = normalize((-dx * strength, dy * strength, 1.0))
+            pixels.append(tuple(int(round((c * 0.5 + 0.5) * 255.0)) for c in normal))
+    image = Image.new("RGB", (width, rows))
+    image.putdata(pixels)
+    return image
+
+
 def crate():
     """A wooden crate with metal corners: external .bin, JPG color and PNG metallic-roughness."""
     size = 512
@@ -313,11 +360,13 @@ def crate():
 
     color.save(MODELS / "crate_color.jpg", "JPEG", quality=90)
     metal_rough.save(MODELS / "crate_metal_rough.png", "PNG", optimize=True)
+    normal_map(crate_height(size)).save(MODELS / "crate_normal.png", "PNG", optimize=True)
 
     builder = GltfBuilder()
     material = builder.material("Crate", metallic=1.0, roughness=1.0,
                                 color_texture=builder.texture_from_uri("crate_color.jpg"),
-                                metal_rough_texture=builder.texture_from_uri("crate_metal_rough.png"))
+                                metal_rough_texture=builder.texture_from_uri("crate_metal_rough.png"),
+                                normal_texture=builder.texture_from_uri("crate_normal.png"))
     positions, normals, uvs, indices = cube_geometry(0.5, lambda _: (0.0, 0.0, 1.0, 1.0))
     mesh = builder.mesh("Crate", [builder.primitive(positions, normals, uvs, indices, material=material)])
     # Centered on its origin, as its box collider (decision 0019). The mesh is half size and its node doubles
@@ -381,7 +430,10 @@ def textured(builder):
     material = builder.material(
         "Textured", color=(0.5, 0.5, 0.5, 1.0), metallic=0.25, roughness=0.75,
         color_texture=builder.texture_from_uri("../Images/rgba_2x2.png"),
-        metal_rough_texture=builder.texture_from_bytes(image_bytes(embedded, "PNG"), "image/png"))
+        metal_rough_texture=builder.texture_from_bytes(image_bytes(embedded, "PNG"), "image/png"),
+        normal_texture=builder.texture_from_bytes(image_bytes(Image.new("RGB", (2, 2), (128, 128, 255)), "PNG"),
+                                                  "image/png"),
+        normal_scale=0.5)
     mesh = builder.mesh("Textured", [builder.primitive(TRIANGLE, TRIANGLE_NORMALS, TRIANGLE_UVS, [0, 1, 2],
                                                        material=material)])
     builder.node(name="Textured", mesh=mesh)

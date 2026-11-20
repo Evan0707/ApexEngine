@@ -87,11 +87,17 @@
     },
     {
       "uri": "crate_metal_rough.png"
+    },
+    {
+      "uri": "crate_normal.png"
     }
   ],
   "materials": [
     {
       "name": "Crate",
+      "normalTexture": {
+        "index": 2
+      },
       "pbrMetallicRoughness": {
         "baseColorFactor": [
           1.0,
@@ -167,6 +173,10 @@
     {
       "sampler": 0,
       "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
     }
   ]
 }

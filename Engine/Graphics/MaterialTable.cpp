@@ -11,7 +11,8 @@ namespace {
     return MaterialGpu{.baseColor = material.baseColorFactor,
                        .metallic = material.metallicFactor,
                        .roughness = material.roughnessFactor,
-                       .padding = {}};
+                       .normalScale = material.normalScale,
+                       .padding = 0.0f};
 }
 
 } // namespace

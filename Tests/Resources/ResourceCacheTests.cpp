@@ -57,8 +57,8 @@ TEST_CASE("A model path is loaded once, whatever its spelling", "[resources]") {
     const ModelHandle again = fixture.cache->loadModel("Models\\.\\crate.gltf");
     REQUIRE(first == again);
     REQUIRE(fixture.cache->state(first) == ResourceState::Ready);
-    // The model and its two textures.
-    REQUIRE(fixture.cache->filesRead() == 3);
+    // The model and its three textures.
+    REQUIRE(fixture.cache->filesRead() == 4);
     REQUIRE(fixture.errors.empty());
 }
 
@@ -74,6 +74,8 @@ TEST_CASE("A loaded model's material points to its loaded textures", "[resources
     REQUIRE(fixture.cache->textures().find(material->baseColorTexture)->colorSpace == ColorSpace::Srgb);
     REQUIRE(fixture.cache->textures().find(material->metallicRoughnessTexture)->colorSpace ==
             ColorSpace::Linear);
+    // Normals are data, not colors.
+    REQUIRE(fixture.cache->textures().find(material->normalTexture)->colorSpace == ColorSpace::Linear);
     REQUIRE(fixture.cache->loadTexture("Models/crate_color.jpg", ColorSpace::Srgb) ==
             material->baseColorTexture);
 }
@@ -136,10 +138,13 @@ TEST_CASE("unloadAll makes every handle stale and keeps the fallbacks ready", "[
     REQUIRE(fixture.cache->parts(crate)[0].mesh == fixture.cache->fallbackMesh());
     REQUIRE(fixture.cache->meshes().find(fixture.cache->fallbackMesh()) != nullptr);
     REQUIRE(fixture.cache->textures().find(fixture.cache->checkerTexture()) != nullptr);
+    const TextureData* flat = fixture.cache->textures().find(fixture.cache->flatNormalTexture());
+    REQUIRE(flat != nullptr);
+    REQUIRE(flat->pixels == std::vector<std::uint8_t>{128, 128, 255, 255});
 
     // Loaded again: read again.
     REQUIRE(fixture.cache->state(fixture.cache->loadModel("Models/crate.gltf")) == ResourceState::Ready);
-    REQUIRE(fixture.cache->filesRead() == 6);
+    REQUIRE(fixture.cache->filesRead() == 8);
 }
 
 TEST_CASE("Meshes and materials made in code are checked", "[resources]") {

@@ -15,6 +15,10 @@ namespace apex::resources {
 [[nodiscard]] TextureData makeWhiteTexture(ColorSpace colorSpace);
 
 // A cube of 1 m centered on the origin, drawn in place of a model that is not ready or failed.
+// A normal map of one texel pointing out of the surface: what a material without one, or with one that
+// failed, is drawn with (decision 0021). Not the checker: a checker read as normals would bend the light.
+[[nodiscard]] TextureData makeFlatNormalTexture();
+
 [[nodiscard]] MeshData makeFallbackMesh();
 
 // The default material of MaterialData, without textures.

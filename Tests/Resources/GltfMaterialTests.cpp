@@ -69,6 +69,10 @@ TEST_CASE("Textures point to external files or to bytes inside the model", "[res
     REQUIRE(color.uri == "../Images/rgba_2x2.png");
     REQUIRE(color.bytes.empty());
 
+    REQUIRE(material.normalImage.has_value());
+    REQUIRE(material.factors.normalScale == 0.5f);
+    REQUIRE_FALSE(model.images.at(*material.normalImage).bytes.empty());
+
     REQUIRE(material.metallicRoughnessImage.has_value());
     const ModelImage& metalRough = model.images.at(*material.metallicRoughnessImage);
     REQUIRE(metalRough.uri.empty());

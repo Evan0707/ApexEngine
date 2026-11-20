@@ -18,6 +18,10 @@ struct MaterialData {
     TextureHandle baseColorTexture;
     // Linear (glTF: metallic in blue, roughness in green). A default handle means no texture.
     TextureHandle metallicRoughnessTexture;
+    // Linear, tangent space as in glTF (decision 0021). A default handle means a flat surface.
+    TextureHandle normalTexture;
+    // glTF normalTexture.scale: multiplies X and Y of the sampled normal.
+    float normalScale = 1.0f;
 };
 
 } // namespace apex::resources

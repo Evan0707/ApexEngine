@@ -191,6 +191,10 @@ private:
         // Only the first UV set exists in the engine's vertex: texCoord is ignored.
         converted.baseColorImage = imageOf(pbr.base_color_texture);
         converted.metallicRoughnessImage = imageOf(pbr.metallic_roughness_texture);
+        converted.normalImage = imageOf(material.normal_texture);
+        if (converted.normalImage) {
+            converted.factors.normalScale = material.normal_texture.scale;
+        }
         return converted;
     }
 

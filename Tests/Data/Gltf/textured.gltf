@@ -1,34 +1,18 @@
 {
   "accessors": [
     {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 3,
-      "max": [
-        1.0,
-        1.0,
-        0.0
-      ],
-      "min": [
-        0.0,
-        0.0,
-        0.0
-      ],
-      "type": "VEC3"
-    },
-    {
       "bufferView": 2,
       "componentType": 5126,
       "count": 3,
       "max": [
-        0.0,
-        0.0,
-        1.0
+        1.0,
+        1.0,
+        0.0
       ],
       "min": [
         0.0,
         0.0,
-        1.0
+        0.0
       ],
       "type": "VEC3"
     },
@@ -36,10 +20,26 @@
       "bufferView": 3,
       "componentType": 5126,
       "count": 3,
-      "type": "VEC2"
+      "max": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "min": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "type": "VEC3"
     },
     {
       "bufferView": 4,
+      "componentType": 5126,
+      "count": 3,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 5,
       "componentType": 5123,
       "count": 3,
       "type": "SCALAR"
@@ -57,33 +57,38 @@
     },
     {
       "buffer": 0,
+      "byteLength": 75,
+      "byteOffset": 76
+    },
+    {
+      "buffer": 0,
       "byteLength": 36,
-      "byteOffset": 76,
+      "byteOffset": 152,
       "target": 34962
     },
     {
       "buffer": 0,
       "byteLength": 36,
-      "byteOffset": 112,
+      "byteOffset": 188,
       "target": 34962
     },
     {
       "buffer": 0,
       "byteLength": 24,
-      "byteOffset": 148,
+      "byteOffset": 224,
       "target": 34962
     },
     {
       "buffer": 0,
       "byteLength": 6,
-      "byteOffset": 172,
+      "byteOffset": 248,
       "target": 34963
     }
   ],
   "buffers": [
     {
-      "byteLength": 178,
-      "uri": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGNkaPjPwMDAxAAGABEfAYP1piHtAAAAAElFTkSuQmCCAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAIA/AACAPwAAgD8AAAAAAAAAAAAAAQACAA=="
+      "byteLength": 254,
+      "uri": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGNkaPjPwMDAxAAGABEfAYP1piHtAAAAAElFTkSuQmCCAIlQTkcNChoKAAAADUlIRFIAAAACAAAAAggCAAAA/dSacwAAABJJREFUeJxjbGj4z8DAwMQABgAXnwIDOOR51QAAAABJRU5ErkJgggAAAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAACAPwAAgD8AAIA/AAAAAAAAAAAAAAEAAgA="
     }
   ],
   "images": [
@@ -93,11 +98,19 @@
     {
       "bufferView": 0,
       "mimeType": "image/png"
+    },
+    {
+      "bufferView": 1,
+      "mimeType": "image/png"
     }
   ],
   "materials": [
     {
       "name": "Textured",
+      "normalTexture": {
+        "index": 2,
+        "scale": 0.5
+      },
       "pbrMetallicRoughness": {
         "baseColorFactor": [
           0.5,
@@ -162,6 +175,10 @@
     {
       "sampler": 0,
       "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
     }
   ]
 }

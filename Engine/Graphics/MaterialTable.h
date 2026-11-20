@@ -18,7 +18,8 @@ struct MaterialGpu {
     glm::vec4 baseColor;
     float metallic;
     float roughness;
-    float padding[2];
+    float normalScale;
+    float padding;
 };
 static_assert(sizeof(MaterialGpu) == 32);
 

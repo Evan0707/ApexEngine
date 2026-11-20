@@ -28,6 +28,7 @@ ResourceCache::ResourceCache(std::filesystem::path assetsRoot, core::Logger& log
 void ResourceCache::createFallbacks() {
     m_checker = m_textures.add(makeCheckerTexture());
     m_white = m_textures.add(makeWhiteTexture(ColorSpace::Srgb));
+    m_flatNormal = m_textures.add(makeFlatNormalTexture());
     m_defaultMaterial = m_materials.add(makeDefaultMaterial());
     MaterialData fallback = makeDefaultMaterial();
     fallback.baseColorFactor = glm::vec4(1.0f);
@@ -84,6 +85,9 @@ MaterialHandle ResourceCache::modelMaterial(const AssetPath& model, const ModelD
     if (source.metallicRoughnessImage) {
         converted.metallicRoughnessTexture =
             imageTexture(model, data, *source.metallicRoughnessImage, ColorSpace::Linear);
+    }
+    if (source.normalImage) {
+        converted.normalTexture = imageTexture(model, data, *source.normalImage, ColorSpace::Linear);
     }
     return addMaterial(std::format("{} material '{}'", model.str(), source.name), converted);
 }
@@ -259,6 +263,10 @@ TextureHandle ResourceCache::checkerTexture() const noexcept {
 
 TextureHandle ResourceCache::whiteTexture() const noexcept {
     return m_white;
+}
+
+TextureHandle ResourceCache::flatNormalTexture() const noexcept {
+    return m_flatNormal;
 }
 
 const ResourcePool<MeshHandle, MeshData>& ResourceCache::meshes() const noexcept {

@@ -144,13 +144,13 @@ core::Result<void> Renderer::State::ensurePipelines() {
     }
     deleter.enqueue([old = std::move(skyPipeline)]() mutable { old = GraphicsPipeline(); });
     skyPipeline = std::move(*sky);
-    core::Result<GraphicsPipeline> created =
-        GraphicsPipeline::create(device->device(), target,
-                                 PipelineDesc{.name = "scene pipeline",
-                                              .vertexShader = sceneVertexShader(),
-                                              .fragmentShader = sceneFragmentShader(),
-                                              .setLayouts = setLayouts,
-                                              .meshAttributes = kMeshPosition | kMeshNormal | kMeshUv});
+    core::Result<GraphicsPipeline> created = GraphicsPipeline::create(
+        device->device(), target,
+        PipelineDesc{.name = "scene pipeline",
+                     .vertexShader = sceneVertexShader(),
+                     .fragmentShader = sceneFragmentShader(),
+                     .setLayouts = setLayouts,
+                     .meshAttributes = kMeshPosition | kMeshNormal | kMeshTangent | kMeshUv});
     if (!created) {
         logger->error("{}", created.error().message);
         return std::unexpected(created.error());

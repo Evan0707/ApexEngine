@@ -11,12 +11,13 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) flat in uint inMaterial;
 layout(location = 3) in vec2 inUv;
+layout(location = 4) in vec4 inTangent;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
     MaterialData material = sampleMaterial(inMaterial, inUv);
-    vec3 n = normalize(inNormal);
+    vec3 n = sampleNormal(inMaterial, inUv, normalize(inNormal), inTangent);
     vec3 v = normalize(-inPosition);
     vec3 radiance = frame.lightRadiance.rgb * shadowVisibility(inPosition);
     // The environment replaces the constant ambient term (spec 5.5) when there is one.

@@ -34,6 +34,7 @@ TEST_CASE("The per-frame structures match the GLSL layouts", "[graphics]") {
     STATIC_REQUIRE(sizeof(MaterialGpu) == 32);
     STATIC_REQUIRE(offsetof(MaterialGpu, metallic) == 16);
     STATIC_REQUIRE(offsetof(MaterialGpu, roughness) == 20);
+    STATIC_REQUIRE(offsetof(MaterialGpu, normalScale) == 24);
 }
 
 TEST_CASE("The normal matrix keeps normals perpendicular under non-uniform scale", "[graphics]") {

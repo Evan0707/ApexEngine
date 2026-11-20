@@ -9,7 +9,7 @@ namespace apex::graphics {
 
 namespace {
 
-constexpr std::uint32_t kTexturesPerMaterial = 2;
+constexpr std::uint32_t kTexturesPerMaterial = 3;
 
 [[nodiscard]] std::unexpected<core::Error> setsError(std::string_view what, VkResult result) {
     return core::makeError(
@@ -27,6 +27,8 @@ core::Result<MaterialSets> MaterialSets::create(VkDevice device, std::uint32_t m
         VkDescriptorSetLayoutBinding{0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
                                      VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         VkDescriptorSetLayoutBinding{1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                                     VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        VkDescriptorSetLayoutBinding{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
                                      VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
     };
     const VkDescriptorSetLayoutCreateInfo layoutInfo{
@@ -104,7 +106,8 @@ VkDescriptorSetLayout MaterialSets::layout() const noexcept {
     return m_layout;
 }
 
-std::optional<VkDescriptorSet> MaterialSets::allocate(VkImageView baseColor, VkImageView metallicRoughness) {
+std::optional<VkDescriptorSet> MaterialSets::allocate(VkImageView baseColor, VkImageView metallicRoughness,
+                                                      VkImageView normal) {
     const VkDescriptorSetAllocateInfo allocateInfo{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
                                                    .descriptorPool = m_pool,
                                                    .descriptorSetCount = 1,
@@ -116,6 +119,7 @@ std::optional<VkDescriptorSet> MaterialSets::allocate(VkImageView baseColor, VkI
     const std::array images{
         VkDescriptorImageInfo{m_sampler, baseColor, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
         VkDescriptorImageInfo{m_sampler, metallicRoughness, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+        VkDescriptorImageInfo{m_sampler, normal, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
     };
     std::array<VkWriteDescriptorSet, kTexturesPerMaterial> writes{};
     for (std::uint32_t binding = 0; binding < writes.size(); ++binding) {

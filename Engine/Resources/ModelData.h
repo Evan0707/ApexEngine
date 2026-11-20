@@ -24,6 +24,7 @@ struct ModelMaterial {
     MaterialData factors;
     std::optional<std::uint32_t> baseColorImage;
     std::optional<std::uint32_t> metallicRoughnessImage;
+    std::optional<std::uint32_t> normalImage;
 };
 
 // One mesh drawn with one material.
