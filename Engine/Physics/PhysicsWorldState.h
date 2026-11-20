@@ -7,12 +7,16 @@
 
 #include <Jolt/Core/JobSystemSingleThreaded.h>
 #include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/BroadPhase/BroadPhaseLayerInterfaceTable.h>
 #include <Jolt/Physics/Collision/BroadPhase/ObjectVsBroadPhaseLayerFilterTable.h>
 #include <Jolt/Physics/Collision/ObjectLayerPairFilterTable.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 
 #include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace apex::physics {
 
@@ -40,7 +44,15 @@ struct LayerPairs final : JPH::ObjectLayerPairFilterTable {
     LayerPairs();
 };
 
-// Members are destroyed in reverse order: the system first, then what it points to.
+// A character and how Jolt updates it. The slot is free when `character` is empty; `generation` counts its
+// reuses so that an old handle does not name a new character.
+struct CharacterSlot {
+    std::unique_ptr<JPH::CharacterVirtual> character;
+    JPH::CharacterVirtual::ExtendedUpdateSettings update;
+    std::uint32_t generation = 0;
+};
+
+// Members are destroyed in reverse order: the characters, the system, then what it points to.
 struct PhysicsWorld::State {
     explicit State(const PhysicsSettings& settings);
 
@@ -51,6 +63,11 @@ struct PhysicsWorld::State {
     // One thread: multithreading is a deferred optimization (spec 4.5, decision 0018).
     JPH::JobSystemSingleThreaded jobs;
     JPH::PhysicsSystem system;
+    std::vector<CharacterSlot> characters;
+
+    // Null for an invalid or stale handle.
+    [[nodiscard]] JPH::CharacterVirtual* findCharacter(CharacterHandle handle) const noexcept;
+    void updateCharacters(float deltaSeconds);
 };
 
 } // namespace apex::physics

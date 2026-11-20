@@ -49,9 +49,11 @@ PhysicsWorld::~PhysicsWorld() = default;
 void PhysicsWorld::step(double deltaSeconds) {
     APEX_PROFILE_SCOPE("Physics step");
     APEX_ASSERT(deltaSeconds > 0.0, "A physics step needs a positive duration");
+    const float seconds = static_cast<float>(deltaSeconds);
+    m_state->updateCharacters(seconds);
     // One collision step per fixed step (spec 5.7: 1/60 s).
     const JPH::EPhysicsUpdateError error =
-        m_state->system.Update(static_cast<float>(deltaSeconds), 1, &m_state->tempAllocator, &m_state->jobs);
+        m_state->system.Update(seconds, 1, &m_state->tempAllocator, &m_state->jobs);
     APEX_ASSERT(error == JPH::EPhysicsUpdateError::None, "A physics capacity was exceeded during the step");
     static_cast<void>(error);
 }

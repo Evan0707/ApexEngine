@@ -30,7 +30,8 @@ public:
     PhysicsWorld(const PhysicsWorld&) = delete;
     PhysicsWorld& operator=(const PhysicsWorld&) = delete;
 
-    // Advances the simulation by one fixed step. deltaSeconds must be positive.
+    // Advances the simulation by one fixed step: the characters first, then the bodies. deltaSeconds must be
+    // positive.
     void step(double deltaSeconds);
 
     [[nodiscard]] glm::vec3 gravity() const;
@@ -65,6 +66,22 @@ public:
     [[nodiscard]] std::optional<CastHit> spherecast(const core::WorldPosition& origin, float radius,
                                                     const glm::vec3& direction, float maxDistance,
                                                     const QueryFilter& filter = {}) const;
+
+    // Fails on an invalid description (InvalidArgument).
+    [[nodiscard]] core::Result<CharacterHandle> createCharacter(const CharacterDesc& desc);
+    void destroyCharacter(CharacterHandle character);
+    [[nodiscard]] bool contains(CharacterHandle character) const;
+    [[nodiscard]] std::uint32_t characterCount() const;
+
+    // The velocity the character tries to move with during the next steps, until set again. Physics adds
+    // neither gravity nor a jump: the caller builds the whole vector, each step, from characterState():
+    //  - on the ground: ground velocity + wanted horizontal velocity + jump speed + gravity * step;
+    //  - otherwise: wanted horizontal velocity + current vertical velocity + gravity * step.
+    void setCharacterVelocity(CharacterHandle character, const glm::vec3& velocity);
+    // Teleports the feet, without a sweep.
+    void setCharacterPosition(CharacterHandle character, const core::WorldPosition& position);
+    // Empty for a stale handle.
+    [[nodiscard]] std::optional<CharacterState> characterState(CharacterHandle character) const;
 
 private:
     std::unique_ptr<State> m_state;

@@ -2,7 +2,7 @@
 
 **Rôle :** simulation physique du moteur, par encapsulation de Jolt Physics (cahier des charges, sections 5.7 et 5.8). Le module ne connaît ni les entités ni EnTT : `World` lui pousse des données et recopie les résultats (section 4.3).
 
-**État (phase 6, tâche 3) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques, raycast et spherecast (notes de décision 0018, 0019 et 0020). Le personnage arrive dans la tâche suivante.
+**État (phase 6) :** état global de Jolt, monde physique, gravité, pas fixe, corps rigides statiques et dynamiques, raycast et spherecast, personnage (notes de décision 0018, 0019 et 0020).
 
 ## Interface publique
 
@@ -10,8 +10,8 @@
 |---|---|
 | `Physics/Runtime.h` | `Runtime` : crée et détruit l'état global de Jolt |
 | `Physics/PhysicsSettings.h` | `PhysicsSettings` : gravité, capacités |
-| `Physics/PhysicsTypes.h` | `BodyHandle`, `ShapeType`, `Shape`, `MotionType`, `BodyTransform`, `BodyDesc`, `QueryFilter`, `CastHit` |
-| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()`, `raycast()`, `spherecast()` |
+| `Physics/PhysicsTypes.h` | `BodyHandle`, `ShapeType`, `Shape`, `MotionType`, `BodyTransform`, `BodyDesc`, `QueryFilter`, `CastHit`, `CharacterHandle`, `CharacterDesc`, `GroundState`, `CharacterState` |
+| `Physics/PhysicsWorld.h` | `PhysicsWorld` : `create()`, `step()`, `gravity()`, `bodyCount()`, `activeBodyCount()`, `createBody()`, `destroyBody()`, `contains()`, `transform()`, `setTransform()`, `linearVelocity()`, `setLinearVelocity()`, `applyImpulse()`, `isActive()`, `raycast()`, `spherecast()`, `createCharacter()`, `destroyCharacter()`, `characterCount()`, `setCharacterVelocity()`, `setCharacterPosition()`, `characterState()` |
 
 Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
@@ -51,6 +51,19 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 - Une requête qui démarre à l'intérieur d'un corps le touche à la distance zéro.
 - `QueryFilter` choisit les couches : corps statiques, corps dynamiques, ou les deux (par défaut). Un personnage n'est pas un corps : aucune requête ne le touche.
 
+## Personnage
+
+- Le personnage est une capsule debout déplacée par `CharacterVirtual` de Jolt (section 5.8) : aucun contrôleur n'est réécrit. Jolt résout les collisions, le glissement le long des murs, la pente maximale, les marches et la poussée des corps dynamiques.
+- La section 5.7 ne cite pas le personnage dans l'interface ; il y est parce qu'aucun type Jolt ne peut sortir du module (décision 0019).
+- `CharacterDesc` porte les valeurs de la section 5.8 par défaut : hauteur 1,8 m, rayon 0,3 m, pente maximale 45°, marche de 0,3 m, masse 70 kg, force de poussée 100 N. La position est celle des pieds.
+- **Qui décide de la vitesse.** `Physics` n'ajoute ni gravité ni saut. À chaque pas, l'appelant donne la vitesse complète par `setCharacterVelocity`, calculée à partir de `characterState()` :
+  - au sol : vitesse du sol + vitesse horizontale voulue + vitesse de saut + gravité × pas ;
+  - sinon : vitesse horizontale voulue + vitesse verticale courante + gravité × pas.
+- `characterState()` rend la position des pieds, la vitesse telle qu'elle a été donnée (les collisions ne la modifient pas : c'est la position qui dit ce qui a bougé), l'état au sol (`OnGround`, `OnSteepGround`, `InAir`), la normale et la vitesse du sol.
+- `step()` met à jour les personnages, puis les corps.
+- Un personnage n'est pas un corps : il n'est pas compté par `bodyCount()` et les requêtes ne le touchent pas. Les corps dynamiques ne le voient pas non plus ; c'est lui qui les détecte et les pousse.
+- `CharacterHandle` (indice et génération) : périmé après `destroyCharacter`, puis ignoré par toutes les fonctions.
+
 ## Couches de collision
 
 | Couche | Touche |
@@ -70,4 +83,4 @@ Aucun de ces en-têtes n'inclut Jolt ni n'expose un type Jolt.
 
 ## Tests
 
-`Tests/Physics/`, étiquette `[physics]`, sans fenêtre ni GPU (section 5.7). Ils couvrent AC-08 (un corps lâché de 10 m ne traverse pas le sol) et AC-09 (une pile de trois caisses reste en place 10 s), et tournent en Debug comme en Release.
+`Tests/Physics/`, étiquette `[physics]`, sans fenêtre ni GPU (section 5.7). Ils couvrent AC-08 (un corps lâché de 10 m ne traverse pas le sol ; le personnage en course ne traverse pas un mur de 10 cm, même à 30 m/s) et AC-09 (une pile de trois caisses reste en place 10 s ; une caisse poussée par le personnage se déplace), ainsi que la pente, les marches et le saut de 1,2 m. Ils tournent en Debug comme en Release.
