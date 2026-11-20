@@ -4,6 +4,7 @@
 #include "GameComponents.h"
 
 #include "Core/Error.h"
+#include "Physics/PhysicsWorld.h"
 #include "World/Components.h"
 
 #include <entt/entity/registry.hpp>
@@ -44,6 +45,20 @@ void placeFreeCameraEntity(entt::registry& registry, entt::entity camera, const 
 // world::createPhysicsObjects.
 void stepPlayerEntity(entt::registry& registry, entt::entity player, const PlayerInput& input,
                       const glm::vec3& gravity, double deltaSeconds, const PlayerSettings& settings);
+
+// Switches the camera entity to third person: it keeps looking the way it does, from behind `player`.
+void startOrbitCameraEntity(entt::registry& registry, entt::entity camera, entt::entity player,
+                            const OrbitCameraSettings& settings);
+
+// One fixed step of the third-person camera (G-05), after world::stepPhysics: turns with the mouse,
+// follows the character, and sweeps a sphere through `physics` so that nothing static or dynamic stands
+// between the character and the camera (spec 5.3).
+void stepOrbitCameraEntity(entt::registry& registry, entt::entity camera, entt::entity player,
+                           const OrbitCameraInput& input, const physics::PhysicsWorld& physics,
+                           double deltaSeconds, const OrbitCameraSettings& settings);
+
+// Gives the camera entity back to its free camera controller, where it is and looking the same way.
+void releaseOrbitCameraEntity(entt::registry& registry, entt::entity camera);
 
 // One fixed step of every Spin.
 void stepSpinners(entt::registry& registry, double deltaSeconds);

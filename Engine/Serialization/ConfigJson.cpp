@@ -165,7 +165,8 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
         return std::unexpected(root.error());
     }
     if (core::Result<void> known = rejectUnknownFields(
-            *root, {"version", "window", "free_camera", "physics", "character"}, context, {});
+            *root, {"version", "window", "free_camera", "physics", "character", "third_person_camera"},
+            context, {});
         !known) {
         return std::unexpected(known.error());
     }
@@ -203,6 +204,13 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
                                {"max_slope_deg", config.characterMaxSlopeDegrees, readSlopeDegrees},
                                {"step_height", config.characterStepHeight, readNotNegative},
                                {"push_force", config.characterPushForce, readNotNegative}});
+        !read) {
+        return std::unexpected(read.error());
+    }
+    if (core::Result<void> read =
+            readNumberSection(*root, "third_person_camera", context,
+                              {{"distance", config.thirdPersonCameraDistance},
+                               {"aim_height", config.thirdPersonCameraAimHeight, readNotNegative}});
         !read) {
         return std::unexpected(read.error());
     }

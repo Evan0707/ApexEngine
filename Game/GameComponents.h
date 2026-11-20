@@ -1,5 +1,6 @@
 #pragma once
 
+#include "OrbitCamera.h"
 #include "PlayerMotion.h"
 
 namespace apex::game {
@@ -12,6 +13,12 @@ namespace apex::game {
 struct FreeCameraController {
     float yaw = 0.0f;
     float pitch = 0.0f;
+};
+
+// On the camera entity while the camera is in third person (spec 5.3): drives its Transform around the
+// character. The FreeCameraController stays on the entity, unused, until the camera is free again.
+struct OrbitCameraController {
+    OrbitCameraState state;
 };
 
 // The demo's character (spec 5.8): turns the move, sprint and jump actions into the entity's

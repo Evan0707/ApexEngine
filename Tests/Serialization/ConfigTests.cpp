@@ -37,7 +37,8 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
         "free_camera": { "speed": 8.5, "sprint_multiplier": 2, "look_sensitivity": 0.001 },
         "physics": { "gravity": [0, -1.62, 0] },
         "character": { "height": 1.6, "radius": 0.25, "walk_speed": 3, "run_speed": 6, "jump_height": 1,
-                       "max_slope_deg": 40, "step_height": 0, "push_force": 250 }
+                       "max_slope_deg": 40, "step_height": 0, "push_force": 250 },
+        "third_person_camera": { "distance": 6, "aim_height": 1.2 }
     })",
                                           kEngine);
     REQUIRE(config.has_value());
@@ -55,6 +56,8 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
     REQUIRE(config->characterMaxSlopeDegrees == 40.0f);
     REQUIRE(config->characterStepHeight == 0.0f);
     REQUIRE(config->characterPushForce == 250.0f);
+    REQUIRE(config->thirdPersonCameraDistance == 6.0f);
+    REQUIRE(config->thirdPersonCameraAimHeight == 1.2f);
 }
 
 TEST_CASE("Fields left out of the engine configuration keep the specification's values", "[serialization]") {
@@ -95,6 +98,8 @@ TEST_CASE("An invalid engine configuration names the file and the field", "[seri
                  {"field 'character.jump'", "unknown field"});
     requireError(parseEngineConfig(R"({"version": 1, "character": 3})", kEngine), kEngine,
                  {"field 'character'"});
+    requireError(parseEngineConfig(R"({"version": 1, "third_person_camera": {"distance": 0}})", kEngine),
+                 kEngine, {"field 'third_person_camera.distance'", "greater than 0"});
     requireError(parseEngineConfig(R"({"version": 1, "vsync": true})", kEngine), kEngine, {"field 'vsync'"});
     requireError(parseEngineConfig("{", kEngine), kEngine, {"invalid JSON"});
 }

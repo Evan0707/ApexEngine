@@ -11,6 +11,8 @@ add_executable(ApexDemo
     GameSystems.cpp
     GameSystems.h
     main.cpp
+    OrbitCamera.cpp
+    OrbitCamera.h
     PlayerMotion.cpp
     PlayerMotion.h
 )

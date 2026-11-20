@@ -100,6 +100,8 @@ Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal 
 | `character.max_slope_deg` | 45 | Degrés, entre 0 et 90 exclus |
 | `character.step_height` | 0,3 | Mètres, positif ou nul |
 | `character.push_force` | 100 | Newtons, positif ou nul : la force maximale exercée sur un corps poussé |
+| `third_person_camera.distance` | 4 | Mètres entre le point visé et la caméra (section 5.3), strictement positif |
+| `third_person_camera.aim_height` | 1,6 | Hauteur du point visé au-dessus des pieds du personnage, en mètres, positive ou nulle |
 
 `input.json` : la table d'actions.
 

@@ -33,6 +33,10 @@ struct EngineConfig {
     float characterMaxSlopeDegrees = 45.0f;
     float characterStepHeight = 0.3f;
     float characterPushForce = 100.0f;
+    // Third-person camera (spec 5.3): meters behind the aim point, and height of the aim point above the
+    // character's feet.
+    float thirdPersonCameraDistance = 4.0f;
+    float thirdPersonCameraAimHeight = 1.6f;
 
     [[nodiscard]] bool operator==(const EngineConfig&) const noexcept = default;
 };

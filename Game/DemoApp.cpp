@@ -94,6 +94,9 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
     app.m_cameraSettings.speed = config.freeCameraSpeed;
     app.m_cameraSettings.sprintMultiplier = config.freeCameraSprintMultiplier;
     app.m_cameraSettings.lookSensitivity = config.freeCameraLookSensitivity;
+    app.m_orbitSettings.distance = config.thirdPersonCameraDistance;
+    app.m_orbitSettings.aimHeight = config.thirdPersonCameraAimHeight;
+    app.m_orbitSettings.lookSensitivity = config.freeCameraLookSensitivity;
     app.m_playerSettings.walkSpeed = config.characterWalkSpeed;
     app.m_playerSettings.runSpeed = config.characterRunSpeed;
     app.m_playerSettings.jumpHeight = config.characterJumpHeight;
@@ -339,6 +342,8 @@ void DemoApp::simulate(const core::FixedStep& step) {
     stepSpinners(m_registry, step.deltaSeconds);
     // After the game wrote its intents: Physics advances and the transforms follow (spec 4.3).
     world::stepPhysics(m_registry, *m_physics, step.deltaSeconds);
+    // Last: the camera follows where the character is at the end of this step (decision 0019).
+    stepThirdPersonCamera(step);
 
     m_simulation.clearTransient();
 }
@@ -377,7 +382,7 @@ void DemoApp::stepPlayer(const core::FixedStep& step) {
                             .right = m_simulation.axis(m_moveRight),
                             .sprint = m_simulation.isHeld(m_sprint),
                             .jump = m_simulation.wasPressed(m_jump),
-                            .cameraYaw = m_registry.get<FreeCameraController>(m_cameraEntity).yaw};
+                            .cameraYaw = m_registry.get<OrbitCameraController>(m_cameraEntity).state.yaw};
     }
     stepPlayerEntity(m_registry, m_playerEntity, input, m_physics->gravity(), step.deltaSeconds,
                      m_playerSettings);
@@ -392,7 +397,24 @@ void DemoApp::switchCamera() {
         return;
     }
     m_thirdPerson = !m_thirdPerson;
+    if (m_thirdPerson) {
+        startOrbitCameraEntity(m_registry, m_cameraEntity, m_playerEntity, m_orbitSettings);
+    } else {
+        releaseOrbitCameraEntity(m_registry, m_cameraEntity);
+    }
     m_logger->info("Camera: {}", m_thirdPerson ? "third person" : "free");
+}
+
+void DemoApp::stepThirdPersonCamera(const core::FixedStep& step) {
+    if (!m_thirdPerson) {
+        return;
+    }
+    // Released cursor: the mouse belongs to the interface, not to the camera.
+    const bool looking = m_window->isCursorCaptured();
+    const OrbitCameraInput input{.lookX = looking ? m_simulation.axis(m_lookX) : 0.0f,
+                                 .lookY = looking ? m_simulation.axis(m_lookY) : 0.0f};
+    stepOrbitCameraEntity(m_registry, m_cameraEntity, m_playerEntity, input, *m_physics, step.deltaSeconds,
+                          m_orbitSettings);
 }
 
 void DemoApp::logMouseLook(const core::FixedStep& step) {

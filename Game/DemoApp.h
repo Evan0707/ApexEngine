@@ -2,6 +2,7 @@
 
 #include "CommandLine.h"
 #include "FreeCamera.h"
+#include "OrbitCamera.h"
 #include "PlayerMotion.h"
 
 #include "Core/Error.h"
@@ -44,8 +45,10 @@ struct DemoSystems {
 
 // Phase 6 demo: loads a scene file into its registry (spec 5.1: last), gives its entities "camera" and
 // "spinner" their behavior, lets Physics move the bodies of its colliders, and draws what the registry
-// holds, seen by the free camera, with the debug panel (F1). Logs window events and actions, toggles cursor
-// capture with the ToggleCursor action; the mouse turns the camera only while the cursor is captured.
+// holds, with the debug panel (F1). The view starts as a free camera; the SwitchCamera action (F3) gives
+// the controls to the character "player", followed by a third-person camera. Logs window events and actions,
+// toggles cursor capture with the ToggleCursor action; the mouse turns the camera only while the cursor is
+// captured.
 class DemoApp final : public core::FramePhases {
 public:
     // options: scene, frame limit and benchmark mode; the renderer's vsync setting is only logged.
@@ -77,6 +80,7 @@ private:
     void logMouseLook(const core::FixedStep& step);
     void stepCamera(const core::FixedStep& step);
     void stepPlayer(const core::FixedStep& step);
+    void stepThirdPersonCamera(const core::FixedStep& step);
     void switchCamera();
     [[nodiscard]] core::Result<void> loadScene(const CommandLineOptions& options);
     void measureFrame();
@@ -117,10 +121,11 @@ private:
     std::vector<float> m_mouseTotals;
 
     FreeCameraSettings m_cameraSettings;
+    OrbitCameraSettings m_orbitSettings;
     PlayerSettings m_playerSettings;
     world::CharacterBody m_characterBody;
-    // False: free camera, the character receives no input (spec 6.2 starts this way). True: the move, sprint
-    // and jump actions drive the character.
+    // False: free camera, the character receives no input (spec 6.2 starts this way). True: the camera
+    // orbits around the character, which the move, sprint and jump actions drive.
     bool m_thirdPerson = false;
     debug::DebugControls m_controls;
     graphics::RenderScene m_renderScene;

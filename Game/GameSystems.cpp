@@ -5,7 +5,9 @@
 #include "World/Rotation.h"
 #include "World/SceneQueries.h"
 
+#include <algorithm>
 #include <format>
+#include <optional>
 
 namespace apex::game {
 
@@ -67,6 +69,59 @@ void stepPlayerEntity(entt::registry& registry, entt::entity player, const Playe
 
     registry.get<world::CharacterMotion>(player).velocity = playerMotion(controller.state, support);
     registry.get<world::Transform>(player).rotation = playerOrientation(controller.state.facingYaw);
+}
+
+namespace {
+
+[[nodiscard]] core::WorldPosition aimPoint(const entt::registry& registry, entt::entity player,
+                                           const OrbitCameraSettings& settings) {
+    return registry.get<world::Transform>(player).position + core::kWorldUp * settings.aimHeight;
+}
+
+} // namespace
+
+void startOrbitCameraEntity(entt::registry& registry, entt::entity camera, entt::entity player,
+                            const OrbitCameraSettings& settings) {
+    const FreeCameraController& free = registry.get<FreeCameraController>(camera);
+    registry.emplace_or_replace<OrbitCameraController>(
+        camera, OrbitCameraState{.yaw = free.yaw,
+                                 .pitch = std::clamp(free.pitch, settings.minPitch, settings.maxPitch),
+                                 .target = aimPoint(registry, player, settings),
+                                 .distance = settings.distance});
+}
+
+void stepOrbitCameraEntity(entt::registry& registry, entt::entity camera, entt::entity player,
+                           const OrbitCameraInput& input, const physics::PhysicsWorld& physics,
+                           double deltaSeconds, const OrbitCameraSettings& settings) {
+    const core::WorldPosition wanted = aimPoint(registry, player, settings);
+    OrbitCameraController& controller = registry.get<OrbitCameraController>(camera);
+    OrbitCameraState state = aimOrbitCamera(controller.state, input, wanted, deltaSeconds, settings);
+
+    // The smoothed aim point lags behind the character and could cut through a corner: it is kept where a
+    // sphere can go from the real aim point, which is inside the character's capsule and so always free.
+    const glm::vec3 lag = state.target - wanted;
+    if (const float length = glm::length(lag); length > 1e-4f) {
+        if (const auto blocked = physics.spherecast(wanted, settings.probeRadius, lag, length)) {
+            state.target = wanted + lag * (blocked->distance / length);
+        }
+    }
+    const auto obstacle =
+        physics.spherecast(state.target, settings.probeRadius, -orbitCameraForward(state), settings.distance);
+    state.distance = orbitCameraDistance(state.distance,
+                                         obstacle ? std::optional<float>(obstacle->distance) : std::nullopt,
+                                         deltaSeconds, settings);
+    controller.state = state;
+
+    world::Transform& transform = registry.get<world::Transform>(camera);
+    transform.position = orbitCameraPosition(state);
+    transform.rotation = orbitCameraOrientation(state);
+}
+
+void releaseOrbitCameraEntity(entt::registry& registry, entt::entity camera) {
+    if (const OrbitCameraController* orbit = registry.try_get<OrbitCameraController>(camera)) {
+        registry.emplace_or_replace<FreeCameraController>(camera, orbit->state.yaw, orbit->state.pitch);
+        registry.remove<OrbitCameraController>(camera);
+    }
 }
 
 void stepSpinners(entt::registry& registry, double deltaSeconds) {
