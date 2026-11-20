@@ -77,6 +77,8 @@ Codes de sortie de `ApexDemo` : 0 fermeture normale, 1 échec, 2 fermeture norma
 | 0015 | 5 | Ajout d'EnTT, utilisé sans surcouche |
 | 0016 | 5 | Ajout de nlohmann/json, confiné à un en-tête interne de `Serialization` |
 | 0017 | 5 | Monde et scène : format de scène complété, champs inconnus refusés, matériau par entité, configuration dans `Config/`, composants du jeu attachés par identifiant |
+| 0018 | 6 | Ajout de Jolt Physics, un seul thread |
+| 0019 | 6 | Physique, personnage et caméra : objet `Runtime` pour l'état global de Jolt, personnage dans `Physics`, composants ajoutés à `World`, collider centré, configuration |
 
 ## Revue des garde-fous (AC-17)
 
