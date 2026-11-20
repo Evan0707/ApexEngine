@@ -9,7 +9,8 @@
 
 namespace apex::game {
 
-core::Result<entt::entity> attachGameComponents(entt::registry& registry) {
+core::Result<GameEntities> attachGameComponents(entt::registry& registry,
+                                                const world::CharacterBody& characterBody) {
     const entt::entity camera = world::findBySceneId(registry, kCameraId);
     if (camera == entt::null || !registry.all_of<world::Transform, world::Camera>(camera)) {
         return core::makeError(
@@ -26,7 +27,18 @@ core::Result<entt::entity> attachGameComponents(entt::registry& registry) {
         spinner != entt::null && registry.all_of<world::Transform>(spinner)) {
         registry.emplace_or_replace<Spin>(spinner, glm::radians(kSpinnerDegreesPerSecond));
     }
-    return camera;
+
+    GameEntities entities{.camera = camera};
+    if (const entt::entity player = world::findBySceneId(registry, kPlayerId);
+        player != entt::null && registry.all_of<world::Transform>(player)) {
+        const glm::vec3 facing =
+            world::eulerDegreesFromRotation(registry.get<world::Transform>(player).rotation);
+        registry.emplace_or_replace<world::CharacterBody>(player, characterBody);
+        registry.emplace_or_replace<PlayerController>(player,
+                                                      PlayerState{.facingYaw = glm::radians(facing.y)});
+        entities.player = player;
+    }
+    return entities;
 }
 
 void stepFreeCameraEntity(entt::registry& registry, entt::entity camera, const FreeCameraInput& input,
@@ -43,6 +55,18 @@ void placeFreeCameraEntity(entt::registry& registry, entt::entity camera, const 
     world::Transform& transform = registry.get<world::Transform>(camera);
     transform.position = state.position;
     transform.rotation = freeCameraOrientation(state);
+}
+
+void stepPlayerEntity(entt::registry& registry, entt::entity player, const PlayerInput& input,
+                      const glm::vec3& gravity, double deltaSeconds, const PlayerSettings& settings) {
+    const world::CharacterGround& ground = registry.get<world::CharacterGround>(player);
+    const PlayerSupport support{.onGround = ground.state == physics::GroundState::OnGround,
+                                .groundVelocity = ground.groundVelocity};
+    PlayerController& controller = registry.get<PlayerController>(player);
+    controller.state = stepPlayer(controller.state, input, support, gravity, deltaSeconds, settings);
+
+    registry.get<world::CharacterMotion>(player).velocity = playerMotion(controller.state, support);
+    registry.get<world::Transform>(player).rotation = playerOrientation(controller.state.facingYaw);
 }
 
 void stepSpinners(entt::registry& registry, double deltaSeconds) {

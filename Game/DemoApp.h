@@ -2,6 +2,7 @@
 
 #include "CommandLine.h"
 #include "FreeCamera.h"
+#include "PlayerMotion.h"
 
 #include "Core/Error.h"
 #include "Core/FramePhases.h"
@@ -18,6 +19,7 @@
 #include "Platform/Window.h"
 #include "Resources/ResourceCache.h"
 #include "Serialization/EngineConfig.h"
+#include "World/Components.h"
 
 #include <entt/entity/registry.hpp>
 
@@ -47,8 +49,8 @@ struct DemoSystems {
 class DemoApp final : public core::FramePhases {
 public:
     // options: scene, frame limit and benchmark mode; the renderer's vsync setting is only logged.
-    // config: free camera settings. Fails when the scene file is invalid or has no camera; the error
-    // names the file, the entity and the field (spec 5.6).
+    // config: free camera and character settings. Fails when the scene file is invalid or has no camera;
+    // the error names the file, the entity and the field (spec 5.6).
     [[nodiscard]] static core::Result<DemoApp> create(const DemoSystems& systems, input::ActionMap actions,
                                                       const CommandLineOptions& options,
                                                       const serialization::EngineConfig& config);
@@ -74,6 +76,8 @@ private:
     void handleFrameActions();
     void logMouseLook(const core::FixedStep& step);
     void stepCamera(const core::FixedStep& step);
+    void stepPlayer(const core::FixedStep& step);
+    void switchCamera();
     [[nodiscard]] core::Result<void> loadScene(const CommandLineOptions& options);
     void measureFrame();
     void recordBenchmark(double frameSeconds);
@@ -90,6 +94,8 @@ private:
     // The world of the demo (spec 5.6): owned here, passed by reference (G-06).
     entt::registry m_registry;
     entt::entity m_cameraEntity = entt::null;
+    // entt::null in a scene without an entity "player".
+    entt::entity m_playerEntity = entt::null;
     input::ActionMap m_actions;
     input::ActionState m_frame;
     input::ActionState m_simulation;
@@ -97,6 +103,8 @@ private:
     input::ActionId m_toggleCursor{};
     input::ActionId m_toggleDebug{};
     input::ActionId m_sprint{};
+    input::ActionId m_jump{};
+    input::ActionId m_switchCamera{};
     input::ActionId m_moveForward{};
     input::ActionId m_moveRight{};
     input::ActionId m_moveUp{};
@@ -109,6 +117,11 @@ private:
     std::vector<float> m_mouseTotals;
 
     FreeCameraSettings m_cameraSettings;
+    PlayerSettings m_playerSettings;
+    world::CharacterBody m_characterBody;
+    // False: free camera, the character receives no input (spec 6.2 starts this way). True: the move, sprint
+    // and jump actions drive the character.
+    bool m_thirdPerson = false;
     debug::DebugControls m_controls;
     graphics::RenderScene m_renderScene;
 

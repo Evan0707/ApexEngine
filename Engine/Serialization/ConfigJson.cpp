@@ -3,8 +3,10 @@
 #include "Serialization/InputConfig.h"
 #include "Serialization/Json.h"
 
+#include <algorithm>
 #include <cmath>
 #include <format>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -64,6 +66,60 @@ constexpr float kMaxWindowSize = 16384.0f;
     return static_cast<std::uint32_t>(*number);
 }
 
+[[nodiscard]] core::Result<float> readNotNegative(const Json& value, const JsonContext& context,
+                                                  std::string_view field) {
+    const core::Result<float> number = readNumber(value, context, field);
+    if (number && *number < 0.0f) {
+        return jsonError(context, field, "expected a number that is not negative");
+    }
+    return number;
+}
+
+// A slope a character can stand on: flat ground and walls excluded.
+[[nodiscard]] core::Result<float> readSlopeDegrees(const Json& value, const JsonContext& context,
+                                                   std::string_view field) {
+    const core::Result<float> number = readNumber(value, context, field);
+    if (number && (*number <= 0.0f || *number >= 90.0f)) {
+        return jsonError(context, field, "expected an angle between 0 and 90 degrees, both excluded");
+    }
+    return number;
+}
+
+using NumberReader = core::Result<float> (*)(const Json&, const JsonContext&, std::string_view);
+
+struct NumberField {
+    std::string_view key;
+    float& target;
+    NumberReader read = readPositive;
+};
+
+// Reads the optional object `name` of the root, made of numbers only. A key that is not in `fields` is an
+// error; a field left out keeps its value.
+[[nodiscard]] core::Result<void> readNumberSection(const Json& root, std::string_view name,
+                                                   const JsonContext& context,
+                                                   std::initializer_list<NumberField> fields) {
+    const auto section = root.find(name);
+    if (section == root.end()) {
+        return {};
+    }
+    if (core::Result<void> valid = requireObject(*section, context, name); !valid) {
+        return valid;
+    }
+    for (const auto& [key, value] : section->items()) {
+        const std::string path = joinField(name, key);
+        const auto* const field = std::ranges::find(fields, std::string_view(key), &NumberField::key);
+        if (field == fields.end()) {
+            return jsonError(context, path, "unknown field");
+        }
+        const core::Result<float> number = field->read(value, context, path);
+        if (!number) {
+            return std::unexpected(number.error());
+        }
+        field->target = *number;
+    }
+    return {};
+}
+
 // The required string `key` of one binding.
 [[nodiscard]] core::Result<void> readRequiredString(const Json& object, std::string_view key,
                                                     const JsonContext& context, std::string_view parent,
@@ -108,8 +164,8 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
     if (!root) {
         return std::unexpected(root.error());
     }
-    if (core::Result<void> known =
-            rejectUnknownFields(*root, {"version", "window", "free_camera", "physics"}, context, {});
+    if (core::Result<void> known = rejectUnknownFields(
+            *root, {"version", "window", "free_camera", "physics", "character"}, context, {});
         !known) {
         return std::unexpected(known.error());
     }
@@ -130,27 +186,28 @@ core::Result<EngineConfig> parseEngineConfig(std::string_view text, std::string_
             return std::unexpected(read.error());
         }
     }
-    if (const auto camera = root->find("free_camera"); camera != root->end()) {
-        core::Result<void> read = requireObject(*camera, context, "free_camera");
-        if (read) {
-            read = rejectUnknownFields(*camera, {"speed", "sprint_multiplier", "look_sensitivity"}, context,
-                                       "free_camera");
-        }
-        if (read) {
-            read =
-                readOptional(*camera, "speed", context, "free_camera", config.freeCameraSpeed, readPositive);
-        }
-        if (read) {
-            read = readOptional(*camera, "sprint_multiplier", context, "free_camera",
-                                config.freeCameraSprintMultiplier, readPositive);
-        }
-        if (read) {
-            read = readOptional(*camera, "look_sensitivity", context, "free_camera",
-                                config.freeCameraLookSensitivity, readPositive);
-        }
-        if (!read) {
-            return std::unexpected(read.error());
-        }
+    if (core::Result<void> read = readNumberSection(*root, "free_camera", context,
+                                                    {{"speed", config.freeCameraSpeed},
+                                                     {"sprint_multiplier", config.freeCameraSprintMultiplier},
+                                                     {"look_sensitivity", config.freeCameraLookSensitivity}});
+        !read) {
+        return std::unexpected(read.error());
+    }
+    if (core::Result<void> read =
+            readNumberSection(*root, "character", context,
+                              {{"height", config.characterHeight},
+                               {"radius", config.characterRadius},
+                               {"walk_speed", config.characterWalkSpeed},
+                               {"run_speed", config.characterRunSpeed},
+                               {"jump_height", config.characterJumpHeight},
+                               {"max_slope_deg", config.characterMaxSlopeDegrees, readSlopeDegrees},
+                               {"step_height", config.characterStepHeight, readNotNegative},
+                               {"push_force", config.characterPushForce, readNotNegative}});
+        !read) {
+        return std::unexpected(read.error());
+    }
+    if (config.characterHeight <= 2.0f * config.characterRadius) {
+        return jsonError(context, "character.height", "the height must be more than twice the radius");
     }
     if (const auto physics = root->find("physics"); physics != root->end()) {
         core::Result<void> read = requireObject(*physics, context, "physics");

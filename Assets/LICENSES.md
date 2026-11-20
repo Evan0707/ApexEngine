@@ -5,6 +5,7 @@ Tout fichier ajouté à `Assets/` figure ici, avec son origine et sa licence (ca
 | Fichier | Origine | Licence |
 |---|---|---|
 | `Models/reference_cube.glb` | Créé pour le projet par `Tools/generate_assets.py` | Celle du projet |
+| `Models/character.glb` | Créé pour le projet par `Tools/generate_assets.py` | Celle du projet |
 | `Models/crate.gltf`, `Models/crate.bin`, `Models/crate_color.jpg`, `Models/crate_metal_rough.png` | Créés pour le projet par `Tools/generate_assets.py` | Celle du projet |
 | `Models/cube.glb`, `Models/sphere.glb` | Créés pour le projet par `Tools/generate_assets.py` | Celle du projet |
 | `Scenes/demo.json` | Écrit pour le projet | Celle du projet |

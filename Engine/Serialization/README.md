@@ -94,6 +94,12 @@ Deux fichiers dans `Config/`, chacun avec un champ `version` obligatoire, égal 
 | `free_camera.sprint_multiplier` | 4 | Strictement positif |
 | `free_camera.look_sensitivity` | 0,0025 | Radians par pixel de souris, strictement positif |
 | `physics.gravity` | [0, −9,81, 0] | Trois nombres, en m/s² (section 5.7) |
+| `character.height`, `character.radius` | 1,8 et 0,3 | Capsule du personnage en mètres (section 5.8) ; la hauteur dépasse deux fois le rayon |
+| `character.walk_speed`, `character.run_speed` | 4 et 7 | Mètres par seconde, strictement positifs |
+| `character.jump_height` | 1,2 | Mètres, strictement positif |
+| `character.max_slope_deg` | 45 | Degrés, entre 0 et 90 exclus |
+| `character.step_height` | 0,3 | Mètres, positif ou nul |
+| `character.push_force` | 100 | Newtons, positif ou nul : la force maximale exercée sur un corps poussé |
 
 `input.json` : la table d'actions.
 

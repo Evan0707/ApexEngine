@@ -18,6 +18,8 @@ add_executable(ApexTests
     Game/CommandLineTests.cpp
     Game/FreeCameraTests.cpp
     Game/GameSystemsTests.cpp
+    Game/PlayerMotionTests.cpp
+    Game/PlayerTests.cpp
     Graphics/DeferredDeleterTests.cpp
     Graphics/DrawListTests.cpp
     Graphics/FrameDataTests.cpp
@@ -57,6 +59,7 @@ add_executable(ApexTests
     "${PROJECT_SOURCE_DIR}/Game/CommandLine.cpp"
     "${PROJECT_SOURCE_DIR}/Game/FreeCamera.cpp"
     "${PROJECT_SOURCE_DIR}/Game/GameSystems.cpp"
+    "${PROJECT_SOURCE_DIR}/Game/PlayerMotion.cpp"
 )
 
 target_include_directories(ApexTests PRIVATE "${PROJECT_SOURCE_DIR}/Game")

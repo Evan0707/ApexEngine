@@ -204,6 +204,49 @@ def primitives():
         builder.write_glb(MODELS / (name + ".glb"))
 
 
+def capsule_geometry(radius, height, segments, rings):
+    """An upright capsule whose bottom is at y = 0: a sphere cut at its equator, the halves pulled apart."""
+    half_cylinder = height / 2 - radius
+    rows = [(ring / rings * math.pi, half_cylinder) for ring in range(rings // 2 + 1)]
+    rows += [(ring / rings * math.pi, -half_cylinder) for ring in range(rings // 2, rings + 1)]
+    positions, normals, uvs, indices = [], [], [], []
+    for row, (polar, offset) in enumerate(rows):
+        for segment in range(segments + 1):
+            u = segment / segments
+            azimuth = u * 2 * math.pi
+            normal = (math.sin(polar) * math.sin(azimuth), math.cos(polar), math.sin(polar) * math.cos(azimuth))
+            positions.append((normal[0] * radius, normal[1] * radius + offset + height / 2, normal[2] * radius))
+            normals.append(normal)
+            uvs.append((u, row / (len(rows) - 1)))
+    stride = segments + 1
+    for row in range(len(rows) - 1):
+        for segment in range(segments):
+            top_left = row * stride + segment
+            bottom_left = top_left + stride
+            # The triangle that would collapse on a pole is skipped.
+            if row + 2 < len(rows):
+                indices += [top_left, bottom_left, bottom_left + 1]
+            if row > 0:
+                indices += [top_left, bottom_left + 1, top_left + 1]
+    return positions, normals, uvs, indices
+
+
+def character():
+    """The demo's character (spec 5.8): a capsule of 1.8 m, feet on the origin, with a visor on its front (-Z)."""
+    builder = GltfBuilder()
+    body = builder.material("CharacterBody", color=(0.85, 0.45, 0.1, 1.0), metallic=0.0, roughness=0.6)
+    visor = builder.material("CharacterVisor", color=(0.05, 0.05, 0.07, 1.0), metallic=0.0, roughness=0.2)
+    positions, normals, uvs, indices = capsule_geometry(0.3, 1.8, 32, 16)
+    # A box 36 cm wide across the face, sticking 6 cm out of the capsule at eye height.
+    box_positions, box_normals, box_uvs, box_indices = cube_geometry(1.0, lambda _: (0.0, 0.0, 1.0, 1.0))
+    box_positions = [(x * 0.36, y * 0.12 + 1.5, z * 0.2 - 0.26) for x, y, z in box_positions]
+    mesh = builder.mesh("Character", [
+        builder.primitive(positions, normals, uvs, indices, material=body),
+        builder.primitive(box_positions, box_normals, box_uvs, box_indices, material=visor)])
+    builder.node(name="Character", mesh=mesh)
+    builder.write_glb(MODELS / "character.glb")
+
+
 def image_bytes(image, fmt, **options):
     stream = io.BytesIO()
     image.save(stream, fmt, **options)
@@ -377,6 +420,7 @@ def main():
     reference_cube()
     crate()
     primitives()
+    character()
     test_data()
     print("Assets written to", MODELS, "and", TEST_DATA)
 

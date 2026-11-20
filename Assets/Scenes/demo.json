@@ -13,6 +13,12 @@
       "transform": { "position": [0.0, 2.5, 7.0], "rotation_deg": [-15, 0, 0] },
       "camera": { "fov_deg": 70, "near": 0.1, "far": 500 }
     },
+    {
+      "id": "player",
+      "name": "Personnage",
+      "transform": { "position": [0.0, 0.0, 4.0] },
+      "mesh": "Models/character.glb"
+    },
 
     {
       "id": "floor",

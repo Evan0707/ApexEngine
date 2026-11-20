@@ -24,6 +24,15 @@ struct EngineConfig {
     float freeCameraLookSensitivity = 0.0025f;
     // Physics: meters per second squared (spec 5.7).
     glm::vec3 gravity{0.0f, -9.81f, 0.0f};
+    // Character (spec 5.8): meters, meters per second, degrees, newtons. The height is the whole capsule's.
+    float characterHeight = 1.8f;
+    float characterRadius = 0.3f;
+    float characterWalkSpeed = 4.0f;
+    float characterRunSpeed = 7.0f;
+    float characterJumpHeight = 1.2f;
+    float characterMaxSlopeDegrees = 45.0f;
+    float characterStepHeight = 0.3f;
+    float characterPushForce = 100.0f;
 
     [[nodiscard]] bool operator==(const EngineConfig&) const noexcept = default;
 };

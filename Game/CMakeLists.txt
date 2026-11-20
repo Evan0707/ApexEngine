@@ -11,6 +11,8 @@ add_executable(ApexDemo
     GameSystems.cpp
     GameSystems.h
     main.cpp
+    PlayerMotion.cpp
+    PlayerMotion.h
 )
 
 target_link_libraries(ApexDemo PRIVATE Apex::Engine)

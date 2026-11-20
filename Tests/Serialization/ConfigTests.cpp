@@ -35,7 +35,9 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
         "version": 1,
         "window": { "width": 1280, "height": 720 },
         "free_camera": { "speed": 8.5, "sprint_multiplier": 2, "look_sensitivity": 0.001 },
-        "physics": { "gravity": [0, -1.62, 0] }
+        "physics": { "gravity": [0, -1.62, 0] },
+        "character": { "height": 1.6, "radius": 0.25, "walk_speed": 3, "run_speed": 6, "jump_height": 1,
+                       "max_slope_deg": 40, "step_height": 0, "push_force": 250 }
     })",
                                           kEngine);
     REQUIRE(config.has_value());
@@ -45,6 +47,14 @@ TEST_CASE("The engine configuration reads the window and the free camera", "[ser
     REQUIRE(config->freeCameraSprintMultiplier == 2.0f);
     REQUIRE(config->freeCameraLookSensitivity == 0.001f);
     REQUIRE(config->gravity == glm::vec3(0.0f, -1.62f, 0.0f));
+    REQUIRE(config->characterHeight == 1.6f);
+    REQUIRE(config->characterRadius == 0.25f);
+    REQUIRE(config->characterWalkSpeed == 3.0f);
+    REQUIRE(config->characterRunSpeed == 6.0f);
+    REQUIRE(config->characterJumpHeight == 1.0f);
+    REQUIRE(config->characterMaxSlopeDegrees == 40.0f);
+    REQUIRE(config->characterStepHeight == 0.0f);
+    REQUIRE(config->characterPushForce == 250.0f);
 }
 
 TEST_CASE("Fields left out of the engine configuration keep the specification's values", "[serialization]") {
@@ -73,6 +83,18 @@ TEST_CASE("An invalid engine configuration names the file and the field", "[seri
                  {"field 'physics.gravity'"});
     requireError(parseEngineConfig(R"({"version": 1, "physics": {"gravty": [0, -9.81, 0]}})", kEngine),
                  kEngine, {"field 'physics.gravty'", "unknown field"});
+    requireError(parseEngineConfig(R"({"version": 1, "character": {"walk_speed": 0}})", kEngine), kEngine,
+                 {"field 'character.walk_speed'", "greater than 0"});
+    requireError(parseEngineConfig(R"({"version": 1, "character": {"max_slope_deg": 90}})", kEngine), kEngine,
+                 {"field 'character.max_slope_deg'", "between 0 and 90"});
+    requireError(parseEngineConfig(R"({"version": 1, "character": {"step_height": -0.1}})", kEngine), kEngine,
+                 {"field 'character.step_height'", "not negative"});
+    requireError(parseEngineConfig(R"({"version": 1, "character": {"radius": 1}})", kEngine), kEngine,
+                 {"field 'character.height'", "twice the radius"});
+    requireError(parseEngineConfig(R"({"version": 1, "character": {"jump": 2}})", kEngine), kEngine,
+                 {"field 'character.jump'", "unknown field"});
+    requireError(parseEngineConfig(R"({"version": 1, "character": 3})", kEngine), kEngine,
+                 {"field 'character'"});
     requireError(parseEngineConfig(R"({"version": 1, "vsync": true})", kEngine), kEngine, {"field 'vsync'"});
     requireError(parseEngineConfig("{", kEngine), kEngine, {"invalid JSON"});
 }

@@ -54,7 +54,7 @@ TEST_CASE("demo.json loads without an error or a warning, every model ready", "[
         UNSCOPED_INFO(problem);
     }
     REQUIRE(demo.problems.empty());
-    REQUIRE(world::sceneEntityCount(demo.registry) == 22);
+    REQUIRE(world::sceneEntityCount(demo.registry) == 23);
     for (const auto [entity, renderer] : demo.registry.view<world::MeshRenderer>().each()) {
         CAPTURE(demo.registry.get<world::SceneId>(entity).value);
         REQUIRE(demo.cache->state(renderer.model) == resources::ResourceState::Ready);

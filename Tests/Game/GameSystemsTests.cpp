@@ -42,9 +42,10 @@ TEST_CASE("The camera entity gets a controller that starts at its orientation", 
     entt::registry registry;
     const entt::entity camera = addCamera(registry, {0.0f, 2.5f, 7.0f}, {-15.0f, 30.0f, 0.0f});
 
-    const auto attached = attachGameComponents(registry);
+    const auto attached = attachGameComponents(registry, {});
     REQUIRE(attached.has_value());
-    REQUIRE(*attached == camera);
+    REQUIRE(attached->camera == camera);
+    REQUIRE(attached->player == entt::null);
     const FreeCameraController& controller = registry.get<FreeCameraController>(camera);
     REQUIRE_THAT(controller.yaw, WithinAbs(glm::radians(30.0f), kTolerance));
     REQUIRE_THAT(controller.pitch, WithinAbs(glm::radians(-15.0f), kTolerance));
@@ -52,20 +53,20 @@ TEST_CASE("The camera entity gets a controller that starts at its orientation", 
 
 TEST_CASE("A scene without a usable camera entity is refused", "[game]") {
     entt::registry registry;
-    const auto missing = attachGameComponents(registry);
+    const auto missing = attachGameComponents(registry, {});
     REQUIRE_FALSE(missing.has_value());
     REQUIRE_THAT(missing.error().message, ContainsSubstring("'camera'"));
 
     // The id alone is not enough: it must be a camera with a place.
     const entt::entity named = registry.create();
     registry.emplace<world::SceneId>(named, std::string(kCameraId));
-    REQUIRE_FALSE(attachGameComponents(registry).has_value());
+    REQUIRE_FALSE(attachGameComponents(registry, {}).has_value());
 }
 
 TEST_CASE("A step of the free camera moves and turns the entity's transform", "[game]") {
     entt::registry registry;
     const entt::entity camera = addCamera(registry, {0.0f, 2.0f, 0.0f}, {0.0f, 90.0f, 0.0f});
-    REQUIRE(attachGameComponents(registry).has_value());
+    REQUIRE(attachGameComponents(registry, {}).has_value());
     const FreeCameraSettings settings;
 
     // Facing -X after a quarter turn to the left: forward for one second covers 5 m along -X.
@@ -86,7 +87,7 @@ TEST_CASE("A step of the free camera moves and turns the entity's transform", "[
 TEST_CASE("Placing the camera sets its transform and its controller", "[game]") {
     entt::registry registry;
     const entt::entity camera = addCamera(registry, {}, {});
-    REQUIRE(attachGameComponents(registry).has_value());
+    REQUIRE(attachGameComponents(registry, {}).has_value());
     placeFreeCameraEntity(registry, camera, {.position = {1.0f, 2.0f, 3.0f}, .yaw = 0.5f, .pitch = -0.25f});
     REQUIRE(registry.get<world::Transform>(camera).position == glm::vec3(1.0f, 2.0f, 3.0f));
     REQUIRE(registry.get<FreeCameraController>(camera).yaw == 0.5f);
@@ -99,7 +100,7 @@ TEST_CASE("The spinner turns 45 degrees per second around +Y, in place", "[game]
     const entt::entity spinner = registry.create();
     registry.emplace<world::SceneId>(spinner, std::string(kSpinnerId));
     registry.emplace<world::Transform>(spinner, world::Transform{.position = {1.8f, 0.4f, 2.2f}});
-    REQUIRE(attachGameComponents(registry).has_value());
+    REQUIRE(attachGameComponents(registry, {}).has_value());
     REQUIRE(registry.all_of<Spin>(spinner));
 
     for (int i = 0; i < 120; ++i) {
@@ -115,7 +116,7 @@ TEST_CASE("The spinner turns 45 degrees per second around +Y, in place", "[game]
 TEST_CASE("A scene without a spinner is fine", "[game]") {
     entt::registry registry;
     (void)addCamera(registry, {}, {});
-    REQUIRE(attachGameComponents(registry).has_value());
+    REQUIRE(attachGameComponents(registry, {}).has_value());
     REQUIRE(registry.view<Spin>().empty());
     stepSpinners(registry, kStep);
 }

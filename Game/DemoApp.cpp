@@ -94,6 +94,15 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
     app.m_cameraSettings.speed = config.freeCameraSpeed;
     app.m_cameraSettings.sprintMultiplier = config.freeCameraSprintMultiplier;
     app.m_cameraSettings.lookSensitivity = config.freeCameraLookSensitivity;
+    app.m_playerSettings.walkSpeed = config.characterWalkSpeed;
+    app.m_playerSettings.runSpeed = config.characterRunSpeed;
+    app.m_playerSettings.jumpHeight = config.characterJumpHeight;
+    app.m_characterBody =
+        world::CharacterBody{.height = config.characterHeight,
+                             .radius = config.characterRadius,
+                             .maxSlopeRadians = glm::radians(config.characterMaxSlopeDegrees),
+                             .stepHeight = config.characterStepHeight,
+                             .maxPushForce = config.characterPushForce};
     if (core::Result<void> loaded = app.loadScene(options); !loaded) {
         return std::unexpected(loaded.error());
     }
@@ -136,6 +145,8 @@ core::Result<DemoApp> DemoApp::create(const DemoSystems& systems, input::ActionM
     app.m_toggleDebug = *toggleDebug;
     // Present: findActions above checked every name.
     app.m_sprint = *app.m_actions.find("Sprint");
+    app.m_jump = *app.m_actions.find("Jump");
+    app.m_switchCamera = *app.m_actions.find("SwitchCamera");
     app.m_moveForward = *app.m_actions.find("MoveForward");
     app.m_moveRight = *app.m_actions.find("MoveRight");
     app.m_moveUp = *app.m_actions.find("MoveUp");
@@ -178,18 +189,19 @@ core::Result<void> DemoApp::loadScene(const CommandLineOptions& options) {
     }
 
     // The demo's own components, by scene id (decision 0017).
-    const core::Result<entt::entity> camera = attachGameComponents(m_registry);
-    if (!camera) {
-        return core::makeError(camera.error().code,
-                               std::format("Scene '{}': {}", scenePath->str(), camera.error().message));
+    const core::Result<GameEntities> entities = attachGameComponents(m_registry, m_characterBody);
+    if (!entities) {
+        return core::makeError(entities.error().code,
+                               std::format("Scene '{}': {}", scenePath->str(), entities.error().message));
     }
-    m_cameraEntity = *camera;
+    m_cameraEntity = entities->camera;
+    m_playerEntity = entities->player;
     // The panel starts at the scene's field of view, kept inside the free camera's range (spec 5.3).
     m_controls.minVerticalFovDegrees = m_cameraSettings.minVerticalFovDegrees;
     m_controls.maxVerticalFovDegrees = m_cameraSettings.maxVerticalFovDegrees;
     m_controls.verticalFovDegrees = clampVerticalFov(
         glm::degrees(m_registry.get<world::Camera>(m_cameraEntity).verticalFovRadians), m_cameraSettings);
-    // Bodies for the colliders of the scene (spec 4.3).
+    // Bodies for the colliders of the scene and the character of the player (spec 4.3).
     if (core::Result<void> created = world::createPhysicsObjects(m_registry, *m_physics); !created) {
         return core::makeError(created.error().code,
                                std::format("Scene '{}': {}", scenePath->str(), created.error().message));
@@ -319,7 +331,11 @@ void DemoApp::simulate(const core::FixedStep& step) {
         }
     }
     logMouseLook(step);
+    if (m_simulation.wasPressed(m_switchCamera)) {
+        switchCamera();
+    }
     stepCamera(step);
+    stepPlayer(step);
     stepSpinners(m_registry, step.deltaSeconds);
     // After the game wrote its intents: Physics advances and the transforms follow (spec 4.3).
     world::stepPhysics(m_registry, *m_physics, step.deltaSeconds);
@@ -333,6 +349,10 @@ void DemoApp::stepCamera(const core::FixedStep& step) {
                               benchmarkCamera(static_cast<double>(step.tick + 1) * step.deltaSeconds));
         return;
     }
+    if (m_thirdPerson) {
+        // The move actions belong to the character.
+        return;
+    }
     // Released cursor: the mouse belongs to the interface, not to the camera.
     const bool looking = m_window->isCursorCaptured();
     const FreeCameraInput input{
@@ -344,6 +364,35 @@ void DemoApp::stepCamera(const core::FixedStep& step) {
         .lookY = looking ? m_simulation.axis(m_lookY) : 0.0f,
     };
     stepFreeCameraEntity(m_registry, m_cameraEntity, input, step.deltaSeconds, m_cameraSettings);
+}
+
+void DemoApp::stepPlayer(const core::FixedStep& step) {
+    if (m_playerEntity == entt::null) {
+        return;
+    }
+    // Without input the character still falls, brakes and stands: it is stepped in both camera modes.
+    PlayerInput input;
+    if (m_thirdPerson) {
+        input = PlayerInput{.forward = m_simulation.axis(m_moveForward),
+                            .right = m_simulation.axis(m_moveRight),
+                            .sprint = m_simulation.isHeld(m_sprint),
+                            .jump = m_simulation.wasPressed(m_jump),
+                            .cameraYaw = m_registry.get<FreeCameraController>(m_cameraEntity).yaw};
+    }
+    stepPlayerEntity(m_registry, m_playerEntity, input, m_physics->gravity(), step.deltaSeconds,
+                     m_playerSettings);
+}
+
+void DemoApp::switchCamera() {
+    if (m_benchmarkSeconds) {
+        return;
+    }
+    if (m_playerEntity == entt::null) {
+        m_logger->warning("The scene has no entity '{}': the camera stays free", kPlayerId);
+        return;
+    }
+    m_thirdPerson = !m_thirdPerson;
+    m_logger->info("Camera: {}", m_thirdPerson ? "third person" : "free");
 }
 
 void DemoApp::logMouseLook(const core::FixedStep& step) {
